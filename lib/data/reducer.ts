@@ -296,6 +296,8 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
               type: "system",
               title: "Support note saved",
               message: `${action.topic}: ${action.message}`,
+              source: "administrator",
+              senderName: state.settings.profileName,
               read: false,
               createdAt: action.stamp.at,
             },
@@ -374,6 +376,8 @@ function maybeNotify(
   const item: AppNotification = {
     id: stamp.notificationId ?? `ntf-${stamp.id}`,
     ...draft,
+    source: "administrator",
+    senderName: state.settings.profileName,
     read: false,
     createdAt: stamp.at,
   };

@@ -87,6 +87,9 @@ export interface AppNotification {
   title: string;
   message: string;
   type: NotificationType;
+  /** Portal that sent this notice to the administrator. */
+  source: UserRole;
+  senderName: string;
   read: boolean;
   createdAt: string;
 }

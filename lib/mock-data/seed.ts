@@ -340,14 +340,18 @@ export function createSeedState(): AdminState {
       task("tsk-12", "Chase utility contractor recovery plan", "prj-industrial", "George Wasswa", "2026-11-08", "critical", "pending"),
     ],
     notifications: [
-      note("ntf-01", "delay", "Entebbe cargo terminal is delayed", "Progress is 41% with completion dated 18 Nov 2026. The cold-room steel package is still open.", false, "2026-11-05T07:40:00Z"),
-      note("ntf-02", "delay", "Industrial park utilities are past due", "Jinja Industrial Park Utilities passed its 2 Oct 2026 milestone at 35% progress.", false, "2026-11-04T15:10:00Z"),
-      note("ntf-03", "status", "Hospital wing placed on hold", "Mbarara Regional Hospital Wing is paused pending the funding review.", true, "2026-10-28T09:05:00Z"),
-      note("ntf-04", "project", "School package created", "Kasese School Infrastructure was registered in planning.", true, "2026-09-22T08:12:00Z"),
-      note("ntf-05", "user", "Quantity surveyor registered", "Ruth Kemigisha was added as a quantity surveyor on the Gulu roads package.", true, "2025-07-16T10:22:00Z"),
-      note("ntf-06", "system", "Weekly portfolio digest skipped", "The weekly digest preference is off in this preview, so no digest was generated.", true, "2026-11-02T06:00:00Z"),
-      note("ntf-07", "status", "Nakivubo channel completed", "Practical completion was recorded for the Nakivubo Channel Upgrade.", true, "2026-08-30T16:40:00Z"),
-      note("ntf-08", "project", "Gulu roads mobilisation is thin", "The roads package is active at 18% progress. Gravel stockpile mobilisation is still to do.", false, "2026-11-03T11:18:00Z"),
+      note("ntf-09", "status", "site_engineer", "Lydia Atim", "Cold-room steel still open on site", "Site instruction: the steel package for Entebbe cargo is not on the apron. Recovery is still in progress.", false, "2026-11-06T06:15:00Z"),
+      note("ntf-10", "project", "site_engineer", "Moses Wanyama", "Night closure requested", "Jinja bridge bearing replacement needs a night closure on 28 Nov 2026. Traffic management is not confirmed.", false, "2026-11-05T18:40:00Z"),
+      note("ntf-11", "project", "quantity_surveyor", "Helen Nabirye", "Interim valuation submitted", "Valuation for Kampala Northern Bypass Phase II is ready for the administrator to acknowledge. Figures are demonstration data.", false, "2026-11-05T09:20:00Z"),
+      note("ntf-12", "status", "quantity_surveyor", "Ruth Kemigisha", "Gulu measurement note filed", "Gravel stockpile quantities on Gulu Municipal Roads are short of the programme. Measurement note is on the task.", false, "2026-11-03T11:12:00Z"),
+      note("ntf-01", "delay", "project_manager", "Sarah Namakula", "Entebbe cargo terminal is delayed", "Progress is 41% with completion dated 18 Nov 2026. The cold-room steel package is still open.", false, "2026-11-05T07:40:00Z"),
+      note("ntf-02", "delay", "project_manager", "Sarah Namakula", "Industrial park utilities are past due", "Jinja Industrial Park Utilities passed its 2 Oct 2026 milestone at 35% progress.", false, "2026-11-04T15:10:00Z"),
+      note("ntf-08", "project", "project_manager", "Peter Ochieng", "Gulu roads mobilisation is thin", "The roads package is active at 18% progress. Gravel stockpile mobilisation is still to do.", false, "2026-11-03T11:18:00Z"),
+      note("ntf-03", "status", "project_manager", "Peter Ochieng", "Hospital wing placed on hold", "Mbarara Regional Hospital Wing is paused pending the funding review.", true, "2026-10-28T09:05:00Z"),
+      note("ntf-04", "project", "project_manager", "Joseph Mugisha", "School package created", "Kasese School Infrastructure was registered in planning.", true, "2026-09-22T08:12:00Z"),
+      note("ntf-07", "status", "project_manager", "Sarah Namakula", "Nakivubo channel completed", "Practical completion was recorded for the Nakivubo Channel Upgrade.", true, "2026-08-30T16:40:00Z"),
+      note("ntf-05", "user", "administrator", "Amina Nalwoga", "Quantity surveyor registered", "Ruth Kemigisha was added as a quantity surveyor on the Gulu roads package.", true, "2025-07-16T10:22:00Z"),
+      note("ntf-06", "system", "administrator", "Amina Nalwoga", "Weekly portfolio digest skipped", "The weekly digest preference is off in this preview, so no digest was generated.", true, "2026-11-02T06:00:00Z"),
     ],
     activityLogs: [
       log("log-01", "u-pm-2", "Sarah Namakula", "Marked project delayed", "Projects", "EBB-CGT-25", "warning", "2026-11-05T07:35:00Z"),
@@ -401,12 +405,14 @@ function task(
 function note(
   id: string,
   type: AdminState["notifications"][number]["type"],
+  source: AdminState["notifications"][number]["source"],
+  senderName: string,
   title: string,
   message: string,
   read: boolean,
   createdAt: string,
 ): AdminState["notifications"][number] {
-  return { id, type, title, message, read, createdAt };
+  return { id, type, source, senderName, title, message, read, createdAt };
 }
 
 function log(
