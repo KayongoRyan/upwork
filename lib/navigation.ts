@@ -2,6 +2,7 @@ import {
   BarChart3,
   Bell,
   Building2,
+  ClipboardCheck,
   ClipboardList,
   FolderKanban,
   LayoutDashboard,
@@ -105,15 +106,61 @@ export const navItems: NavItem[] = [
 
 export const navSections = ["Main", "Management", "System"] as const;
 
+export const pmNavItems: NavItem[] = [
+  {
+    href: "/pm",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    section: "Main",
+    exact: true,
+    description: "Portfolio position for the projects you manage.",
+  },
+  {
+    href: "/pm/projects",
+    label: "My projects",
+    icon: Building2,
+    section: "Main",
+    description: "Monitor status, dates, and budget use.",
+  },
+  {
+    href: "/pm/tasks",
+    label: "Schedule & tasks",
+    icon: ClipboardList,
+    section: "Management",
+    description: "Assign work and set due dates.",
+  },
+  {
+    href: "/pm/progress",
+    label: "Progress",
+    icon: BarChart3,
+    section: "Management",
+    description: "Record progress against each project.",
+  },
+  {
+    href: "/pm/reports",
+    label: "Engineer reports",
+    icon: ClipboardCheck,
+    section: "Management",
+    description: "Review site reports: submit, then approve or reject.",
+  },
+  {
+    href: "/pm/notifications",
+    label: "Inbox",
+    icon: Bell,
+    section: "System",
+    description: "Notices sent in from the other portals.",
+  },
+];
+
 export function isActive(pathname: string, item: NavItem) {
   if (item.exact) return pathname === item.href;
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
-export function crumbsFor(pathname: string) {
-  const item = navItems.find((entry) => isActive(pathname, entry));
+export function crumbsFor(pathname: string, items: NavItem[] = navItems, root = { href: "/admin", label: "CPMIS" }) {
+  const item = items.find((entry) => isActive(pathname, entry));
   return [
-    { href: "/admin", label: "CPMIS" },
+    root,
     { href: item?.href ?? pathname, label: item?.label ?? "Page" },
   ];
 }

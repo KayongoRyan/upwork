@@ -7,18 +7,39 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { SearchDialog } from "@/components/layout/search-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAdmin } from "@/lib/data/admin-store";
+import { navItems, type NavItem } from "@/lib/navigation";
+import { portalUrl } from "@/lib/portals";
 import { formatDateTime, initials } from "@/lib/utils";
 
 export function Header({
   collapsed,
   onToggleCollapse,
   onOpenMobile,
+  identity,
+  links = {
+    notifications: "/admin/notifications",
+    settings: "/admin/settings",
+    switchHref: portalUrl("project_manager"),
+    switchLabel: "Project manager portal",
+  },
+  crumbs,
+  scope = "all",
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
   onOpenMobile: () => void;
+  identity?: { name: string; email: string; role: string };
+  links?: { notifications: string; settings: string; switchHref: string; switchLabel: string };
+  crumbs?: { items: NavItem[]; root: { href: string; label: string } };
+  scope?: "all" | "field";
 }) {
-  const { settings, notifications, markNotification } = useAdmin();
+  const { settings, notifications: allNotifications, markNotification } = useAdmin();
+  const notifications = scope === "field"
+    ? allNotifications.filter((item) => item.source === "site_engineer" || item.source === "quantity_surveyor")
+    : allNotifications;
+  const name = identity?.name ?? settings.profileName;
+  const email = identity?.email ?? settings.profileEmail;
+  const role = identity?.role ?? "Administrator";
   const [searchOpen, setSearchOpen] = useState(false);
   const unread = notifications.filter((item) => !item.read);
 
@@ -71,7 +92,7 @@ export function Header({
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/admin/notifications">Open notifications</Link>
+              <Link href={links.notifications}>Open notifications</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -79,32 +100,35 @@ export function Header({
           <DropdownMenuTrigger asChild>
             <button type="button" className="flex items-center gap-2.5 rounded-2xl border border-black/5 bg-white py-1 pr-3 pl-1">
               <span className="grid size-9 place-items-center rounded-full bg-black text-xs font-semibold text-white">
-                {initials(settings.profileName)}
+                {initials(name)}
               </span>
               <span className="hidden text-left leading-tight sm:block">
-                <span className="block text-sm font-semibold">{settings.profileName}</span>
-                <span className="block text-[11px] text-black/45">Administrator</span>
+                <span className="block text-sm font-semibold">{name}</span>
+                <span className="block text-[11px] text-black/45">{role}</span>
               </span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuLabel>
-              <span className="block text-sm font-medium text-foreground">{settings.profileName}</span>
-              <span className="block">{settings.profileEmail}</span>
+              <span className="block text-sm font-medium text-foreground">{name}</span>
+              <span className="block">{email}</span>
               <span className="mt-1 block">Preview session. Sign-in is not connected.</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/admin/settings">Profile settings</Link>
+              {links.settings.startsWith("http") ? <a href={links.settings}>Profile settings</a> : <Link href={links.settings}>Profile settings</Link>}
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/admin/notifications">Notifications</Link>
+              {links.notifications.startsWith("http") ? <a href={links.notifications}>Notifications</a> : <Link href={links.notifications}>Notifications</Link>}
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              {links.switchHref.startsWith("http") ? <a href={links.switchHref}>{links.switchLabel}</a> : <Link href={links.switchHref}>{links.switchLabel}</Link>}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
       <div className="mt-2 flex items-center justify-between gap-3 px-1">
-        <Breadcrumbs />
+        <Breadcrumbs items={crumbs?.items ?? navItems} root={crumbs?.root ?? { href: "/admin", label: "CPMIS" }} />
         <span className="rounded-full bg-[#fff1eb] px-2 py-0.5 text-[11px] font-medium text-black">Demo data</span>
       </div>
       <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />

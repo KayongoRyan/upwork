@@ -26,6 +26,9 @@ export type NotificationType =
 
 export type TaskStatus = "todo" | "pending" | "done";
 
+/** Site engineer report moving through the project manager. */
+export type EngineerReportStatus = "submitted" | "in_review" | "approved" | "rejected";
+
 export type TaskPriority = "low" | "medium" | "high" | "critical";
 
 export interface Project {
@@ -104,6 +107,22 @@ export interface TaskItem {
   status: TaskStatus;
 }
 
+export interface EngineerReport {
+  id: string;
+  projectId: string;
+  engineerId: string;
+  periodStart: string;
+  periodEnd: string;
+  progress: number;
+  summary: string;
+  issues: string;
+  status: EngineerReportStatus;
+  submittedAt: string;
+  reviewedAt: string | null;
+  reviewerId: string | null;
+  decisionNote: string;
+}
+
 export interface OrgSettings {
   organizationName: string;
   registrationNumber: string;
@@ -143,6 +162,7 @@ export interface AdminState {
   activityLogs: ActivityLog[];
   notifications: AppNotification[];
   tasks: TaskItem[];
+  reports: EngineerReport[];
   settings: OrgSettings;
   monthlyActivity: MonthlyPoint[];
 }
@@ -151,5 +171,9 @@ export type ProjectInput = Omit<Project, "id" | "createdAt">;
 export type UserInput = Omit<UserAccount, "id" | "registeredAt">;
 export type EmployeeInput = Omit<Employee, "id">;
 export type TaskInput = Omit<TaskItem, "id">;
+export type EngineerReportInput = Pick<
+  EngineerReport,
+  "projectId" | "engineerId" | "periodStart" | "periodEnd" | "progress" | "summary" | "issues"
+>;
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
