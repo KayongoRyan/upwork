@@ -131,7 +131,7 @@ export function ProjectsView() {
                   <td className="px-3 py-3">{project.location}</td>
                   <td className="px-3 py-3 whitespace-nowrap">{formatDate(project.startDate)}</td>
                   <td className="px-3 py-3 whitespace-nowrap">{formatDate(project.expectedEndDate)}</td>
-                  <td className="px-3 py-3 whitespace-nowrap">{formatMoney(project.budget)}</td>
+                  <td className="px-3 py-3 whitespace-nowrap">{formatMoney(project.budget, data.settings.currency)}</td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
@@ -196,8 +196,8 @@ export function ProjectsView() {
               <Detail label="Status" value={<ProjectStatusBadge status={viewing.status} />} />
               <Detail label="Start" value={formatDate(viewing.startDate)} />
               <Detail label="Expected completion" value={formatDate(viewing.expectedEndDate)} />
-              <Detail label="Budget" value={`${formatMoney(viewing.budget)} demo`} />
-              <Detail label="Spent" value={`${formatMoney(viewing.spent)} demo`} />
+              <Detail label="Budget" value={`${formatMoney(viewing.budget, data.settings.currency)} demo`} />
+              <Detail label="Spent" value={`${formatMoney(viewing.spent, data.settings.currency)} demo`} />
               <div className="sm:col-span-2">
                 <dt className="text-muted-foreground">Description</dt>
                 <dd className="mt-1">{viewing.description}</dd>

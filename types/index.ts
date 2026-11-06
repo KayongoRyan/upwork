@@ -24,7 +24,7 @@ export type NotificationType =
   | "delay"
   | "system";
 
-export type TaskStatus = "todo" | "in_progress" | "review" | "done";
+export type TaskStatus = "todo" | "pending" | "done";
 
 export type TaskPriority = "low" | "medium" | "high" | "critical";
 
@@ -87,6 +87,9 @@ export interface AppNotification {
   title: string;
   message: string;
   type: NotificationType;
+  /** Portal that sent this notice to the administrator. */
+  source: UserRole;
+  senderName: string;
   read: boolean;
   createdAt: string;
 }

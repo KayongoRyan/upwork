@@ -120,6 +120,9 @@ export function useAdmin() {
     setTaskStatus(id: string, status: TaskInput["status"]) {
       dispatch({ type: "set-task-status", id, status, stamp: stamp() });
     },
+    assignTask(id: string, projectId: string) {
+      dispatch({ type: "assign-task", id, projectId, stamp: stamp() });
+    },
     deleteTask(id: string) {
       dispatch({ type: "delete-task", id, stamp: stamp() });
     },

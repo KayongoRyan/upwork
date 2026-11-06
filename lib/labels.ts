@@ -52,8 +52,7 @@ export const notificationTypeLabel: Record<NotificationType, string> = {
 
 export const taskStatusLabel: Record<TaskStatus, string> = {
   todo: "To do",
-  in_progress: "In progress",
-  review: "In review",
+  pending: "Pending",
   done: "Done",
 };
 

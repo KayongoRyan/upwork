@@ -65,7 +65,7 @@ export function Header({
                     {!item.read ? <span className="size-1.5 rounded-full bg-accent" /> : null}
                     <span className="truncate font-medium">{item.title}</span>
                   </span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{formatDateTime(item.createdAt)}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{item.senderName} · {formatDateTime(item.createdAt)}</span>
                 </span>
               </DropdownMenuItem>
             ))}

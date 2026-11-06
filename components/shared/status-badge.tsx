@@ -41,7 +41,7 @@ export function ActivityBadge({ status }: { status: ActivityStatus }) {
 }
 
 export function TaskStatusBadge({ status }: { status: TaskStatus }) {
-  const tone: Record<TaskStatus, BadgeTone> = { todo: "slate", in_progress: "blue", review: "amber", done: "green" };
+  const tone: Record<TaskStatus, BadgeTone> = { todo: "slate", pending: "amber", done: "green" };
   return <Badge tone={tone[status]}>{taskStatusLabel[status]}</Badge>;
 }
 

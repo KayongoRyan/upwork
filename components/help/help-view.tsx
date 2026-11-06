@@ -35,7 +35,7 @@ const articles = [
   },
   {
     title: "Money on the reports",
-    body: "Budgets and spent amounts are labelled demonstration figures in USD. They are not a ledger and should not be exported as company accounts. The CSV is the filtered sample table only.",
+    body: "Budgets and spent amounts are demonstration figures in Rwandan francs (RWF). They are not a ledger and should not be exported as company accounts. The CSV is the filtered sample table only.",
   },
   {
     title: "What the preview administrator can do",

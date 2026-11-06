@@ -9,6 +9,7 @@ import type {
   NotificationType,
   ProjectInput,
   TaskInput,
+  TaskItem,
   UserInput,
 } from "@/types";
 
@@ -32,6 +33,7 @@ export type AdminAction =
   | { type: "delete-employee"; id: string; stamp: Stamp }
   | { type: "create-task"; input: TaskInput; stamp: Stamp }
   | { type: "set-task-status"; id: string; status: TaskInput["status"]; stamp: Stamp }
+  | { type: "assign-task"; id: string; projectId: string; stamp: Stamp }
   | { type: "delete-task"; id: string; stamp: Stamp }
   | { type: "mark-notification"; id: string; read: boolean }
   | { type: "mark-all-notifications" }
@@ -48,14 +50,17 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         id: action.stamp.id,
         createdAt: action.stamp.at,
       };
+      const manager = state.users.find((user) => user.id === project.managerId);
+      const assignee = manager ? `${manager.firstName} ${manager.lastName}` : "Unassigned";
       return audit(
         {
           ...state,
           projects: [project, ...state.projects],
+          tasks: [...projectTasks(project.id, project.code, assignee, project.expectedEndDate, action.stamp.id), ...state.tasks],
           notifications: maybeNotify(state, action.stamp, {
             type: "project",
             title: "Project created",
-            message: `${project.name} (${project.code}) was added to the portfolio.`,
+            message: `${project.name} (${project.code}) was added to the portfolio and assigned on To do, Pending, and Done.`,
           }),
         },
         action.stamp,
@@ -224,6 +229,22 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         "success",
       );
     }
+    case "assign-task": {
+      const item = state.tasks.find((task) => task.id === action.id);
+      const project = state.projects.find((entry) => entry.id === action.projectId);
+      if (!item || !project) return state;
+      return audit(
+        {
+          ...state,
+          tasks: state.tasks.map((task) => (task.id === item.id ? { ...task, projectId: project.id } : task)),
+        },
+        action.stamp,
+        "Assigned task to project",
+        "Tasks",
+        `${item.title} → ${project.code}`,
+        "success",
+      );
+    }
     case "set-task-status": {
       const item = state.tasks.find((task) => task.id === action.id);
       if (!item) return state;
@@ -275,6 +296,8 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
               type: "system",
               title: "Support note saved",
               message: `${action.topic}: ${action.message}`,
+              source: "administrator",
+              senderName: state.settings.profileName,
               read: false,
               createdAt: action.stamp.at,
             },
@@ -290,6 +313,14 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
     default:
       return state;
   }
+}
+
+function projectTasks(projectId: string, code: string, assignee: string, dueDate: string, stampId: string): TaskItem[] {
+  return [
+    { id: `${stampId}-todo`, title: `Open ${code}`, projectId, assignee, dueDate, priority: "high", status: "todo" },
+    { id: `${stampId}-pending`, title: `Track ${code}`, projectId, assignee, dueDate, priority: "medium", status: "pending" },
+    { id: `${stampId}-done`, title: `Register ${code}`, projectId, assignee, dueDate, priority: "low", status: "done" },
+  ];
 }
 
 function normalizeProject(input: ProjectInput): ProjectInput {
@@ -345,6 +376,8 @@ function maybeNotify(
   const item: AppNotification = {
     id: stamp.notificationId ?? `ntf-${stamp.id}`,
     ...draft,
+    source: "administrator",
+    senderName: state.settings.profileName,
     read: false,
     createdAt: stamp.at,
   };
