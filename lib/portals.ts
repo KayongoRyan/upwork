@@ -2,6 +2,7 @@ export const portals = [
   { id: "administrator", port: 3000, basePath: "/admin", home: "/admin", label: "Administrator portal" },
   { id: "project_manager", port: 3001, basePath: "/pm", home: "/pm", label: "Project manager portal" },
   { id: "site_engineer", port: 3002, basePath: "/se", home: "/se", label: "Site engineer portal" },
+  { id: "quantity_surveyor", port: 3003, basePath: "/qs", home: "/qs", label: "Quantity surveyor portal" },
 ] as const;
 
 export type PortalId = (typeof portals)[number]["id"];
@@ -32,6 +33,7 @@ export function readBoundPorts(): BoundPorts {
     administrator: activePort("administrator"),
     project_manager: activePort("project_manager"),
     site_engineer: activePort("site_engineer"),
+    quantity_surveyor: activePort("quantity_surveyor"),
   };
 }
 

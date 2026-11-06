@@ -12,6 +12,9 @@ export const PREVIEW_PM_ID = "u-pm-2";
 /** Preview site engineer. She only sees the project on her account. */
 export const PREVIEW_SE_ID = "u-se-2";
 
+/** Preview quantity surveyor. He only sees the project on his account. */
+export const PREVIEW_QS_ID = "u-qs-2";
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

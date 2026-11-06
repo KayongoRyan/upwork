@@ -1,4 +1,5 @@
-import type { AdminState } from "@/types";
+import { expenditureFor } from "@/lib/boq";
+import type { AdminState, BoqItem } from "@/types";
 
 /**
  * Demonstration records for the CPMIS administrator preview.
@@ -7,6 +8,8 @@ import type { AdminState } from "@/types";
  * The preview clock is 6 Nov 2026 (see DEMO_TODAY).
  */
 export function createSeedState(): AdminState {
+  const boq = cargoBill();
+  const cargoSpent = expenditureFor(boq, "prj-cargo");
   return {
     monthlyActivity: [
       { month: "Jan", started: 1, completed: 0, updates: 6 },
@@ -207,7 +210,7 @@ export function createSeedState(): AdminState {
         startDate: "2025-06-15",
         expectedEndDate: "2026-11-18",
         budget: 37_530_000_000,
-        spent: 21_735_000_000,
+        spent: cargoSpent,
         progress: 41,
         status: "delayed",
         createdAt: "2025-05-20T08:00:00Z",
@@ -411,13 +414,16 @@ export function createSeedState(): AdminState {
         rejectionNote: "",
       },
     ],
+    boq,
+    costReports: [],
     notifications: [
+      note("ntf-15", "project", "quantity_surveyor", "David Oketch", "EBB-CGT-25 quantities measured", "David Oketch measured Entebbe Cargo Terminal Expansion. Expenditure is the sum of actual quantity times unit rate on that bill.", false, "2026-11-06T08:05:00Z", "prj-cargo"),
       note("ntf-13", "project", "site_engineer", "Lydia Atim", "EBB-CGT-25 daily report submitted", "Lydia Atim filed a site report for Entebbe Cargo Terminal Expansion (2026-10-27 to 2026-11-02) at 44% progress.", false, "2026-11-03T16:10:00Z", "prj-cargo"),
       note("ntf-14", "project", "site_engineer", "Lydia Atim", "JJA-IND-24 daily report submitted", "Lydia Atim filed a site report for Jinja Industrial Park Utilities (2026-10-20 to 2026-10-26) at 38% progress.", false, "2026-10-27T15:00:00Z", "prj-industrial"),
       note("ntf-09", "status", "site_engineer", "Lydia Atim", "Cold-room steel still open on site", "Site instruction: the steel package for Entebbe cargo is not on the apron. Recovery is still in progress.", false, "2026-11-06T06:15:00Z", "prj-cargo"),
       note("ntf-10", "project", "site_engineer", "Moses Wanyama", "Night closure requested", "Jinja bridge bearing replacement needs a night closure on 28 Nov 2026. Traffic management is not confirmed.", false, "2026-11-05T18:40:00Z"),
-      note("ntf-11", "project", "quantity_surveyor", "Helen Nabirye", "Interim valuation submitted", "Valuation for Kampala Northern Bypass Phase II is ready for the administrator to acknowledge. Figures are demonstration data.", false, "2026-11-05T09:20:00Z"),
-      note("ntf-12", "status", "quantity_surveyor", "Ruth Kemigisha", "Gulu measurement note filed", "Gravel stockpile quantities on Gulu Municipal Roads are short of the programme. Measurement note is on the task.", false, "2026-11-03T11:12:00Z"),
+      note("ntf-11", "project", "quantity_surveyor", "Helen Nabirye", "Interim valuation submitted", "Valuation for Kampala Northern Bypass Phase II is ready for the administrator to acknowledge. Figures are demonstration data.", false, "2026-11-05T09:20:00Z", "prj-bypass"),
+      note("ntf-12", "status", "quantity_surveyor", "Ruth Kemigisha", "Gulu measurement note filed", "Gravel stockpile quantities on Gulu Municipal Roads are short of the programme. Measurement note is on the task.", false, "2026-11-03T11:12:00Z", "prj-gulu"),
       note("ntf-01", "delay", "project_manager", "Sarah Namakula", "Entebbe cargo terminal is delayed", "Progress is 41% with completion dated 18 Nov 2026. The cold-room steel package is still open.", false, "2026-11-05T07:40:00Z"),
       note("ntf-02", "delay", "project_manager", "Sarah Namakula", "Industrial park utilities are past due", "Jinja Industrial Park Utilities passed its 2 Oct 2026 milestone at 35% progress.", false, "2026-11-04T15:10:00Z"),
       note("ntf-08", "project", "project_manager", "Peter Ochieng", "Gulu roads mobilisation is thin", "The roads package is active at 18% progress. Gravel stockpile mobilisation is still to do.", false, "2026-11-03T11:18:00Z"),
@@ -446,6 +452,33 @@ export function createSeedState(): AdminState {
       log("log-16", "u-se-1", "Brian Ssekandi", "Logged site instruction", "Tasks", "Pedestrian bridge piers", "success", "2026-04-16T14:26:00Z"),
     ],
   };
+}
+
+function cargoBill(): BoqItem[] {
+  const projectId = "prj-cargo";
+  return [
+    line("boq-01", projectId, "EBB-01", "Airside apron concrete", "m3", 8200, 6100, 1_800_000),
+    line("boq-02", projectId, "EBB-02", "Cold-room structural steel", "t", 180, 260, 4_500_000),
+    line("boq-03", projectId, "EBB-03", "Customs hall blockwork", "m2", 6400, 4100, 220_000),
+    line("boq-04", projectId, "EBB-04", "Apron reinforcement", "t", 900, 640, 3_250_000),
+    line("boq-05", projectId, "EBB-05", "Storm drainage", "m", 2200, 1500, 480_000),
+    line("boq-06", projectId, "EBB-06", "Preliminaries and site establishment", "ls", 1, 1, 4_200_000_000),
+    line("boq-07", projectId, "EBB-07", "Electrical containment", "m", 1800, 900, 350_000),
+    line("boq-08", projectId, "EBB-08", "Cold store refrigeration plant", "nr", 4, 3, 456_000_000),
+  ];
+}
+
+function line(
+  id: string,
+  projectId: string,
+  code: string,
+  description: string,
+  unit: string,
+  estimatedQty: number,
+  actualQty: number,
+  unitRate: number,
+): BoqItem {
+  return { id, projectId, code, description, unit, estimatedQty, actualQty, unitRate };
 }
 
 function emp(
