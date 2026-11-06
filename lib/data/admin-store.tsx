@@ -2,10 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { adminReducer, type AdminAction } from "@/lib/data/reducer";
-import { nextId, PREVIEW_PM_ID, PREVIEW_SE_ID } from "@/lib/utils";
+import { billLines, estimateFor, expenditureFor, parseBoq, sameBill } from "@/lib/boq";
+import { nextId, PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID } from "@/lib/utils";
 import type {
   ActionResult,
   AdminState,
+  BoqInput,
   EmployeeInput,
   EngineerReportInput,
   EngineerReportStatus,
@@ -218,6 +220,18 @@ export function useAdmin() {
     resubmitSiteReport(id: string, input: { progress: number; summary: string; issues: string; photos: ReportPhoto[] }) {
       dispatch({ type: "resubmit-report", id, ...input, stamp: stamp() });
     },
+    createBoqLine(surveyorId: string, input: BoqInput) {
+      dispatch({ type: "create-boq", surveyorId, input, stamp: stamp() });
+    },
+    updateBoqLine(surveyorId: string, id: string, input: BoqInput) {
+      dispatch({ type: "update-boq", surveyorId, id, input, stamp: stamp() });
+    },
+    deleteBoqLine(surveyorId: string, id: string) {
+      dispatch({ type: "delete-boq", surveyorId, id, stamp: stamp() });
+    },
+    submitCostReport(projectId: string, surveyorId: string) {
+      dispatch({ type: "submit-cost-report", projectId, surveyorId, stamp: stamp() });
+    },
     markNotification(id: string, read: boolean) {
       dispatch({ type: "mark-notification", id, read });
     },
@@ -253,11 +267,25 @@ export function usePm() {
     projects,
     tasks: data.tasks.filter((task) => ids.has(task.projectId)),
     reports: data.reports.filter((report) => ids.has(report.projectId)),
+    boq: data.boq.filter((item) => ids.has(item.projectId)),
+    costReports: (data.costReports ?? []).filter((report) => ids.has(report.projectId)),
+    surveyors: data.users.filter((user) => user.role === "quantity_surveyor" && user.status === "active" && user.projectId && ids.has(user.projectId)),
     engineers: data.users.filter((user) => user.role === "site_engineer" && user.status === "active"),
     crew: data.employees.filter((employee) => employee.projectId && ids.has(employee.projectId) && employee.status !== "inactive"),
     inbox: data.notifications.filter((item) => isManagerFieldNotice(item, projects)),
     users: data.users,
     submitReport: data.submitEngineerReport,
+    submitCostReport(projectId: string): ActionResult {
+      if (!ids.has(projectId)) return { ok: false, error: "That project is not on your portfolio." };
+      const surveyor = data.users.find((user) => user.role === "quantity_surveyor" && user.status === "active" && user.projectId === projectId);
+      if (!surveyor) return { ok: false, error: "No quantity surveyor is assigned to that project." };
+      const live = billLines(data.boq, projectId);
+      if (live.length === 0) return { ok: false, error: "There is no bill to submit." };
+      const latest = (data.costReports ?? []).find((report) => report.projectId === projectId && report.status === "submitted");
+      if (latest && sameBill(latest.lines, live)) return { ok: false, error: "This measurement is already submitted." };
+      data.submitCostReport(projectId, surveyor.id);
+      return { ok: true };
+    },
     openReview: data.openReportReview,
     decideReport: data.decideReport,
     setProgress: data.setProjectProgress,
@@ -320,6 +348,53 @@ export function useSiteEngineer() {
       data.resubmitSiteReport(id, input);
       return { ok: true };
     },
+  };
+}
+
+export function useQuantitySurveyor() {
+  const data = useAdmin();
+  const actor = data.users.find((user) => user.id === PREVIEW_QS_ID) ?? null;
+  const project = data.projects.find((item) => item.id === actor?.projectId) ?? null;
+  const lines = data.boq.filter((item) => item.projectId === project?.id).sort((a, b) => a.code.localeCompare(b.code));
+  const notices = project ? data.notifications.filter((item) => isManagerFieldNotice(item, [project])) : [];
+
+  function checked(input: BoqInput): ActionResult | BoqInput {
+    if (!actor?.projectId || !project) return { ok: false, error: "No project is assigned to this account." };
+    if (input.projectId !== actor.projectId) return { ok: false, error: "That line is not on your project." };
+    const parsed = parseBoq(input);
+    if (!parsed) return { ok: false, error: "Check the code, description, unit, quantities, and rate." };
+    return parsed;
+  }
+
+  return {
+    actor,
+    project,
+    lines,
+    notices,
+    submissions: (data.costReports ?? []).filter((report) => report.projectId === project?.id && report.status === "submitted"),
+    submitter: data.users.find((user) => user.id === (data.costReports ?? []).find((report) => report.projectId === project?.id && report.status === "submitted")?.submittedBy) ?? null,
+    estimated: project ? estimateFor(lines, project.id) : 0,
+    expenditure: project ? expenditureFor(lines, project.id) : 0,
+    add(input: BoqInput): ActionResult {
+      const parsed = checked(input);
+      if ("ok" in parsed) return parsed;
+      data.createBoqLine(actor!.id, parsed);
+      return { ok: true };
+    },
+    save(id: string, input: BoqInput): ActionResult {
+      if (!lines.some((item) => item.id === id)) return { ok: false, error: "That line is not on your bill." };
+      const parsed = checked(input);
+      if ("ok" in parsed) return parsed;
+      data.updateBoqLine(actor!.id, id, parsed);
+      return { ok: true };
+    },
+    remove(id: string): ActionResult {
+      if (!lines.some((item) => item.id === id)) return { ok: false, error: "That line is not on your bill." };
+      if (!actor) return { ok: false, error: "No project is assigned to this account." };
+      data.deleteBoqLine(actor.id, id);
+      return { ok: true };
+    },
+    markNotification: data.markNotification,
   };
 }
 

@@ -1,3 +1,4 @@
+import { billLines, expenditureFor, linesActual, parseBoq } from "@/lib/boq";
 import { createSeedState } from "@/lib/mock-data/seed";
 import { PREVIEW_ACTOR_ID, PREVIEW_PM_ID } from "@/lib/utils";
 import type {
@@ -5,6 +6,9 @@ import type {
   ActivityStatus,
   AdminState,
   AppNotification,
+  BoqInput,
+  BoqItem,
+  CostReport,
   EmployeeInput,
   EngineerReport,
   EngineerReportInput,
@@ -47,6 +51,10 @@ export type AdminAction =
   | { type: "resubmit-report"; id: string; progress: number; summary: string; issues: string; photos: EngineerReport["photos"]; stamp: Stamp }
   | { type: "open-report-review"; id: string; stamp: Stamp }
   | { type: "decide-report"; id: string; decision: Extract<EngineerReportStatus, "approved" | "rejected">; note: string; stamp: Stamp }
+  | { type: "create-boq"; surveyorId: string; input: BoqInput; stamp: Stamp }
+  | { type: "update-boq"; surveyorId: string; id: string; input: BoqInput; stamp: Stamp }
+  | { type: "delete-boq"; surveyorId: string; id: string; stamp: Stamp }
+  | { type: "submit-cost-report"; projectId: string; surveyorId: string; stamp: Stamp }
   | { type: "mark-notification"; id: string; read: boolean }
   | { type: "mark-all-notifications" }
   | { type: "update-settings"; patch: Partial<AdminState["settings"]>; stamp?: Stamp }
@@ -122,6 +130,8 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
             employee.projectId === project.id ? { ...employee, projectId: null } : employee,
           ),
           tasks: state.tasks.filter((task) => task.projectId !== project.id),
+          boq: state.boq.filter((item) => item.projectId !== project.id),
+          costReports: (state.costReports ?? []).filter((item) => item.projectId !== project.id),
         },
         action.stamp,
         "Deleted project",
@@ -507,6 +517,92 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         { id: engineer.id, name },
       );
     }
+    case "create-boq": {
+      const surveyor = activeSurveyor(state, action.surveyorId);
+      const input = parseBoq(action.input);
+      if (!surveyor || !input || input.projectId !== surveyor.projectId) return state;
+      const name = `${surveyor.firstName} ${surveyor.lastName}`;
+      const item: BoqItem = { ...input, id: action.stamp.id };
+      return measure(
+        state,
+        input.projectId,
+        [item, ...state.boq],
+        action.stamp,
+        `${item.code} added to the bill`,
+        `${name} added ${item.description} on the bill of quantities.`,
+        { id: surveyor.id, name },
+      );
+    }
+    case "update-boq": {
+      const current = state.boq.find((item) => item.id === action.id);
+      const surveyor = activeSurveyor(state, action.surveyorId);
+      const input = parseBoq(action.input);
+      if (!current || !surveyor || !input || current.projectId !== surveyor.projectId || input.projectId !== surveyor.projectId) return state;
+      const name = `${surveyor.firstName} ${surveyor.lastName}`;
+      const item: BoqItem = { ...input, id: current.id };
+      return measure(
+        state,
+        current.projectId,
+        state.boq.map((row) => (row.id === current.id ? item : row)),
+        action.stamp,
+        `${item.code} quantities updated`,
+        `${name} set ${item.description} to ${item.actualQty} ${item.unit} measured at ${item.unitRate} per unit.`,
+        { id: surveyor.id, name },
+      );
+    }
+    case "delete-boq": {
+      const current = state.boq.find((item) => item.id === action.id);
+      const surveyor = activeSurveyor(state, action.surveyorId);
+      if (!current || !surveyor || current.projectId !== surveyor.projectId) return state;
+      const name = `${surveyor.firstName} ${surveyor.lastName}`;
+      return measure(
+        state,
+        current.projectId,
+        state.boq.filter((item) => item.id !== current.id),
+        action.stamp,
+        `${current.code} removed from the bill`,
+        `${name} removed ${current.description} from the bill of quantities.`,
+        { id: surveyor.id, name },
+      );
+    }
+    case "submit-cost-report": {
+      const project = managedProject(state, action.projectId);
+      const surveyor = state.users.find((user) => user.id === action.surveyorId && user.role === "quantity_surveyor" && user.status === "active" && user.projectId === action.projectId);
+      const lines = billLines(state.boq, action.projectId);
+      if (!project || !surveyor || lines.length === 0) return state;
+      const actor = pmActor(state);
+      const report: CostReport = {
+        id: action.stamp.id,
+        projectId: project.id,
+        surveyorId: surveyor.id,
+        status: "submitted",
+        lines,
+        submittedAt: action.stamp.at,
+        submittedBy: actor.id,
+      };
+      const expenditure = linesActual(lines);
+      const surveyorName = `${surveyor.firstName} ${surveyor.lastName}`;
+      return audit(
+        {
+          ...state,
+          costReports: [report, ...(state.costReports ?? [])],
+          notifications: maybeNotify(state, action.stamp, {
+            type: "project",
+            title: `${project.code} cost report submitted`,
+            message: `${actor.name} submitted ${surveyorName}'s cost statement for ${project.name}. Measured expenditure is ${expenditure} RWF.`,
+            source: "project_manager",
+            senderName: actor.name,
+            projectId: project.id,
+          }),
+        },
+        action.stamp,
+        "Submitted cost report",
+        "Reports",
+        project.code,
+        "success",
+        actor,
+      );
+    }
     case "mark-notification":
       return {
         ...state,
@@ -579,6 +675,44 @@ function normalizeUser(input: UserInput): UserInput {
 function emptyToNull(value: string | null) {
   if (!value || value === "unassigned") return null;
   return value;
+}
+
+function activeSurveyor(state: AdminState, id: string) {
+  return state.users.find((user) => user.id === id && user.role === "quantity_surveyor" && user.status === "active") ?? null;
+}
+
+function measure(
+  state: AdminState,
+  projectId: string,
+  boq: BoqItem[],
+  stamp: Stamp,
+  title: string,
+  message: string,
+  sender: { id: string; name: string },
+) {
+  const spent = expenditureFor(boq, projectId);
+  const project = state.projects.find((item) => item.id === projectId);
+  return audit(
+    {
+      ...state,
+      boq,
+      projects: state.projects.map((item) => (item.id === projectId ? { ...item, spent } : item)),
+      notifications: maybeNotify(state, stamp, {
+        type: "project",
+        title: project ? `${project.code} ${title}` : title,
+        message,
+        source: "quantity_surveyor",
+        senderName: sender.name,
+        projectId,
+      }),
+    },
+    stamp,
+    title,
+    "BOQ",
+    project?.code ?? projectId,
+    "success",
+    sender,
+  );
 }
 
 function managedProject(state: AdminState, projectId: string) {

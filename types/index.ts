@@ -119,6 +119,40 @@ export interface ReportPhoto {
   dataUrl: string;
 }
 
+export type CostReportStatus = "pending" | "submitted";
+
+/** Frozen bill of quantities filed by the project manager. */
+export interface CostReportLine {
+  code: string;
+  description: string;
+  unit: string;
+  estimatedQty: number;
+  actualQty: number;
+  unitRate: number;
+}
+
+export interface CostReport {
+  id: string;
+  projectId: string;
+  surveyorId: string;
+  status: CostReportStatus;
+  lines: CostReportLine[];
+  submittedAt: string | null;
+  submittedBy: string | null;
+}
+
+export interface BoqItem {
+  id: string;
+  projectId: string;
+  code: string;
+  description: string;
+  unit: string;
+  estimatedQty: number;
+  actualQty: number;
+  /** Francs per unit. Line amounts are round(quantity × rate). */
+  unitRate: number;
+}
+
 export interface EngineerReport {
   id: string;
   projectId: string;
@@ -178,6 +212,8 @@ export interface AdminState {
   notifications: AppNotification[];
   tasks: TaskItem[];
   reports: EngineerReport[];
+  boq: BoqItem[];
+  costReports: CostReport[];
   settings: OrgSettings;
   monthlyActivity: MonthlyPoint[];
 }
@@ -186,6 +222,7 @@ export type ProjectInput = Omit<Project, "id" | "createdAt">;
 export type UserInput = Omit<UserAccount, "id" | "registeredAt">;
 export type EmployeeInput = Omit<Employee, "id">;
 export type TaskInput = Omit<TaskItem, "id" | "progress"> & { progress?: number };
+export type BoqInput = Omit<BoqItem, "id">;
 export type EngineerReportInput = Pick<
   EngineerReport,
   "projectId" | "engineerId" | "periodStart" | "periodEnd" | "progress" | "summary" | "issues"

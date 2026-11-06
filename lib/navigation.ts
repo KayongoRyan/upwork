@@ -5,12 +5,15 @@ import {
   Camera,
   ClipboardCheck,
   ClipboardList,
+  FileBarChart,
   FolderKanban,
   LayoutDashboard,
   LifeBuoy,
+  Ruler,
   ScrollText,
   Settings,
   Users,
+  Wallet,
   HardHat,
   type LucideIcon,
 } from "lucide-react";
@@ -145,6 +148,13 @@ export const pmNavItems: NavItem[] = [
     description: "Review site reports: submit, then approve or reject.",
   },
   {
+    href: "/pm/costs",
+    label: "Cost reports",
+    icon: FileBarChart,
+    section: "Management",
+    description: "Quantity surveyor statements. You submit the cost report.",
+  },
+  {
     href: "/pm/notifications",
     label: "Inbox",
     icon: Bell,
@@ -182,6 +192,45 @@ export const seNavItems: NavItem[] = [
     icon: ClipboardCheck,
     section: "Management",
     description: "Past reports, rejection notes, and resubmission.",
+  },
+];
+
+export const qsNavItems: NavItem[] = [
+  {
+    href: "/qs",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    section: "Main",
+    exact: true,
+    description: "Budget, measured expenditure, and variance on your project.",
+  },
+  {
+    href: "/qs/boq",
+    label: "Bill of quantities",
+    icon: Ruler,
+    section: "Main",
+    description: "Estimated quantities, measured quantities, and unit rates.",
+  },
+  {
+    href: "/qs/expenditure",
+    label: "Expenditure",
+    icon: Wallet,
+    section: "Management",
+    description: "Project spend, budget use, and cost variance.",
+  },
+  {
+    href: "/qs/reports",
+    label: "Financial report",
+    icon: FileBarChart,
+    section: "Management",
+    description: "Cost statement for the assigned project.",
+  },
+  {
+    href: "/qs/notices",
+    label: "Notices",
+    icon: Bell,
+    section: "System",
+    description: "Measurement notices on your project.",
   },
 ];
 
