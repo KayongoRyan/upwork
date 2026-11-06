@@ -2,17 +2,18 @@
 
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePm } from "@/lib/data/admin-store";
 import { formatDate, formatDateTime, fullName } from "@/lib/utils";
 import { engineerReportSchema, type EngineerReportFormValues } from "@/lib/validations/schemas";
 import type { EngineerReport, EngineerReportStatus } from "@/types";
+
+const selectClass = "h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
 
 const statusLabel: Record<EngineerReportStatus, string> = {
   submitted: "Submitted",
@@ -88,21 +89,19 @@ function SubmitForm() {
         <h2 className="text-sm font-semibold">Record a site engineer submission</h2>
         <p className="mt-1 text-xs text-muted-foreground">This is the engineer step. The report is filed in their name, then it lands in Submitted.</p>
       </div>
-      <Field label="Project" error={errors.projectId?.message}>
-        <Controller control={form.control} name="projectId" render={({ field }) => (
-          <Select value={field.value} onValueChange={field.onChange}>
-            <SelectTrigger aria-label="Project"><SelectValue /></SelectTrigger>
-            <SelectContent>{data.projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.code} — {project.name}</SelectItem>)}</SelectContent>
-          </Select>
-        )} />
+      <Field label="Project" htmlFor="report-project" error={errors.projectId?.message}>
+        <select id="report-project" className={selectClass} {...form.register("projectId")}>
+          {data.projects.map((project) => (
+            <option key={project.id} value={project.id}>{project.code} — {project.name}</option>
+          ))}
+        </select>
       </Field>
-      <Field label="Site engineer" error={errors.engineerId?.message}>
-        <Controller control={form.control} name="engineerId" render={({ field }) => (
-          <Select value={field.value} onValueChange={field.onChange}>
-            <SelectTrigger aria-label="Site engineer"><SelectValue /></SelectTrigger>
-            <SelectContent>{data.engineers.map((user) => <SelectItem key={user.id} value={user.id}>{fullName(user)}</SelectItem>)}</SelectContent>
-          </Select>
-        )} />
+      <Field label="Site engineer" htmlFor="report-engineer" error={errors.engineerId?.message}>
+        <select id="report-engineer" className={selectClass} {...form.register("engineerId")}>
+          {data.engineers.map((user) => (
+            <option key={user.id} value={user.id}>{fullName(user)}</option>
+          ))}
+        </select>
       </Field>
       <Field label="Period start" htmlFor="periodStart" error={errors.periodStart?.message}><Input id="periodStart" type="date" {...form.register("periodStart")} /></Field>
       <Field label="Period end" htmlFor="periodEnd" error={errors.periodEnd?.message}><Input id="periodEnd" type="date" {...form.register("periodEnd")} /></Field>
@@ -132,6 +131,13 @@ function ReportCard({ report }: { report: EngineerReport }) {
       </p>
       <p className="mt-3 text-sm">{report.summary}</p>
       {report.issues ? <p className="mt-2 text-sm text-muted-foreground">Issues: {report.issues}</p> : null}
+      {report.photos?.length ? (
+        <div className="mt-3 flex gap-2 overflow-x-auto">
+          {report.photos.map((photo) => (
+            <img key={photo.id} src={photo.dataUrl} alt={photo.name} className="h-20 w-28 shrink-0 rounded-xl object-cover" />
+          ))}
+        </div>
+      ) : null}
       {report.reviewedAt ? <p className="mt-2 text-xs text-muted-foreground">Decided {formatDateTime(report.reviewedAt)}{report.decisionNote ? ` · ${report.decisionNote}` : ""}</p> : null}
       {report.status === "submitted" ? (
         <div className="mt-3">

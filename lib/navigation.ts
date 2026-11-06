@@ -2,6 +2,7 @@ import {
   BarChart3,
   Bell,
   Building2,
+  Camera,
   ClipboardCheck,
   ClipboardList,
   FolderKanban,
@@ -149,6 +150,38 @@ export const pmNavItems: NavItem[] = [
     icon: Bell,
     section: "System",
     description: "Notices sent in from the other portals.",
+  },
+];
+
+export const seNavItems: NavItem[] = [
+  {
+    href: "/se",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    section: "Main",
+    exact: true,
+    description: "Today on your assigned site.",
+  },
+  {
+    href: "/se/report",
+    label: "Daily report",
+    icon: Camera,
+    section: "Main",
+    description: "File the shift, with photos.",
+  },
+  {
+    href: "/se/tasks",
+    label: "Assigned tasks",
+    icon: ClipboardList,
+    section: "Management",
+    description: "Update progress on work assigned to you.",
+  },
+  {
+    href: "/se/history",
+    label: "Report history",
+    icon: ClipboardCheck,
+    section: "Management",
+    description: "Past reports, rejection notes, and resubmission.",
   },
 ];
 

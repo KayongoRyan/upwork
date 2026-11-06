@@ -25,7 +25,19 @@ function redirect(location: string, fromPort: number) {
   });
 }
 
+function rememberPorts(request: NextRequest) {
+  const raw = request.headers.get("x-cpmis-ports");
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    globalThis.__cpmisPorts = { ...globalThis.__cpmisPorts, ...parsed };
+  } catch {
+    /* A bad header must not block the page. */
+  }
+}
+
 export function proxy(request: NextRequest) {
+  rememberPorts(request);
   const port = requestPort(request);
   const here = portalByPort(port);
   if (!here) return NextResponse.next();

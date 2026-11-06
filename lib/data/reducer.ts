@@ -42,7 +42,9 @@ export type AdminAction =
   | { type: "schedule-task"; id: string; projectId: string; assignee: string; dueDate: string; priority: TaskPriority; stamp: Stamp }
   | { type: "delete-task"; id: string; stamp: Stamp }
   | { type: "set-progress"; id: string; progress: number; note: string; stamp: Stamp }
+  | { type: "set-task-progress"; id: string; engineerId: string; progress: number; status: TaskInput["status"]; stamp: Stamp }
   | { type: "submit-report"; input: EngineerReportInput; stamp: Stamp }
+  | { type: "resubmit-report"; id: string; progress: number; summary: string; issues: string; photos: EngineerReport["photos"]; stamp: Stamp }
   | { type: "open-report-review"; id: string; stamp: Stamp }
   | { type: "decide-report"; id: string; decision: Extract<EngineerReportStatus, "approved" | "rejected">; note: string; stamp: Stamp }
   | { type: "mark-notification"; id: string; read: boolean }
@@ -229,7 +231,11 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       );
     }
     case "create-task": {
-      const item = { ...action.input, id: action.stamp.id };
+      const item: TaskItem = {
+        ...action.input,
+        id: action.stamp.id,
+        progress: action.input.progress ?? (action.input.status === "done" ? 100 : 0),
+      };
       return audit(
         { ...state, tasks: [item, ...state.tasks] },
         action.stamp,
@@ -329,6 +335,36 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         actor,
       );
     }
+    case "set-task-progress": {
+      const task = state.tasks.find((item) => item.id === action.id);
+      const engineer = state.users.find((user) => user.id === action.engineerId && user.role === "site_engineer" && user.status === "active");
+      if (!task || !engineer || engineer.projectId !== task.projectId) return state;
+      const name = `${engineer.firstName} ${engineer.lastName}`;
+      if (task.assignee !== name) return state;
+      const progress = Math.min(100, Math.max(0, Math.round(action.progress)));
+      const status = progress >= 100 ? "done" : action.status;
+      const project = state.projects.find((item) => item.id === task.projectId);
+      return audit(
+        {
+          ...state,
+          tasks: state.tasks.map((item) => (item.id === task.id ? { ...item, progress, status } : item)),
+          notifications: maybeNotify(state, action.stamp, {
+            type: "status",
+            title: `${project?.code ?? "Task"} progress updated`,
+            message: `${name} set “${task.title}” to ${progress}%.`,
+            source: "site_engineer",
+            senderName: name,
+            projectId: task.projectId,
+          }),
+        },
+        action.stamp,
+        "Updated task progress",
+        "Tasks",
+        task.title,
+        "success",
+        { id: engineer.id, name },
+      );
+    }
     case "submit-report": {
       const project = managedProject(state, action.input.projectId);
       const engineer = state.users.find((user) => user.id === action.input.engineerId && user.role === "site_engineer" && user.status === "active");
@@ -339,11 +375,13 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         progress: Math.min(100, Math.max(0, Math.round(action.input.progress))),
         summary: action.input.summary.trim(),
         issues: action.input.issues.trim(),
+        photos: action.input.photos ?? [],
         status: "submitted",
         submittedAt: action.stamp.at,
         reviewedAt: null,
         reviewerId: null,
         decisionNote: "",
+        rejectionNote: "",
       };
       const sender = `${engineer.firstName} ${engineer.lastName}`;
       return audit(
@@ -352,10 +390,11 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
           reports: [report, ...state.reports],
           notifications: maybeNotify(state, action.stamp, {
             type: "project",
-            title: `${project.code} engineer report submitted`,
-            message: `${sender} submitted a site report for ${project.name} (${report.periodStart} to ${report.periodEnd}) at ${report.progress}% progress.`,
+            title: `${project.code} daily report submitted`,
+            message: `${sender} filed a site report for ${project.name} (${report.periodStart} to ${report.periodEnd}) at ${report.progress}% progress.`,
             source: "site_engineer",
             senderName: sender,
+            projectId: project.id,
           }),
         },
         action.stamp,
@@ -397,7 +436,14 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
           projects: state.projects.map((item) => (item.id === project.id ? { ...item, progress: item.status === "completed" ? 100 : progress } : item)),
           reports: state.reports.map((item) =>
             item.id === report.id
-              ? { ...item, status: action.decision, reviewedAt: action.stamp.at, reviewerId: actor.id, decisionNote: action.note.trim() }
+              ? {
+                  ...item,
+                  status: action.decision,
+                  reviewedAt: action.stamp.at,
+                  reviewerId: actor.id,
+                  decisionNote: action.note.trim(),
+                  rejectionNote: action.decision === "rejected" ? action.note.trim() : item.rejectionNote,
+                }
               : item,
           ),
           notifications: maybeNotify(state, action.stamp, {
@@ -416,6 +462,49 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         project.code,
         approved ? "success" : "warning",
         actor,
+      );
+    }
+    case "resubmit-report": {
+      const report = state.reports.find((item) => item.id === action.id);
+      const engineer = report ? state.users.find((user) => user.id === report.engineerId && user.role === "site_engineer" && user.status === "active") : undefined;
+      const project = report ? state.projects.find((item) => item.id === report.projectId) : undefined;
+      if (!report || !engineer || !project || report.status !== "rejected" || engineer.projectId !== project.id) return state;
+      const name = `${engineer.firstName} ${engineer.lastName}`;
+      const progress = Math.min(100, Math.max(0, Math.round(action.progress)));
+      return audit(
+        {
+          ...state,
+          reports: state.reports.map((item) =>
+            item.id === report.id
+              ? {
+                  ...item,
+                  progress,
+                  summary: action.summary.trim(),
+                  issues: action.issues.trim(),
+                  photos: action.photos,
+                  status: "submitted",
+                  submittedAt: action.stamp.at,
+                  reviewedAt: null,
+                  reviewerId: null,
+                  decisionNote: "",
+                }
+              : item,
+          ),
+          notifications: maybeNotify(state, action.stamp, {
+            type: "project",
+            title: `${project.code} daily report resubmitted`,
+            message: `${name} resubmitted the site report after rejection. ${project.name} is now at ${progress}%.`,
+            source: "site_engineer",
+            senderName: name,
+            projectId: project.id,
+          }),
+        },
+        action.stamp,
+        "Resubmitted engineer report",
+        "Reports",
+        project.code,
+        "success",
+        { id: engineer.id, name },
       );
     }
     case "mark-notification":
@@ -444,6 +533,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
               message: `${action.topic}: ${action.message}`,
               source: "administrator",
               senderName: state.settings.profileName,
+              projectId: null,
               read: false,
               createdAt: action.stamp.at,
             },
@@ -463,9 +553,9 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
 
 function projectTasks(projectId: string, code: string, assignee: string, dueDate: string, stampId: string): TaskItem[] {
   return [
-    { id: `${stampId}-todo`, title: `Open ${code}`, projectId, assignee, dueDate, priority: "high", status: "todo" },
-    { id: `${stampId}-pending`, title: `Track ${code}`, projectId, assignee, dueDate, priority: "medium", status: "pending" },
-    { id: `${stampId}-done`, title: `Register ${code}`, projectId, assignee, dueDate, priority: "low", status: "done" },
+    { id: `${stampId}-todo`, title: `Open ${code}`, projectId, assignee, dueDate, priority: "high", status: "todo", progress: 0 },
+    { id: `${stampId}-pending`, title: `Track ${code}`, projectId, assignee, dueDate, priority: "medium", status: "pending", progress: 40 },
+    { id: `${stampId}-done`, title: `Register ${code}`, projectId, assignee, dueDate, priority: "low", status: "done", progress: 100 },
   ];
 }
 
@@ -525,7 +615,7 @@ function audit(
 function maybeNotify(
   state: AdminState,
   stamp: Stamp,
-  draft: { type: NotificationType; title: string; message: string; source?: UserRole; senderName?: string },
+  draft: { type: NotificationType; title: string; message: string; source?: UserRole; senderName?: string; projectId?: string | null },
   enabled = true,
 ): AppNotification[] {
   if (!enabled) return state.notifications;
@@ -536,6 +626,7 @@ function maybeNotify(
     message: draft.message,
     source: draft.source ?? "administrator",
     senderName: draft.senderName ?? state.settings.profileName,
+    projectId: draft.projectId ?? null,
     read: false,
     createdAt: stamp.at,
   };

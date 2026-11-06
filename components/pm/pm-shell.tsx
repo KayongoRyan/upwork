@@ -20,7 +20,7 @@ export function PmShell({ children }: { children: React.ReactNode }) {
 }
 
 function Frame({ children }: { children: React.ReactNode }) {
-  const { actor } = usePm();
+  const { actor, projects } = usePm();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const reduce = useReducedMotion();
@@ -57,6 +57,7 @@ function Frame({ children }: { children: React.ReactNode }) {
           onToggleCollapse={() => setCollapsed((value) => !value)}
           onOpenMobile={() => setMobileOpen(true)}
           scope="field"
+          portfolio={projects}
           identity={{ name, email: actor?.email ?? "", role: "Project manager" }}
           links={{
             notifications: "/pm/notifications",
