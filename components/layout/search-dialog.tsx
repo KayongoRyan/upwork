@@ -10,7 +10,17 @@ import { useAdmin } from "@/lib/data/admin-store";
 import { portalForPath } from "@/lib/portals";
 import { fullName } from "@/lib/utils";
 
-export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function SearchDialog({
+  open,
+  onOpenChange,
+  pages = navItems,
+  projectIds,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  pages?: typeof navItems;
+  projectIds?: string[];
+}) {
   const router = useRouter();
   const { projects, users, employees } = useAdmin();
   const [query, setQuery] = useState("");
@@ -21,11 +31,13 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   }
 
   const needle = query.trim().toLowerCase();
-  const pages = useMemo(
-    () => navItems.filter((item) => !needle || `${item.label} ${item.description}`.toLowerCase().includes(needle)),
-    [needle],
+  const pageHits = useMemo(
+    () => pages.filter((item) => !needle || `${item.label} ${item.description}`.toLowerCase().includes(needle)),
+    [needle, pages],
   );
+  const allowed = projectIds ? new Set(projectIds) : null;
   const projectHits = projects
+    .filter((project) => !allowed || allowed.has(project.id))
     .filter((project) => !needle || `${project.name} ${project.code} ${project.location}`.toLowerCase().includes(needle))
     .slice(0, 5);
   const userHits = users
@@ -54,31 +66,40 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         </div>
         <div className="max-h-80 space-y-4 overflow-y-auto">
           <ResultGroup title="Pages">
-            {pages.slice(0, 6).map((item) => (
+            {pageHits.slice(0, 6).map((item) => (
               <ResultButton key={item.href} title={item.label} meta={item.section} onClick={() => go(item.href)} />
             ))}
           </ResultGroup>
           <ResultGroup title="Projects">
             {projectHits.map((project) => (
-              <ResultButton key={project.id} title={project.name} meta={project.code} onClick={() => go(`/admin/projects?focus=${project.id}`)} />
+              <ResultButton
+                key={project.id}
+                title={project.name}
+                meta={project.code}
+                onClick={() => go(allowed ? "/se" : `/admin/projects?focus=${project.id}`)}
+              />
             ))}
             {needle && projectHits.length === 0 ? <p className="px-2 text-xs text-muted-foreground">No projects</p> : null}
           </ResultGroup>
-          <ResultGroup title="Users">
-            {userHits.map((user) => (
-              <ResultButton key={user.id} title={fullName(user)} meta={user.email} onClick={() => go(`/admin/users?focus=${user.id}`)} />
-            ))}
-          </ResultGroup>
-          <ResultGroup title="Employees">
-            {employeeHits.map((employee) => (
-              <ResultButton
-                key={employee.id}
-                title={fullName(employee)}
-                meta={employee.employeeCode}
-                onClick={() => go(`/admin/employees?focus=${employee.id}`)}
-              />
-            ))}
-          </ResultGroup>
+          {allowed ? null : (
+            <>
+              <ResultGroup title="Users">
+                {userHits.map((user) => (
+                  <ResultButton key={user.id} title={fullName(user)} meta={user.email} onClick={() => go(`/admin/users?focus=${user.id}`)} />
+                ))}
+              </ResultGroup>
+              <ResultGroup title="Employees">
+                {employeeHits.map((employee) => (
+                  <ResultButton
+                    key={employee.id}
+                    title={fullName(employee)}
+                    meta={employee.employeeCode}
+                    onClick={() => go(`/admin/employees?focus=${employee.id}`)}
+                  />
+                ))}
+              </ResultGroup>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

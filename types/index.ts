@@ -93,6 +93,8 @@ export interface AppNotification {
   /** Portal that sent this notice to the administrator. */
   source: UserRole;
   senderName: string;
+  /** Project this notice belongs to. The managing project manager receives it. */
+  projectId: string | null;
   read: boolean;
   createdAt: string;
 }
@@ -105,6 +107,16 @@ export interface TaskItem {
   dueDate: string;
   priority: TaskPriority;
   status: TaskStatus;
+  /** 0–100 site progress recorded by the assignee. */
+  progress: number;
+}
+
+export interface ReportPhoto {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
 }
 
 export interface EngineerReport {
@@ -116,11 +128,14 @@ export interface EngineerReport {
   progress: number;
   summary: string;
   issues: string;
+  photos: ReportPhoto[];
   status: EngineerReportStatus;
   submittedAt: string;
   reviewedAt: string | null;
   reviewerId: string | null;
   decisionNote: string;
+  /** Kept after a resubmit so the engineer still sees why it was sent back. */
+  rejectionNote: string;
 }
 
 export interface OrgSettings {
@@ -170,10 +185,10 @@ export interface AdminState {
 export type ProjectInput = Omit<Project, "id" | "createdAt">;
 export type UserInput = Omit<UserAccount, "id" | "registeredAt">;
 export type EmployeeInput = Omit<Employee, "id">;
-export type TaskInput = Omit<TaskItem, "id">;
+export type TaskInput = Omit<TaskItem, "id" | "progress"> & { progress?: number };
 export type EngineerReportInput = Pick<
   EngineerReport,
   "projectId" | "engineerId" | "periodStart" | "periodEnd" | "progress" | "summary" | "issues"
->;
+> & { photos?: ReportPhoto[] };
 
 export type ActionResult = { ok: true } | { ok: false; error: string };

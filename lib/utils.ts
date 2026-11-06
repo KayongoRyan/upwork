@@ -9,6 +9,9 @@ export const PREVIEW_ACTOR_ID = "u-admin";
 /** Preview project manager. The PM portal is scoped to projects she manages. */
 export const PREVIEW_PM_ID = "u-pm-2";
 
+/** Preview site engineer. She only sees the project on her account. */
+export const PREVIEW_SE_ID = "u-se-2";
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

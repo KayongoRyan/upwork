@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { adminReducer, type AdminAction } from "@/lib/data/reducer";
-import { nextId, PREVIEW_PM_ID } from "@/lib/utils";
+import { nextId, PREVIEW_PM_ID, PREVIEW_SE_ID } from "@/lib/utils";
 import type {
   ActionResult,
   AdminState,
@@ -10,10 +10,12 @@ import type {
   EngineerReportInput,
   EngineerReportStatus,
   OrgSettings,
+  ReportPhoto,
   Project,
   ProjectInput,
   TaskInput,
   TaskPriority,
+  TaskStatus,
   UserAccount,
   UserInput,
 } from "@/types";
@@ -207,6 +209,15 @@ export function useAdmin() {
     deleteTask(id: string) {
       dispatch({ type: "delete-task", id, stamp: stamp() });
     },
+    setAssignedTaskProgress(engineerId: string, id: string, progress: number, status: TaskStatus) {
+      dispatch({ type: "set-task-progress", id, engineerId, progress, status, stamp: stamp() });
+    },
+    submitSiteReport(input: EngineerReportInput) {
+      dispatch({ type: "submit-report", input, stamp: stamp() });
+    },
+    resubmitSiteReport(id: string, input: { progress: number; summary: string; issues: string; photos: ReportPhoto[] }) {
+      dispatch({ type: "resubmit-report", id, ...input, stamp: stamp() });
+    },
     markNotification(id: string, read: boolean) {
       dispatch({ type: "mark-notification", id, read });
     },
@@ -244,7 +255,7 @@ export function usePm() {
     reports: data.reports.filter((report) => ids.has(report.projectId)),
     engineers: data.users.filter((user) => user.role === "site_engineer" && user.status === "active"),
     crew: data.employees.filter((employee) => employee.projectId && ids.has(employee.projectId) && employee.status !== "inactive"),
-    inbox: data.notifications.filter((item) => item.source === "site_engineer" || item.source === "quantity_surveyor"),
+    inbox: data.notifications.filter((item) => isManagerFieldNotice(item, projects)),
     users: data.users,
     submitReport: data.submitEngineerReport,
     openReview: data.openReportReview,
@@ -264,6 +275,62 @@ export function usePm() {
     markNotification: data.markNotification,
     projectById: data.projectById,
   };
+}
+
+export function useSiteEngineer() {
+  const data = useAdmin();
+  const actor = data.users.find((user) => user.id === PREVIEW_SE_ID) ?? null;
+  const name = actor ? `${actor.firstName} ${actor.lastName}` : "";
+  const projects = data.projects.filter((project) => actor?.projectId === project.id);
+  const ids = new Set(projects.map((project) => project.id));
+  const tasks = data.tasks.filter((task) => ids.has(task.projectId) && task.assignee === name);
+  const reports = data.reports.filter((report) => ids.has(report.projectId) && report.engineerId === actor?.id);
+
+  return {
+    actor,
+    project: projects[0] ?? null,
+    tasks,
+    reports,
+    updateTask(id: string, progress: number, status: TaskStatus): ActionResult {
+      const task = tasks.find((item) => item.id === id);
+      if (!task || !actor) return { ok: false, error: "That task is not assigned to you." };
+      data.setAssignedTaskProgress(actor.id, id, progress, status);
+      return { ok: true };
+    },
+    submitDaily(input: { date: string; progress: number; summary: string; issues: string; photos: ReportPhoto[] }): ActionResult {
+      if (!actor?.projectId) return { ok: false, error: "No project is assigned to this account." };
+      if (input.summary.trim().length < 12) return { ok: false, error: "Write a short account of the shift, at least a sentence." };
+      data.submitSiteReport({
+        projectId: actor.projectId,
+        engineerId: actor.id,
+        periodStart: input.date,
+        periodEnd: input.date,
+        progress: input.progress,
+        summary: input.summary,
+        issues: input.issues,
+        photos: input.photos,
+      });
+      return { ok: true };
+    },
+    resubmit(id: string, input: { progress: number; summary: string; issues: string; photos: ReportPhoto[] }): ActionResult {
+      const report = reports.find((item) => item.id === id);
+      if (!report) return { ok: false, error: "That report is not on your project." };
+      if (report.status !== "rejected") return { ok: false, error: "Only a rejected report can be sent back." };
+      if (input.summary.trim().length < 12) return { ok: false, error: "Write what changed since the rejection." };
+      data.resubmitSiteReport(id, input);
+      return { ok: true };
+    },
+  };
+}
+
+export function isManagerFieldNotice(
+  item: { source: string; projectId: string | null; title: string; message: string },
+  projects: { id: string; code: string; name: string }[],
+) {
+  if (item.source !== "site_engineer" && item.source !== "quantity_surveyor") return false;
+  if (item.projectId && projects.some((project) => project.id === item.projectId)) return true;
+  const text = `${item.title} ${item.message}`;
+  return projects.some((project) => text.includes(project.code) || text.includes(project.name));
 }
 
 function emailTaken(users: UserAccount[], email: string, exceptId?: string) {

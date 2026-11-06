@@ -13,3 +13,6 @@ npm run dev
 
 - Administrator: http://localhost:3000/admin
 - Project manager: http://localhost:3001/pm
+- Site engineer: http://localhost:3002/se
+
+If one of those ports is already taken, that portal moves up by 10 (3000, then 3010, then 3020) until it finds a free port. The URL it actually bound is printed when the server starts. Cross-portal links follow those bound ports.

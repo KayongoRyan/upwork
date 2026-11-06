@@ -6,7 +6,7 @@ import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react"
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { SearchDialog } from "@/components/layout/search-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useAdmin } from "@/lib/data/admin-store";
+import { isManagerFieldNotice, useAdmin } from "@/lib/data/admin-store";
 import { navItems, type NavItem } from "@/lib/navigation";
 import { portalUrl } from "@/lib/portals";
 import { formatDateTime, initials } from "@/lib/utils";
@@ -24,6 +24,9 @@ export function Header({
   },
   crumbs,
   scope = "all",
+  siteCode,
+  portfolio,
+  search,
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -31,12 +34,17 @@ export function Header({
   identity?: { name: string; email: string; role: string };
   links?: { notifications: string; settings: string; switchHref: string; switchLabel: string };
   crumbs?: { items: NavItem[]; root: { href: string; label: string } };
-  scope?: "all" | "field";
+  scope?: "all" | "field" | "site";
+  siteCode?: string;
+  portfolio?: { id: string; code: string; name: string }[];
+  search?: { pages: NavItem[]; projectIds: string[] };
 }) {
   const { settings, notifications: allNotifications, markNotification } = useAdmin();
   const notifications = scope === "field"
-    ? allNotifications.filter((item) => item.source === "site_engineer" || item.source === "quantity_surveyor")
-    : allNotifications;
+    ? allNotifications.filter((item) => isManagerFieldNotice(item, portfolio ?? []))
+    : scope === "site"
+      ? allNotifications.filter((item) => Boolean(siteCode) && `${item.title} ${item.message}`.includes(siteCode ?? ""))
+      : allNotifications;
   const name = identity?.name ?? settings.profileName;
   const email = identity?.email ?? settings.profileEmail;
   const role = identity?.role ?? "Administrator";
@@ -131,7 +139,7 @@ export function Header({
         <Breadcrumbs items={crumbs?.items ?? navItems} root={crumbs?.root ?? { href: "/admin", label: "CPMIS" }} />
         <span className="rounded-full bg-[#fff1eb] px-2 py-0.5 text-[11px] font-medium text-black">Demo data</span>
       </div>
-      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} pages={search?.pages} projectIds={search?.projectIds} />
     </header>
   );
 }

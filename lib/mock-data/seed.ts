@@ -328,7 +328,9 @@ export function createSeedState(): AdminState {
     tasks: [
       task("tsk-01", "Set out pedestrian bridge piers", "prj-bypass", "Isaac Tumusiime", "2026-11-20", "high", "pending"),
       task("tsk-02", "Approve drainage shop drawings", "prj-bypass", "Helen Nabirye", "2026-11-14", "medium", "pending"),
-      task("tsk-03", "Recover cold-room steel package", "prj-cargo", "Lydia Atim", "2026-11-12", "critical", "pending"),
+      task("tsk-03", "Recover cold-room steel package", "prj-cargo", "Lydia Atim", "2026-11-12", "critical", "pending", 55),
+      task("tsk-13", "Pour apron bay 4", "prj-cargo", "Lydia Atim", "2026-11-09", "high", "todo", 0),
+      task("tsk-14", "Photograph cold-room pad levels", "prj-cargo", "Lydia Atim", "2026-11-07", "medium", "pending", 35),
       task("tsk-04", "Rebaseline customs hall programme", "prj-cargo", "Sarah Namakula", "2026-11-10", "high", "todo"),
       task("tsk-05", "Night closure for bearing replacement", "prj-bridge", "Moses Wanyama", "2026-11-28", "high", "todo"),
       task("tsk-06", "Close out snag list — east approach", "prj-bridge", "Simon Byaruhanga", "2026-12-02", "medium", "pending"),
@@ -349,11 +351,30 @@ export function createSeedState(): AdminState {
         progress: 44,
         summary: "Apron steel is still short. Customs hall blockwork continued on the day shift.",
         issues: "Cold-room steel package has not arrived. Night pour was cancelled once.",
+        photos: [],
         status: "submitted",
         submittedAt: "2026-11-03T16:10:00Z",
         reviewedAt: null,
         reviewerId: null,
         decisionNote: "",
+        rejectionNote: "",
+      },
+      {
+        id: "rpt-04",
+        projectId: "prj-cargo",
+        engineerId: "u-se-2",
+        periodStart: "2026-10-20",
+        periodEnd: "2026-10-20",
+        progress: 40,
+        summary: "Night pour was cancelled. Apron bay 3 shutter was still open at the end of the shift.",
+        issues: "No concrete delivery. The pump did not arrive.",
+        photos: [],
+        status: "rejected",
+        submittedAt: "2026-10-20T17:05:00Z",
+        reviewedAt: "2026-10-21T08:10:00Z",
+        reviewerId: "u-pm-2",
+        decisionNote: "The progress figure does not match the apron inspection. Resubmit with photos of bay 3.",
+        rejectionNote: "The progress figure does not match the apron inspection. Resubmit with photos of bay 3.",
       },
       {
         id: "rpt-02",
@@ -364,11 +385,13 @@ export function createSeedState(): AdminState {
         progress: 38,
         summary: "Covering the utilities package. Water main trench is open on the east access road.",
         issues: "The utility contractor missed the October milestone. Duct banks are incomplete.",
+        photos: [],
         status: "in_review",
         submittedAt: "2026-10-27T15:00:00Z",
         reviewedAt: null,
         reviewerId: "u-pm-2",
         decisionNote: "",
+        rejectionNote: "",
       },
       {
         id: "rpt-03",
@@ -379,15 +402,19 @@ export function createSeedState(): AdminState {
         progress: 100,
         summary: "Snag list closed on the east approach. Site handed to the client.",
         issues: "",
+        photos: [],
         status: "approved",
         submittedAt: "2026-08-24T09:00:00Z",
         reviewedAt: "2026-08-24T14:20:00Z",
         reviewerId: "u-pm-2",
         decisionNote: "Matches the practical completion record.",
+        rejectionNote: "",
       },
     ],
     notifications: [
-      note("ntf-09", "status", "site_engineer", "Lydia Atim", "Cold-room steel still open on site", "Site instruction: the steel package for Entebbe cargo is not on the apron. Recovery is still in progress.", false, "2026-11-06T06:15:00Z"),
+      note("ntf-13", "project", "site_engineer", "Lydia Atim", "EBB-CGT-25 daily report submitted", "Lydia Atim filed a site report for Entebbe Cargo Terminal Expansion (2026-10-27 to 2026-11-02) at 44% progress.", false, "2026-11-03T16:10:00Z", "prj-cargo"),
+      note("ntf-14", "project", "site_engineer", "Lydia Atim", "JJA-IND-24 daily report submitted", "Lydia Atim filed a site report for Jinja Industrial Park Utilities (2026-10-20 to 2026-10-26) at 38% progress.", false, "2026-10-27T15:00:00Z", "prj-industrial"),
+      note("ntf-09", "status", "site_engineer", "Lydia Atim", "Cold-room steel still open on site", "Site instruction: the steel package for Entebbe cargo is not on the apron. Recovery is still in progress.", false, "2026-11-06T06:15:00Z", "prj-cargo"),
       note("ntf-10", "project", "site_engineer", "Moses Wanyama", "Night closure requested", "Jinja bridge bearing replacement needs a night closure on 28 Nov 2026. Traffic management is not confirmed.", false, "2026-11-05T18:40:00Z"),
       note("ntf-11", "project", "quantity_surveyor", "Helen Nabirye", "Interim valuation submitted", "Valuation for Kampala Northern Bypass Phase II is ready for the administrator to acknowledge. Figures are demonstration data.", false, "2026-11-05T09:20:00Z"),
       note("ntf-12", "status", "quantity_surveyor", "Ruth Kemigisha", "Gulu measurement note filed", "Gravel stockpile quantities on Gulu Municipal Roads are short of the programme. Measurement note is on the task.", false, "2026-11-03T11:12:00Z"),
@@ -445,8 +472,9 @@ function task(
   dueDate: string,
   priority: AdminState["tasks"][number]["priority"],
   status: AdminState["tasks"][number]["status"],
+  progress = status === "done" ? 100 : status === "pending" ? 45 : 0,
 ): AdminState["tasks"][number] {
-  return { id, title, projectId, assignee, dueDate, priority, status };
+  return { id, title, projectId, assignee, dueDate, priority, status, progress };
 }
 
 function note(
@@ -458,8 +486,9 @@ function note(
   message: string,
   read: boolean,
   createdAt: string,
+  projectId: string | null = null,
 ): AdminState["notifications"][number] {
-  return { id, type, source, senderName, title, message, read, createdAt };
+  return { id, type, source, senderName, title, message, projectId, read, createdAt };
 }
 
 function log(

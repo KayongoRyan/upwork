@@ -2,17 +2,18 @@
 
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { usePm } from "@/lib/data/admin-store";
 import { taskPriorities, taskPriorityLabel, taskStatusLabel, taskStatuses } from "@/lib/labels";
 import { formatDate, fullName } from "@/lib/utils";
 import { taskSchema, type TaskFormValues } from "@/lib/validations/schemas";
 import type { TaskItem, TaskPriority, TaskStatus } from "@/types";
+
+const selectClass = "h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
 
 export function PmTasks() {
   const data = usePm();
@@ -71,29 +72,26 @@ function AssignForm({
     >
       <Field label="Task" htmlFor="title" error={errors.title?.message}><Input id="title" {...form.register("title")} /></Field>
       <Field label="Due date" htmlFor="dueDate" error={errors.dueDate?.message}><Input id="dueDate" type="date" {...form.register("dueDate")} /></Field>
-      <Field label="Project" error={errors.projectId?.message}>
-        <Controller control={form.control} name="projectId" render={({ field }) => (
-          <Select value={field.value} onValueChange={field.onChange}>
-            <SelectTrigger aria-label="Project"><SelectValue /></SelectTrigger>
-            <SelectContent>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.code} — {project.name}</SelectItem>)}</SelectContent>
-          </Select>
-        )} />
+      <Field label="Project" htmlFor="projectId" error={errors.projectId?.message}>
+        <select id="projectId" className={selectClass} {...form.register("projectId")}>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>{project.code} — {project.name}</option>
+          ))}
+        </select>
       </Field>
-      <Field label="Assignee" error={errors.assignee?.message}>
-        <Controller control={form.control} name="assignee" render={({ field }) => (
-          <Select value={field.value} onValueChange={field.onChange}>
-            <SelectTrigger aria-label="Assignee"><SelectValue /></SelectTrigger>
-            <SelectContent>{people.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
-          </Select>
-        )} />
+      <Field label="Assignee" htmlFor="assignee" error={errors.assignee?.message}>
+        <select id="assignee" className={selectClass} {...form.register("assignee")}>
+          {people.map((name) => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
       </Field>
-      <Field label="Priority" error={errors.priority?.message}>
-        <Controller control={form.control} name="priority" render={({ field }) => (
-          <Select value={field.value} onValueChange={field.onChange}>
-            <SelectTrigger aria-label="Priority"><SelectValue /></SelectTrigger>
-            <SelectContent>{taskPriorities.map((priority) => <SelectItem key={priority} value={priority}>{taskPriorityLabel[priority]}</SelectItem>)}</SelectContent>
-          </Select>
-        )} />
+      <Field label="Priority" htmlFor="priority" error={errors.priority?.message}>
+        <select id="priority" className={selectClass} defaultValue="medium" {...form.register("priority")}>
+          {taskPriorities.map((priority) => (
+            <option key={priority} value={priority}>{taskPriorityLabel[priority]}</option>
+          ))}
+        </select>
       </Field>
       <div className="flex items-end justify-end">
         <Button type="submit">Assign task</Button>

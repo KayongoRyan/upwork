@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ export function PmInbox() {
     <div>
       <PageHeader
         title="Inbox"
-        description="Notices that arrived from the site engineer and quantity surveyor portals. Approvals you make are delivered to the administrator."
+        description="Daily reports and other notices from the site engineers on your projects. Approvals you make are delivered to the administrator."
       />
       {data.inbox.length === 0 ? <EmptyState title="No incoming notices" body="Engineer and surveyor notices will show here." /> : (
         <ul className="space-y-2">
@@ -29,6 +30,9 @@ export function PmInbox() {
                   </div>
                   <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{item.message}</p>
                   <p className="mt-2 text-xs text-muted-foreground">{item.senderName} · {formatDateTime(item.createdAt)}</p>
+                  {/report/i.test(item.title) ? (
+                    <Link href="/pm/reports" className="mt-2 inline-block text-sm font-medium text-accent">Review report</Link>
+                  ) : null}
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={() => data.markNotification(item.id, !item.read)}>
                   {item.read ? "Mark unread" : "Mark as read"}

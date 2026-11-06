@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Geist, Geist_Mono } from "next/font/google";
+import { PortalPortsProvider } from "@/components/portal-ports";
 import { AdminProvider } from "@/lib/data/admin-store";
+import { readBoundPorts } from "@/lib/portals";
 import { readState } from "@/lib/server/memory";
 import "./globals.css";
 
@@ -29,7 +31,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <AdminProvider initialState={initialState}>{children}</AdminProvider>
+        <PortalPortsProvider ports={readBoundPorts()}>
+          <AdminProvider initialState={initialState}>{children}</AdminProvider>
+        </PortalPortsProvider>
       </body>
     </html>
   );
