@@ -12,7 +12,7 @@ export function ProjectProgressChart({ projects }: { projects: Project[] }) {
       full: project.name,
     }));
   return (
-    <section className="rounded-xl border border-border bg-card p-4">
+    <section className="rounded-[22px] border border-black/5 bg-card p-4">
       <header className="mb-2">
         <h2 className="text-sm font-semibold">Project progress</h2>
         <p className="text-xs text-muted-foreground">Completion percentage by project code</p>
@@ -20,11 +20,11 @@ export function ProjectProgressChart({ projects }: { projects: Project[] }) {
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} layout="vertical" margin={{ left: 8, right: 12, top: 8, bottom: 0 }}>
-            <CartesianGrid stroke="#e6edf4" horizontal={false} />
-            <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12, fill: "#5d6d80" }} />
-            <YAxis type="category" dataKey="name" width={92} tick={{ fontSize: 11, fill: "#122033" }} />
+            <CartesianGrid stroke="#f0f0f0" horizontal={false} />
+            <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12, fill: "#6f6f6f" }} />
+            <YAxis type="category" dataKey="name" width={92} tick={{ fontSize: 11, fill: "#111111" }} />
             <Tooltip formatter={(value) => [`${value}%`, "Progress"]} labelFormatter={(_, payload) => payload?.[0]?.payload.full ?? ""} />
-            <Bar dataKey="progress" fill="#0c2340" radius={[0, 4, 4, 0]} barSize={14} />
+            <Bar dataKey="progress" fill="#ff5c22" radius={[0, 6, 6, 0]} barSize={12} />
           </BarChart>
         </ResponsiveContainer>
       </div>

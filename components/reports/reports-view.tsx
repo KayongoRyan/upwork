@@ -57,7 +57,7 @@ export function ReportsView() {
         description="Sample performance, workforce, and budget figures for this preview. Do not treat the amounts as company accounts."
         actions={<Button type="button" onClick={exportCsv} disabled={projects.length === 0}><Download />Export CSV</Button>}
       />
-      <div className="mb-4 rounded-xl border border-[#f3d7a4] bg-[#fff8eb] px-4 py-3 text-sm text-[#6d4a09]">
+      <div className="mb-4 rounded-[22px] border border-accent/30 bg-[#fff1eb] px-4 py-3 text-sm text-black">
         Demonstration data in USD. The monthly trend is a fixed sample series. Project counts, progress, and budget bars follow the records currently in this session.
       </div>
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -101,7 +101,7 @@ export function ReportsView() {
                     <span className="text-muted-foreground">{formatMoney(project.spent)} / {formatMoney(project.budget)}</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full bg-primary" style={{ width: `${ratio}%` }} />
+                    <div className="h-full bg-accent" style={{ width: `${ratio}%` }} />
                   </div>
                 </li>
               );

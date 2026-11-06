@@ -5,7 +5,7 @@ import type { ActivityLog } from "@/types";
 
 export function RecentActivities({ logs }: { logs: ActivityLog[] }) {
   return (
-    <section className="rounded-xl border border-border bg-card">
+    <section className="rounded-[22px] border border-black/5 bg-card">
       <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold">Recent activity</h2>

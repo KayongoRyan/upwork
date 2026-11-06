@@ -27,26 +27,28 @@ export function StatCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: reduce ? 0 : index * 0.03 }}
     >
-      <Link href={href} className="block rounded-xl border border-border bg-card p-4 transition-colors hover:border-[#c5d2e0]">
+      <Link href={href} className="block rounded-[22px] border border-black/5 bg-card p-4 transition-colors hover:border-black/10">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-sm text-black/50">{label}</p>
             <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
           </div>
-          <span className="grid size-9 place-items-center rounded-lg bg-secondary text-primary">
+          <span className="grid size-9 place-items-center rounded-2xl bg-[#fff1eb] text-accent">
             <Icon className="size-4" />
           </span>
         </div>
         {trend ? (
-          <p
-            className={cn(
-              "mt-3 text-xs font-medium",
-              trend.tone === "up" && "text-success",
-              trend.tone === "down" && "text-destructive",
-              trend.tone === "flat" && "text-muted-foreground",
-            )}
-          >
-            {trend.text}
+          <p className="mt-3">
+            <span
+              className={cn(
+                "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+                trend.tone === "up" && "bg-[#fff1eb] text-accent",
+                trend.tone === "down" && "bg-black text-white",
+                trend.tone === "flat" && "bg-black/[0.06] text-black/60",
+              )}
+            >
+              {trend.text}
+            </span>
           </p>
         ) : null}
       </Link>

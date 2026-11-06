@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { SearchDialog } from "@/components/layout/search-dialog";
-import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAdmin } from "@/lib/data/admin-store";
 import { formatDateTime, initials } from "@/lib/utils";
@@ -35,31 +34,27 @@ export function Header({
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-card/95 px-3 backdrop-blur sm:px-5">
-      <Button type="button" variant="ghost" size="icon" className="lg:hidden" onClick={onOpenMobile} aria-label="Open navigation">
-        <Menu />
-      </Button>
-      <Button type="button" variant="ghost" size="icon" className="hidden lg:inline-flex" onClick={onToggleCollapse} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
-        {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
-      </Button>
-      <Breadcrumbs />
-      <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-        <span className="hidden rounded-full bg-[#fff4dc] px-2 py-1 text-[11px] font-medium text-[#8a5b04] md:inline">Demo data</span>
-        <Button type="button" variant="outline" className="h-9 px-2.5 text-muted-foreground" onClick={() => setSearchOpen(true)}>
-          <Search />
-          <span className="hidden sm:inline">Search</span>
-          <kbd className="hidden rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground lg:inline">Ctrl K</kbd>
-        </Button>
+    <header className="sticky top-0 z-30 bg-[#f3f3f3]/90 px-3 pt-3 pb-2 backdrop-blur sm:px-5 lg:px-6">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <button type="button" className="grid size-11 place-items-center rounded-2xl border border-black/5 bg-white text-black lg:hidden" onClick={onOpenMobile} aria-label="Open navigation">
+          <Menu className="size-4" />
+        </button>
+        <button type="button" className="hidden size-11 place-items-center rounded-2xl border border-black/5 bg-white text-black lg:grid" onClick={onToggleCollapse} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+        </button>
+        <button type="button" onClick={() => setSearchOpen(true)} className="flex h-12 min-w-0 flex-1 items-center gap-3 rounded-2xl border border-black/5 bg-white px-4 text-left text-sm text-black/40">
+          <Search className="size-4 shrink-0" />
+          <span className="truncate">Search projects, people, pages</span>
+        </button>
+        <button type="button" onClick={() => setSearchOpen(true)} className="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent text-white" aria-label="Search">
+          <Search className="size-4" />
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button type="button" variant="ghost" size="icon" className="relative" aria-label="Notifications">
-              <Bell />
-              {unread.length > 0 ? (
-                <span className="absolute top-1.5 right-1.5 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-white">
-                  {unread.length}
-                </span>
-              ) : null}
-            </Button>
+            <button type="button" className="relative grid size-11 place-items-center rounded-2xl border border-black/5 bg-white text-black" aria-label="Notifications">
+              <Bell className="size-4" />
+              {unread.length > 0 ? <span className="absolute top-2.5 right-2.5 size-2 rounded-full bg-accent" /> : null}
+            </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-80">
             <DropdownMenuLabel>{unread.length} unread</DropdownMenuLabel>
@@ -82,13 +77,13 @@ export function Header({
         </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="flex items-center gap-2 rounded-lg py-1 pr-1 pl-1 hover:bg-muted">
-              <span className="grid size-8 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+            <button type="button" className="flex items-center gap-2.5 rounded-2xl border border-black/5 bg-white py-1 pr-3 pl-1">
+              <span className="grid size-9 place-items-center rounded-full bg-black text-xs font-semibold text-white">
                 {initials(settings.profileName)}
               </span>
-              <span className="hidden text-left leading-tight md:block">
-                <span className="block text-sm font-medium">{settings.profileName}</span>
-                <span className="block text-[11px] text-muted-foreground">Administrator</span>
+              <span className="hidden text-left leading-tight sm:block">
+                <span className="block text-sm font-semibold">{settings.profileName}</span>
+                <span className="block text-[11px] text-black/45">Administrator</span>
               </span>
             </button>
           </DropdownMenuTrigger>
@@ -107,6 +102,10 @@ export function Header({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-3 px-1">
+        <Breadcrumbs />
+        <span className="rounded-full bg-[#fff1eb] px-2 py-0.5 text-[11px] font-medium text-black">Demo data</span>
       </div>
       <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
     </header>

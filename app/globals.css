@@ -1,32 +1,32 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f6f8;
-  --foreground: #122033;
+  --background: #f3f3f3;
+  --foreground: #111111;
   --card: #ffffff;
-  --card-foreground: #122033;
-  --primary: #0c2340;
-  --primary-foreground: #f7fafc;
-  --secondary: #e7eef6;
-  --secondary-foreground: #0c2340;
-  --muted: #eef2f6;
-  --muted-foreground: #5d6d80;
-  --accent: #e08a12;
-  --accent-foreground: #1c1404;
-  --destructive: #c5362b;
+  --card-foreground: #111111;
+  --primary: #111111;
+  --primary-foreground: #ffffff;
+  --secondary: #f6f6f6;
+  --secondary-foreground: #111111;
+  --muted: #f4f4f4;
+  --muted-foreground: #6f6f6f;
+  --accent: #ff5c22;
+  --accent-foreground: #ffffff;
+  --destructive: #ff5c22;
   --destructive-foreground: #ffffff;
-  --success: #1f7a45;
+  --success: #111111;
   --success-foreground: #ffffff;
-  --warning: #b58108;
-  --warning-foreground: #1c1404;
-  --info: #1d4e89;
-  --border: #d7e0ea;
-  --input: #cfd8e3;
-  --ring: #e08a12;
-  --sidebar: #0c2340;
-  --sidebar-foreground: #e7eef6;
-  --sidebar-muted: #9aafc4;
-  --radius: 0.75rem;
+  --warning: #ff5c22;
+  --warning-foreground: #ffffff;
+  --info: #ff5c22;
+  --border: #ececec;
+  --input: #e7e7e7;
+  --ring: #ff5c22;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111111;
+  --sidebar-muted: #8a8a8a;
+  --radius: 1.15rem;
 }
 
 @theme inline {
@@ -57,10 +57,10 @@
   --color-sidebar-muted: var(--sidebar-muted);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 8px);
+  --radius-md: calc(var(--radius) - 6px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 6px);
 }
 
 * {
@@ -86,8 +86,12 @@ textarea {
 }
 
 ::selection {
-  background: #f3d7a4;
-  color: #1c1404;
+  background: #ffd8c8;
+  color: #111111;
+}
+
+.bg-card {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
 }
 
 .compact-tables table td,

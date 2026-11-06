@@ -1,12 +1,12 @@
 import { cn } from "@/lib/utils";
 
 const tones = {
-  green: "bg-[#e7f6ee] text-[#17693b]",
-  red: "bg-[#fdeceb] text-[#9d2b24]",
-  amber: "bg-[#fff4dc] text-[#8a5b04]",
-  navy: "bg-[#e7eef8] text-[#16365d]",
-  slate: "bg-[#eef1f4] text-[#4d5b6b]",
-  blue: "bg-[#e8f1fb] text-[#1d4e89]",
+  green: "bg-black text-white",
+  red: "bg-accent text-white",
+  amber: "bg-[#fff1eb] text-black",
+  navy: "bg-black text-white",
+  slate: "bg-black/[0.06] text-black/70",
+  blue: "bg-[#fff1eb] text-black",
 } as const;
 
 export type BadgeTone = keyof typeof tones;

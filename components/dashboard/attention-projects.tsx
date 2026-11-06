@@ -14,7 +14,7 @@ export function AttentionProjects({
 }) {
   const items = projectsNeedingAttention(projects);
   return (
-    <section className="rounded-xl border border-border bg-card">
+    <section className="rounded-[22px] border border-black/5 bg-card">
       <header className="border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold">Projects requiring attention</h2>
         <p className="text-xs text-muted-foreground">Delayed work, low progress, holds, and deadlines inside 21 days of 6 Nov 2026.</p>

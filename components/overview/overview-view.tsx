@@ -63,7 +63,7 @@ export function OverviewView() {
                   <span>{ratio}%</span>
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full bg-accent" style={{ width: `${ratio}%` }} />
+                  <div className="h-full bg-black" style={{ width: `${ratio}%` }} />
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">{formatMoney(project.spent)} of {formatMoney(project.budget)}</p>
               </div>

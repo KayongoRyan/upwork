@@ -30,7 +30,7 @@ function Frame({ children }: { children: React.ReactNode }) {
           <motion.button
             type="button"
             aria-label="Close navigation"
-            className="fixed inset-0 z-40 bg-[#0c2340]/50 lg:hidden"
+            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
             initial={reduce ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={reduce ? undefined : { opacity: 0 }}
@@ -45,9 +45,9 @@ function Frame({ children }: { children: React.ReactNode }) {
         profileTitle={settings.profileTitle}
         onNavigate={() => setMobileOpen(false)}
       />
-      <div className={cn("min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-20" : "lg:pl-[264px]", settings.compactTables && "compact-tables")}>
+      <div className={cn("min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-[108px]" : "lg:pl-[276px]", settings.compactTables && "compact-tables")}>
         <Header collapsed={collapsed} onToggleCollapse={() => setCollapsed((value) => !value)} onOpenMobile={() => setMobileOpen(true)} />
-        <main className="px-4 py-6 sm:px-6 lg:px-8">
+        <main className="px-3 pt-2 pb-6 sm:px-5 lg:px-6">
           {children}
           <p className="mt-8 text-xs text-muted-foreground">
             Demonstration workspace for Harbours & Highlands Construction. People, budgets, and activity are sample records, not a live company.

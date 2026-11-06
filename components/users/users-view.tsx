@@ -98,7 +98,7 @@ export function UsersView() {
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-sm">
-            <thead className="bg-[#f8fafc] text-left text-[11px] text-muted-foreground">
+            <thead className="bg-black/[0.03] text-left text-[11px] text-muted-foreground">
               <tr>
                 {[
                   ["name", "Full name"],

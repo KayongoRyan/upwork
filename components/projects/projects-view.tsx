@@ -102,7 +102,7 @@ export function ProjectsView() {
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1080px] text-sm">
-            <thead className="bg-[#f8fafc] text-left text-[11px] text-muted-foreground">
+            <thead className="bg-black/[0.03] text-left text-[11px] text-muted-foreground">
               <tr>
                 {[
                   ["name", "Project"],
@@ -135,7 +135,7 @@ export function ProjectsView() {
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                        <div className="h-full bg-primary" style={{ width: `${project.progress}%` }} />
+                        <div className="h-full bg-accent" style={{ width: `${project.progress}%` }} />
                       </div>
                       <span>{project.progress}%</span>
                     </div>

@@ -75,7 +75,7 @@ export function HelpView() {
         <h2 className="text-base font-semibold">Leave a support note</h2>
         <p className="mt-1 text-sm text-muted-foreground">This stores the note in notifications and the activity log. It is not emailed.</p>
         {sent ? (
-          <p className="mt-4 rounded-lg bg-[#e7f6ee] px-3 py-2 text-sm text-[#17693b]">Saved in this preview. No message left this browser.</p>
+          <p className="mt-4 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm text-black">Saved in this preview. No message left this browser.</p>
         ) : null}
         <form
           className="mt-4 grid gap-4"

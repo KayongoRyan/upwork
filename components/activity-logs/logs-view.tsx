@@ -63,7 +63,7 @@ export function LogsView() {
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-sm">
-            <thead className="bg-[#f8fafc] text-left text-xs tracking-wide text-muted-foreground uppercase">
+            <thead className="bg-black/[0.03] text-left text-xs tracking-wide text-muted-foreground uppercase">
               <tr>
                 <th className="px-4 py-3 font-medium">User</th>
                 <th className="px-4 py-3 font-medium">Action</th>
