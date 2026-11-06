@@ -55,6 +55,21 @@ export const employeeSchema = z.object({
   hiredAt: z.string().min(1, "Choose a hire date"),
 });
 
+export const engineerReportSchema = z
+  .object({
+    projectId: z.string().min(1, "Choose a project"),
+    engineerId: z.string().min(1, "Choose a site engineer"),
+    periodStart: z.string().min(1, "Choose a period start"),
+    periodEnd: z.string().min(1, "Choose a period end"),
+    progress: z.coerce.number().min(0, "Progress cannot be negative").max(100, "Progress cannot exceed 100"),
+    summary: requiredText("Summary", 12),
+    issues: z.string().trim(),
+  })
+  .refine((value) => value.periodEnd >= value.periodStart, {
+    message: "Period end must be on or after the start",
+    path: ["periodEnd"],
+  });
+
 export const taskSchema = z.object({
   title: requiredText("Task title", 3),
   projectId: z.string().min(1, "Choose a project"),
@@ -107,3 +122,4 @@ export type ProjectFormValues = z.infer<typeof projectSchema>;
 export type UserFormValues = z.infer<typeof userSchema>;
 export type EmployeeFormValues = z.infer<typeof employeeSchema>;
 export type TaskFormValues = z.infer<typeof taskSchema>;
+export type EngineerReportFormValues = z.infer<typeof engineerReportSchema>;

@@ -1,31 +1,67 @@
 "use client";
 
-import { createContext, useContext, useMemo, useReducer, type Dispatch } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { adminReducer, type AdminAction } from "@/lib/data/reducer";
-import { createSeedState } from "@/lib/mock-data/seed";
-import { nextId } from "@/lib/utils";
+import { nextId, PREVIEW_PM_ID } from "@/lib/utils";
 import type {
   ActionResult,
   AdminState,
   EmployeeInput,
+  EngineerReportInput,
+  EngineerReportStatus,
   OrgSettings,
   Project,
   ProjectInput,
   TaskInput,
+  TaskPriority,
   UserAccount,
   UserInput,
 } from "@/types";
 
 interface AdminContextValue {
   state: AdminState;
-  dispatch: Dispatch<AdminAction>;
+  dispatch: (action: AdminAction) => void;
 }
 
 const AdminContext = createContext<AdminContextValue | null>(null);
 
-export function AdminProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(adminReducer, undefined, createSeedState);
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+export function AdminProvider({ initialState, children }: { initialState: AdminState; children: React.ReactNode }) {
+  const [state, setState] = useState(initialState);
+  const pending = useRef(0);
+  const chain = useRef(Promise.resolve());
+
+  const dispatch = useCallback((action: AdminAction) => {
+    setState((current) => adminReducer(current, action));
+    pending.current += 1;
+    chain.current = chain.current.then(async () => {
+      try {
+        const response = await fetch("/api/state", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(action),
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const next = (await response.json()) as AdminState;
+        if (pending.current === 1) setState(next);
+      } finally {
+        pending.current -= 1;
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(async () => {
+      if (pending.current > 0) return;
+      const response = await fetch("/api/state", { cache: "no-store" });
+      if (!response.ok) return;
+      const next = (await response.json()) as AdminState;
+      setState((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
+    }, 1200);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const value = useMemo(() => ({ state, dispatch }), [state, dispatch]);
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }
 
@@ -114,14 +150,59 @@ export function useAdmin() {
     deleteEmployee(id: string) {
       dispatch({ type: "delete-employee", id, stamp: stamp() });
     },
-    createTask(input: TaskInput) {
+    createTask(input: TaskInput): ActionResult {
       dispatch({ type: "create-task", input, stamp: stamp() });
+      return { ok: true };
     },
     setTaskStatus(id: string, status: TaskInput["status"]) {
       dispatch({ type: "set-task-status", id, status, stamp: stamp() });
     },
     assignTask(id: string, projectId: string) {
       dispatch({ type: "assign-task", id, projectId, stamp: stamp() });
+    },
+    scheduleTask(id: string, input: { projectId: string; assignee: string; dueDate: string; priority: TaskPriority }): ActionResult {
+      const task = state.tasks.find((item) => item.id === id);
+      const project = state.projects.find((item) => item.id === input.projectId);
+      const current = task ? state.projects.find((item) => item.id === task.projectId) : undefined;
+      if (!task || !project || !current) return { ok: false, error: "That task is no longer on the portfolio." };
+      if (project.managerId !== PREVIEW_PM_ID || current.managerId !== PREVIEW_PM_ID) {
+        return { ok: false, error: "You can only schedule tasks on your own projects." };
+      }
+      dispatch({ type: "schedule-task", id, ...input, stamp: stamp() });
+      return { ok: true };
+    },
+    setProjectProgress(id: string, progress: number, note: string): ActionResult {
+      const project = state.projects.find((item) => item.id === id);
+      if (!project || project.managerId !== PREVIEW_PM_ID) return { ok: false, error: "That project is not on your portfolio." };
+      if (project.status === "completed") return { ok: false, error: "A completed project keeps its recorded progress." };
+      dispatch({ type: "set-progress", id, progress, note: note.trim(), stamp: stamp() });
+      return { ok: true };
+    },
+    submitEngineerReport(input: EngineerReportInput): ActionResult {
+      const project = state.projects.find((item) => item.id === input.projectId && item.managerId === PREVIEW_PM_ID);
+      const engineer = state.users.find((user) => user.id === input.engineerId && user.role === "site_engineer" && user.status === "active");
+      if (!project) return { ok: false, error: "Choose one of your projects." };
+      if (!engineer) return { ok: false, error: "Choose an active site engineer." };
+      if (input.periodEnd < input.periodStart) return { ok: false, error: "Period end must be on or after the start." };
+      dispatch({ type: "submit-report", input, stamp: stamp() });
+      return { ok: true };
+    },
+    openReportReview(id: string): ActionResult {
+      const report = state.reports.find((item) => item.id === id);
+      const project = report ? state.projects.find((item) => item.id === report.projectId) : undefined;
+      if (!report || !project || project.managerId !== PREVIEW_PM_ID) return { ok: false, error: "That report is not on your portfolio." };
+      if (report.status !== "submitted") return { ok: false, error: "Only a submitted report can be opened for review." };
+      dispatch({ type: "open-report-review", id, stamp: stamp() });
+      return { ok: true };
+    },
+    decideReport(id: string, decision: Extract<EngineerReportStatus, "approved" | "rejected">, note: string): ActionResult {
+      const report = state.reports.find((item) => item.id === id);
+      const project = report ? state.projects.find((item) => item.id === report.projectId) : undefined;
+      if (!report || !project || project.managerId !== PREVIEW_PM_ID) return { ok: false, error: "That report is not on your portfolio." };
+      if (report.status !== "in_review") return { ok: false, error: "Open the report for review before you approve or reject it." };
+      if (decision === "rejected" && note.trim().length < 3) return { ok: false, error: "A rejection needs a note the engineer can act on." };
+      dispatch({ type: "decide-report", id, decision, note, stamp: stamp() });
+      return { ok: true };
     },
     deleteTask(id: string) {
       dispatch({ type: "delete-task", id, stamp: stamp() });
@@ -148,6 +229,40 @@ export function useAdmin() {
       const manager = state.users.find((user) => user.id === project.managerId);
       return manager ? `${manager.firstName} ${manager.lastName}` : "Unassigned";
     },
+  };
+}
+
+export function usePm() {
+  const data = useAdmin();
+  const projects = data.projects.filter((project) => project.managerId === PREVIEW_PM_ID);
+  const ids = new Set(projects.map((project) => project.id));
+  const actor = data.users.find((user) => user.id === PREVIEW_PM_ID) ?? null;
+  return {
+    actor,
+    projects,
+    tasks: data.tasks.filter((task) => ids.has(task.projectId)),
+    reports: data.reports.filter((report) => ids.has(report.projectId)),
+    engineers: data.users.filter((user) => user.role === "site_engineer" && user.status === "active"),
+    crew: data.employees.filter((employee) => employee.projectId && ids.has(employee.projectId) && employee.status !== "inactive"),
+    inbox: data.notifications.filter((item) => item.source === "site_engineer" || item.source === "quantity_surveyor"),
+    users: data.users,
+    submitReport: data.submitEngineerReport,
+    openReview: data.openReportReview,
+    decideReport: data.decideReport,
+    setProgress: data.setProjectProgress,
+    scheduleTask: data.scheduleTask,
+    setTaskStatus: data.setTaskStatus,
+    createTask(input: TaskInput): ActionResult {
+      if (!ids.has(input.projectId)) return { ok: false, error: "Assign the task to one of your projects." };
+      return data.createTask(input);
+    },
+    deleteTask(id: string) {
+      const task = data.tasks.find((item) => item.id === id);
+      if (!task || !ids.has(task.projectId)) return;
+      data.deleteTask(id);
+    },
+    markNotification: data.markNotification,
+    projectById: data.projectById,
   };
 }
 

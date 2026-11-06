@@ -2,7 +2,7 @@
 
 Frontend-only administrator portal for a Construction Project Management Information System.
 
-This build has no backend, database, or authentication. Records live in a local store for the browser session and reset on refresh. Sample people, budgets, and activity are demonstration data.
+This build has no database or authentication. Both portals share one demonstration store for the life of the dev server. Restarting the server restores the sample records.
 
 ## Run
 
@@ -11,4 +11,5 @@ npm install
 npm run dev
 ```
 
-Open `/admin`.
+- Administrator: http://localhost:3000/admin
+- Project manager: http://localhost:3001/pm

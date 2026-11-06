@@ -3,17 +3,17 @@
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Toaster } from "sonner";
-import { AdminProvider, useAdmin } from "@/lib/data/admin-store";
+import { useAdmin } from "@/lib/data/admin-store";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { cn } from "@/lib/utils";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   return (
-    <AdminProvider>
+    <>
       <Frame>{children}</Frame>
       <Toaster position="top-right" closeButton />
-    </AdminProvider>
+    </>
   );
 }
 

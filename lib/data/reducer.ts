@@ -1,16 +1,21 @@
 import { createSeedState } from "@/lib/mock-data/seed";
-import { PREVIEW_ACTOR_ID } from "@/lib/utils";
+import { PREVIEW_ACTOR_ID, PREVIEW_PM_ID } from "@/lib/utils";
 import type {
   ActivityLog,
   ActivityStatus,
   AdminState,
   AppNotification,
   EmployeeInput,
+  EngineerReport,
+  EngineerReportInput,
+  EngineerReportStatus,
   NotificationType,
   ProjectInput,
   TaskInput,
   TaskItem,
+  TaskPriority,
   UserInput,
+  UserRole,
 } from "@/types";
 
 interface Stamp {
@@ -34,7 +39,12 @@ export type AdminAction =
   | { type: "create-task"; input: TaskInput; stamp: Stamp }
   | { type: "set-task-status"; id: string; status: TaskInput["status"]; stamp: Stamp }
   | { type: "assign-task"; id: string; projectId: string; stamp: Stamp }
+  | { type: "schedule-task"; id: string; projectId: string; assignee: string; dueDate: string; priority: TaskPriority; stamp: Stamp }
   | { type: "delete-task"; id: string; stamp: Stamp }
+  | { type: "set-progress"; id: string; progress: number; note: string; stamp: Stamp }
+  | { type: "submit-report"; input: EngineerReportInput; stamp: Stamp }
+  | { type: "open-report-review"; id: string; stamp: Stamp }
+  | { type: "decide-report"; id: string; decision: Extract<EngineerReportStatus, "approved" | "rejected">; note: string; stamp: Stamp }
   | { type: "mark-notification"; id: string; read: boolean }
   | { type: "mark-all-notifications" }
   | { type: "update-settings"; patch: Partial<AdminState["settings"]>; stamp?: Stamp }
@@ -272,6 +282,142 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         "warning",
       );
     }
+    case "schedule-task": {
+      const item = state.tasks.find((task) => task.id === action.id);
+      const project = managedProject(state, action.projectId);
+      const current = item ? managedProject(state, item.projectId) : undefined;
+      if (!item || !project || !current) return state;
+      return audit(
+        {
+          ...state,
+          tasks: state.tasks.map((task) =>
+            task.id === item.id
+              ? { ...task, projectId: project.id, assignee: action.assignee.trim(), dueDate: action.dueDate, priority: action.priority }
+              : task,
+          ),
+        },
+        action.stamp,
+        "Scheduled task",
+        "Tasks",
+        item.title,
+        "success",
+        pmActor(state),
+      );
+    }
+    case "set-progress": {
+      const project = managedProject(state, action.id);
+      if (!project || project.status === "completed") return state;
+      const progress = Math.min(100, Math.max(0, Math.round(action.progress)));
+      const actor = pmActor(state);
+      return audit(
+        {
+          ...state,
+          projects: state.projects.map((item) => (item.id === project.id ? { ...item, progress } : item)),
+          notifications: maybeNotify(state, action.stamp, {
+            type: "status",
+            title: `${project.code} progress updated`,
+            message: `${actor.name} set progress to ${progress}%. ${action.note}`.trim(),
+            source: "project_manager",
+            senderName: actor.name,
+          }),
+        },
+        action.stamp,
+        "Updated project progress",
+        "Projects",
+        project.code,
+        "success",
+        actor,
+      );
+    }
+    case "submit-report": {
+      const project = managedProject(state, action.input.projectId);
+      const engineer = state.users.find((user) => user.id === action.input.engineerId && user.role === "site_engineer" && user.status === "active");
+      if (!project || !engineer) return state;
+      const report: EngineerReport = {
+        ...action.input,
+        id: action.stamp.id,
+        progress: Math.min(100, Math.max(0, Math.round(action.input.progress))),
+        summary: action.input.summary.trim(),
+        issues: action.input.issues.trim(),
+        status: "submitted",
+        submittedAt: action.stamp.at,
+        reviewedAt: null,
+        reviewerId: null,
+        decisionNote: "",
+      };
+      const sender = `${engineer.firstName} ${engineer.lastName}`;
+      return audit(
+        {
+          ...state,
+          reports: [report, ...state.reports],
+          notifications: maybeNotify(state, action.stamp, {
+            type: "project",
+            title: `${project.code} engineer report submitted`,
+            message: `${sender} submitted a site report for ${project.name} (${report.periodStart} to ${report.periodEnd}) at ${report.progress}% progress.`,
+            source: "site_engineer",
+            senderName: sender,
+          }),
+        },
+        action.stamp,
+        "Submitted engineer report",
+        "Reports",
+        project.code,
+        "success",
+        { id: engineer.id, name: sender },
+      );
+    }
+    case "open-report-review": {
+      const report = state.reports.find((item) => item.id === action.id);
+      const project = report ? managedProject(state, report.projectId) : undefined;
+      if (!report || !project || report.status !== "submitted") return state;
+      const actor = pmActor(state);
+      return audit(
+        {
+          ...state,
+          reports: state.reports.map((item) => (item.id === report.id ? { ...item, status: "in_review", reviewerId: actor.id } : item)),
+        },
+        action.stamp,
+        "Opened engineer report",
+        "Reports",
+        project.code,
+        "success",
+        actor,
+      );
+    }
+    case "decide-report": {
+      const report = state.reports.find((item) => item.id === action.id);
+      const project = report ? managedProject(state, report.projectId) : undefined;
+      if (!report || !project || report.status !== "in_review") return state;
+      const actor = pmActor(state);
+      const approved = action.decision === "approved";
+      const progress = approved ? Math.max(project.progress, report.progress) : project.progress;
+      return audit(
+        {
+          ...state,
+          projects: state.projects.map((item) => (item.id === project.id ? { ...item, progress: item.status === "completed" ? 100 : progress } : item)),
+          reports: state.reports.map((item) =>
+            item.id === report.id
+              ? { ...item, status: action.decision, reviewedAt: action.stamp.at, reviewerId: actor.id, decisionNote: action.note.trim() }
+              : item,
+          ),
+          notifications: maybeNotify(state, action.stamp, {
+            type: approved ? "status" : "delay",
+            title: `${project.code} report ${approved ? "approved" : "rejected"}`,
+            message: approved
+              ? `${actor.name} approved the site report. Project progress is ${progress}%.`
+              : `${actor.name} rejected the site report. ${action.note.trim()}`,
+            source: "project_manager",
+            senderName: actor.name,
+          }),
+        },
+        action.stamp,
+        approved ? "Approved engineer report" : "Rejected engineer report",
+        "Reports",
+        project.code,
+        approved ? "success" : "warning",
+        actor,
+      );
+    }
     case "mark-notification":
       return {
         ...state,
@@ -345,6 +491,15 @@ function emptyToNull(value: string | null) {
   return value;
 }
 
+function managedProject(state: AdminState, projectId: string) {
+  return state.projects.find((project) => project.id === projectId && project.managerId === PREVIEW_PM_ID);
+}
+
+function pmActor(state: AdminState) {
+  const user = state.users.find((item) => item.id === PREVIEW_PM_ID);
+  return { id: PREVIEW_PM_ID, name: user ? `${user.firstName} ${user.lastName}` : "Project manager" };
+}
+
 function audit(
   state: AdminState,
   stamp: Stamp,
@@ -352,11 +507,12 @@ function audit(
   module: string,
   record: string,
   status: ActivityStatus,
+  actor?: { id: string; name: string },
 ): AdminState {
   const entry: ActivityLog = {
     id: stamp.id.startsWith("log") ? stamp.id : `log-${stamp.id}`,
-    userId: PREVIEW_ACTOR_ID,
-    userName: state.settings.profileName,
+    userId: actor?.id ?? PREVIEW_ACTOR_ID,
+    userName: actor?.name ?? state.settings.profileName,
     action,
     module,
     record,
@@ -369,15 +525,17 @@ function audit(
 function maybeNotify(
   state: AdminState,
   stamp: Stamp,
-  draft: { type: NotificationType; title: string; message: string },
+  draft: { type: NotificationType; title: string; message: string; source?: UserRole; senderName?: string },
   enabled = true,
 ): AppNotification[] {
   if (!enabled) return state.notifications;
   const item: AppNotification = {
     id: stamp.notificationId ?? `ntf-${stamp.id}`,
-    ...draft,
-    source: "administrator",
-    senderName: state.settings.profileName,
+    type: draft.type,
+    title: draft.title,
+    message: draft.message,
+    source: draft.source ?? "administrator",
+    senderName: draft.senderName ?? state.settings.profileName,
     read: false,
     createdAt: stamp.at,
   };

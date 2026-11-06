@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
-import { isActive, navItems, navSections } from "@/lib/navigation";
+import { isActive, navItems, navSections, type NavItem } from "@/lib/navigation";
 import { initials } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
@@ -13,12 +13,18 @@ export function Sidebar({
   profileName,
   profileTitle,
   onNavigate,
+  items = navItems,
+  portalLabel = "Administrator",
+  profileHref = "/admin/settings",
 }: {
   collapsed: boolean;
   mobileOpen: boolean;
   profileName: string;
   profileTitle: string;
   onNavigate: () => void;
+  items?: NavItem[];
+  portalLabel?: string;
+  profileHref?: string;
 }) {
   const pathname = usePathname();
   const reduce = useReducedMotion();
@@ -42,13 +48,16 @@ export function Sidebar({
         {!collapsed ? (
           <div className="min-w-0">
             <p className="truncate text-[15px] font-semibold tracking-tight">CPMIS</p>
-            <p className="truncate text-xs text-black/45">Administrator</p>
+            <p className="truncate text-xs text-black/45">{portalLabel}</p>
           </div>
         ) : null}
       </div>
 
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4" aria-label="Administrator">
-        {navSections.map((section) => (
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-4" aria-label={portalLabel}>
+        {navSections.map((section) => {
+          const sectionItems = items.filter((item) => item.section === section);
+          if (sectionItems.length === 0) return null;
+          return (
           <div key={section}>
             {!collapsed ? (
               <p className="mb-1.5 px-3 text-[11px] font-medium text-black/35">{section}</p>
@@ -56,9 +65,7 @@ export function Sidebar({
               <div className="mx-auto mb-2 h-px w-6 bg-black/10" />
             )}
             <ul className="space-y-0.5">
-              {navItems
-                .filter((item) => item.section === section)
-                .map((item) => {
+              {sectionItems.map((item) => {
                   const active = isActive(pathname, item);
                   const Icon = item.icon;
                   return (
@@ -81,11 +88,12 @@ export function Sidebar({
                 })}
             </ul>
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       <Link
-        href="/admin/settings"
+        href={profileHref}
         onClick={onNavigate}
         className={cn(
           "mx-3 mb-3 flex items-center gap-3 rounded-2xl px-2 py-2 hover:bg-black/[0.04]",

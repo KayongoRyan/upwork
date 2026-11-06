@@ -3,11 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import { crumbsFor } from "@/lib/navigation";
+import { crumbsFor, navItems, type NavItem } from "@/lib/navigation";
 
-export function Breadcrumbs() {
+export function Breadcrumbs({
+  items = navItems,
+  root = { href: "/admin", label: "CPMIS" },
+}: {
+  items?: NavItem[];
+  root?: { href: string; label: string };
+}) {
   const pathname = usePathname();
-  const crumbs = crumbsFor(pathname);
+  const crumbs = crumbsFor(pathname, items, root);
   return (
     <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1 text-sm sm:flex">
       {crumbs.map((crumb, index) => {

@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AdminProvider } from "@/lib/data/admin-store";
+import { readState } from "@/lib/server/memory";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,10 +23,14 @@ export const metadata: Metadata = {
   description: "Construction Project Management Information System — administrator preview.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  await connection();
+  const initialState = readState();
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <AdminProvider initialState={initialState}>{children}</AdminProvider>
+      </body>
     </html>
   );
 }

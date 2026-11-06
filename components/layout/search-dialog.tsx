@@ -7,6 +7,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { navItems } from "@/lib/navigation";
 import { useAdmin } from "@/lib/data/admin-store";
+import { portalForPath } from "@/lib/portals";
 import { fullName } from "@/lib/utils";
 
 export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -36,6 +37,11 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
   function go(href: string) {
     close(false);
+    const owner = portalForPath(href);
+    if (owner && window.location.port !== String(owner.port)) {
+      window.location.assign(`http://localhost:${owner.port}${href}`);
+      return;
+    }
     router.push(href);
   }
 
