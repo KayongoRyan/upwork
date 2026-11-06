@@ -34,7 +34,7 @@ export function TasksView() {
         <option value="all">All projects</option>
         {data.projects.map((project) => <option key={project.id} value={project.id}>{project.code} — {project.name}</option>)}
       </select>
-      <div className="grid gap-4 xl:grid-cols-4">
+      <div className="grid gap-4 lg:grid-cols-3">
         {taskStatuses.map((status) => (
           <section key={status} className="rounded-xl border border-border bg-card">
             <header className="flex items-center justify-between border-b border-border px-3 py-2">
@@ -56,6 +56,19 @@ export function TasksView() {
                     <span className="text-xs text-muted-foreground">Due {formatDate(task.dueDate)}</span>
                   </div>
                   <label className="mt-3 grid gap-1 text-xs text-muted-foreground">
+                    Project
+                    <select
+                      aria-label={`Project for ${task.title}`}
+                      value={task.projectId}
+                      onChange={(event) => data.assignTask(task.id, event.target.value)}
+                      className="h-8 rounded-md border border-input bg-white px-2 text-sm text-foreground"
+                    >
+                      {data.projects.map((project) => (
+                        <option key={project.id} value={project.id}>{project.code} — {project.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="mt-2 grid gap-1 text-xs text-muted-foreground">
                     Move to
                     <select
                       aria-label={`Status for ${task.title}`}
@@ -132,6 +145,16 @@ function TaskForm({
           )} />
         </Field>
       </div>
+      <Field label="Status" error={errors.status?.message}>
+        <Controller control={form.control} name="status" render={({ field }) => (
+          <Select value={field.value} onValueChange={field.onChange}>
+            <SelectTrigger aria-label="Task status"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {taskStatuses.map((status) => <SelectItem key={status} value={status}>{taskStatusLabel[status]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )} />
+      </Field>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
         <Button type="submit">Add task</Button>

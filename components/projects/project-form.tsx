@@ -122,13 +122,13 @@ export function ProjectForm({
         <Field label="Expected completion" htmlFor="expectedEndDate" error={errors.expectedEndDate?.message}>
           <Input id="expectedEndDate" type="date" {...form.register("expectedEndDate")} />
         </Field>
-        <Field label="Estimated budget (USD)" htmlFor="budget" error={errors.budget?.message} hint="Demonstration figure">
-          <Input id="budget" type="number" min={0} step={1000} {...form.register("budget")} />
+        <Field label="Estimated budget (RWF)" htmlFor="budget" error={errors.budget?.message} hint="Demonstration figure in Rwandan francs">
+          <Input id="budget" type="number" min={0} step={1000000} {...form.register("budget")} />
         </Field>
         {project ? (
           <>
-            <Field label="Amount spent (USD)" htmlFor="spent" error={errors.spent?.message} hint="Demonstration figure">
-              <Input id="spent" type="number" min={0} step={1000} {...form.register("spent")} />
+            <Field label="Amount spent (RWF)" htmlFor="spent" error={errors.spent?.message} hint="Demonstration figure in Rwandan francs">
+              <Input id="spent" type="number" min={0} step={1000000} {...form.register("spent")} />
             </Field>
             <Field label="Completion %" htmlFor="progress" error={errors.progress?.message}>
               <Input id="progress" type="number" min={0} max={100} {...form.register("progress")} />

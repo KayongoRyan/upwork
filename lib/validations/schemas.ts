@@ -61,7 +61,7 @@ export const taskSchema = z.object({
   assignee: requiredText("Assignee"),
   dueDate: z.string().min(1, "Choose a due date"),
   priority: z.enum(["low", "medium", "high", "critical"]),
-  status: z.enum(["todo", "in_progress", "review", "done"]),
+  status: z.enum(["todo", "pending", "done"]),
 });
 
 export const organizationSchema = z.object({

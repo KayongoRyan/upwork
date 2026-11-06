@@ -24,7 +24,7 @@ export type NotificationType =
   | "delay"
   | "system";
 
-export type TaskStatus = "todo" | "in_progress" | "review" | "done";
+export type TaskStatus = "todo" | "pending" | "done";
 
 export type TaskPriority = "low" | "medium" | "high" | "critical";
 

@@ -32,7 +32,7 @@ export function formatDateTime(value: string) {
   }).format(new Date(iso));
 }
 
-export function formatMoney(value: number, currency = "USD") {
+export function formatMoney(value: number, currency = "RWF") {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,

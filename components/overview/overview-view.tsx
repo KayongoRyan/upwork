@@ -65,7 +65,7 @@ export function OverviewView() {
                 <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                   <div className="h-full bg-black" style={{ width: `${ratio}%` }} />
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{formatMoney(project.spent)} of {formatMoney(project.budget)}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{formatMoney(project.spent, data.settings.currency)} of {formatMoney(project.budget, data.settings.currency)}</p>
               </div>
               <Link href={`/admin/projects?focus=${project.id}`} className="mt-4 text-sm font-medium text-info hover:underline">
                 Open record

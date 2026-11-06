@@ -40,8 +40,8 @@ export function ReportsView() {
       Name: project.name,
       Status: project.status,
       Progress: project.progress,
-      BudgetUSD_demo: project.budget,
-      SpentUSD_demo: project.spent,
+      BudgetRWF_demo: project.budget,
+      SpentRWF_demo: project.spent,
       Manager: data.managerName(project),
       Location: project.location,
       Start: project.startDate,
@@ -58,7 +58,7 @@ export function ReportsView() {
         actions={<Button type="button" onClick={exportCsv} disabled={projects.length === 0}><Download />Export CSV</Button>}
       />
       <div className="mb-4 rounded-[22px] border border-accent/30 bg-[#fff1eb] px-4 py-3 text-sm text-black">
-        Demonstration data in USD. The monthly trend is a fixed sample series. Project counts, progress, and budget bars follow the records currently in this session.
+        Demonstration data in RWF. The monthly trend is a fixed sample series. Project counts, progress, and budget bars follow the records currently in this session.
       </div>
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <label className="grid gap-1 text-sm">
@@ -81,8 +81,8 @@ export function ReportsView() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Summary label="Projects in range" value={String(counts.total)} />
         <Summary label="Average progress" value={`${average}%`} />
-        <Summary label="Budget (demo)" value={formatMoney(money.budget)} />
-        <Summary label="Spent (demo)" value={formatMoney(money.spent)} />
+        <Summary label="Budget (demo)" value={formatMoney(money.budget, data.settings.currency)} />
+        <Summary label="Spent (demo)" value={formatMoney(money.spent, data.settings.currency)} />
       </div>
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <ProjectStatusChart projects={projects} />
@@ -98,7 +98,7 @@ export function ReportsView() {
                 <li key={project.id}>
                   <div className="mb-1 flex justify-between gap-3 text-sm">
                     <span className="truncate font-medium">{project.code}</span>
-                    <span className="text-muted-foreground">{formatMoney(project.spent)} / {formatMoney(project.budget)}</span>
+                    <span className="text-muted-foreground">{formatMoney(project.spent, data.settings.currency)} / {formatMoney(project.budget, data.settings.currency)}</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div className="h-full bg-accent" style={{ width: `${ratio}%` }} />
