@@ -24,7 +24,7 @@ function Frame({ children }: { children: React.ReactNode }) {
   const reduce = useReducedMotion();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="shell min-h-screen bg-background">
       <AnimatePresence>
         {mobileOpen ? (
           <motion.button
@@ -45,12 +45,12 @@ function Frame({ children }: { children: React.ReactNode }) {
         profileTitle={settings.profileTitle}
         onNavigate={() => setMobileOpen(false)}
       />
-      <div className={cn("min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-[108px]" : "lg:pl-[276px]", settings.compactTables && "compact-tables")}>
+      <div className={cn("shell-main min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-[108px]" : "lg:pl-[276px]", settings.compactTables && "compact-tables")}>
         <Header collapsed={collapsed} onToggleCollapse={() => setCollapsed((value) => !value)} onOpenMobile={() => setMobileOpen(true)} />
         <main className="px-3 pt-2 pb-6 sm:px-5 lg:px-6">
           {children}
           <p className="mt-8 text-xs text-muted-foreground">
-            Demonstration workspace for Harbours & Highlands Construction. People, budgets, and activity are sample records, not a live company.
+            Demonstration workspace for Vertexa Group. People, budgets, and activity are sample records, not a live company.
           </p>
         </main>
       </div>

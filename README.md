@@ -1,6 +1,6 @@
 # CPMIS Administrator Portal
 
-Frontend-only administrator portal for a Construction Project Management Information System.
+Frontend-only portal for Vertexa Group's Construction Project Management Information System.
 
 This build has no database or authentication. The portals share one demonstration store for the life of the dev server. Restarting the server restores the sample records.
 

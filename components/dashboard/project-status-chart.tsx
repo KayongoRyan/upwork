@@ -1,6 +1,7 @@
 "use client";
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { ChartSlot } from "@/components/dashboard/chart-slot";
 import { countProjects } from "@/lib/metrics";
 import type { Project } from "@/types";
 
@@ -21,10 +22,10 @@ export function ProjectStatusChart({ projects }: { projects: Project[] }) {
         <h2 className="text-sm font-semibold">Project status</h2>
         <p className="text-xs text-muted-foreground">Live count from the preview portfolio</p>
       </header>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
+      <ChartSlot className="h-64">
+        <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 640, height: 256 }}>
           <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" innerRadius={58} outerRadius={84} paddingAngle={2} stroke="none">
+            <Pie data={data} dataKey="value" nameKey="name" innerRadius={58} outerRadius={84} paddingAngle={2} stroke="none" isAnimationActive={false}>
               {data.map((entry) => (
                 <Cell key={entry.name} fill={entry.color} />
               ))}
@@ -32,7 +33,7 @@ export function ProjectStatusChart({ projects }: { projects: Project[] }) {
             <Tooltip />
           </PieChart>
         </ResponsiveContainer>
-      </div>
+      </ChartSlot>
       <ul className="grid grid-cols-2 gap-2 text-xs">
         {data.map((entry) => (
           <li key={entry.name} className="flex items-center justify-between gap-2">
