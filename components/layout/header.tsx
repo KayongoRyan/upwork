@@ -102,7 +102,7 @@ export function Header({
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href={links.notifications}>Open notifications</Link>
+              <Link href={links.notifications} prefetch={false}>Open notifications</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -126,13 +126,13 @@ export function Header({
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              {links.settings.startsWith("http") ? <a href={links.settings}>Profile settings</a> : <Link href={links.settings}>Profile settings</Link>}
+              {links.settings.startsWith("http") ? <a href={links.settings}>Profile settings</a> : <Link href={links.settings} prefetch={false}>Profile settings</Link>}
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              {links.notifications.startsWith("http") ? <a href={links.notifications}>Notifications</a> : <Link href={links.notifications}>Notifications</Link>}
+              {links.notifications.startsWith("http") ? <a href={links.notifications}>Notifications</a> : <Link href={links.notifications} prefetch={false}>Notifications</Link>}
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              {links.switchHref.startsWith("http") ? <a href={links.switchHref}>{links.switchLabel}</a> : <Link href={links.switchHref}>{links.switchLabel}</Link>}
+              {links.switchHref.startsWith("http") ? <a href={links.switchHref}>{links.switchLabel}</a> : <Link href={links.switchHref} prefetch={false}>{links.switchLabel}</Link>}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

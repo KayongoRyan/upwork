@@ -23,8 +23,8 @@ export function PmTasks() {
   return (
     <div>
       <PageHeader
-        title="Schedule & tasks"
-        description="Assign work on your projects and set the due date. Assignees are the site engineers and crew already on those projects."
+        title="Tasks"
+        description="Assign work on your projects and set the due date. The Gantt programme is on the schedule."
       />
       <AssignForm projects={data.projects} people={people} onCreate={data.createTask} />
       <ul className="mt-4 space-y-2">
@@ -152,7 +152,7 @@ function ScheduleRow({
         onClick={() => {
           const result = onSave(task.id, { projectId, assignee, dueDate, priority });
           if (!result.ok) toast.error(result.error);
-          else toast.success("Schedule saved.");
+          else toast.success("Task updated.");
         }}
       >
         Save

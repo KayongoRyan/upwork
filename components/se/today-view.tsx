@@ -22,7 +22,7 @@ export function SeToday() {
           <p className="mt-1 text-sm text-black/45">{formatDate(DEMO_TODAY)}. File the shift before you leave the gate.</p>
         </div>
         <Button asChild>
-          <Link href="/se/report">
+          <Link prefetch={false} href="/se/report">
             <Camera /> File today’s report
           </Link>
         </Button>
@@ -63,7 +63,7 @@ export function SeToday() {
 
           <div className="mt-6 flex items-center justify-between">
             <h3 className="text-sm font-semibold">Your open tasks</h3>
-            <Link href="/se/tasks" className="text-sm font-medium text-accent">Update</Link>
+            <Link prefetch={false} href="/se/tasks" className="text-sm font-medium text-accent">Update</Link>
           </div>
           <ul className="mt-3 divide-y divide-black/5">
             {open.length === 0 ? <li className="py-3 text-sm text-black/45">Nothing is still open.</li> : null}
@@ -86,7 +86,7 @@ export function SeToday() {
 
         <section className="space-y-3">
           {rejected.map((report) => (
-            <Link key={report.id} href={`/se/history#${report.id}`} className="block rounded-[22px] bg-[#fff1eb] p-4">
+            <Link key={report.id} prefetch={false} href={`/se/history#${report.id}`} className="block rounded-[22px] bg-[#fff1eb] p-4">
               <p className="text-sm font-semibold">Report sent back</p>
               <p className="mt-1 text-sm">{report.rejectionNote || report.decisionNote}</p>
               <p className="mt-3 text-xs font-medium">Open it and resubmit</p>
@@ -106,7 +106,7 @@ export function SeToday() {
 
 function Stat({ href, icon: Icon, value, label, warn }: { href: string; icon: typeof ListTodo; value: number | string; label: string; warn?: boolean }) {
   return (
-    <Link href={href} className="rounded-[22px] border border-black/5 bg-card p-4">
+    <Link prefetch={false} href={href} className="rounded-[22px] border border-black/5 bg-card p-4">
       <span className={cn("grid size-9 place-items-center rounded-2xl", warn ? "bg-[#fff1eb] text-accent" : "bg-black/[0.04] text-black")}>
         <Icon className="size-4" />
       </span>

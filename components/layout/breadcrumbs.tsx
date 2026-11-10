@@ -24,7 +24,7 @@ export function Breadcrumbs({
             {last ? (
               <span className="truncate font-medium text-foreground">{crumb.label}</span>
             ) : (
-              <Link href={crumb.href} className="truncate text-muted-foreground hover:text-foreground">
+              <Link prefetch={false} href={crumb.href} className="truncate text-muted-foreground hover:text-foreground">
                 {crumb.label}
               </Link>
             )}

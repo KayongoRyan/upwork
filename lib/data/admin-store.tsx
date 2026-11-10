@@ -8,6 +8,9 @@ import type {
   ActionResult,
   AdminState,
   BoqInput,
+  DocumentRevision,
+  ProjectDocument,
+  UserRole,
   EmployeeInput,
   EngineerReportInput,
   EngineerReportStatus,
@@ -231,6 +234,44 @@ export function useAdmin() {
     },
     submitCostReport(projectId: string, surveyorId: string) {
       dispatch({ type: "submit-cost-report", projectId, surveyorId, stamp: stamp() });
+    },
+    registerDocument(
+      document: Omit<ProjectDocument, "id" | "revisions">,
+      revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt">,
+    ): ActionResult {
+      const number = document.number.trim().toUpperCase();
+      if (!number || !document.title.trim()) return { ok: false, error: "Number and title are required." };
+      if (!revision.fileName) return { ok: false, error: "Choose a file." };
+      if ((state.documents ?? []).some((item) => item.projectId === document.projectId && item.number.toUpperCase() === number)) {
+        return { ok: false, error: "That document number is already on this project." };
+      }
+      dispatch({
+        type: "register-document",
+        document: { ...document, number, title: document.title.trim() },
+        revision: { ...revision, status: revision.status },
+        stamp: stamp(),
+      });
+      return { ok: true };
+    },
+    reviseDocument(documentId: string, revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt" | "status">): ActionResult {
+      const current = (state.documents ?? []).find((item) => item.id === documentId);
+      if (!current) return { ok: false, error: "That document is not on the register." };
+      if (!revision.fileName) return { ok: false, error: "Choose a file." };
+      dispatch({ type: "revise-document", documentId, revision, stamp: stamp() });
+      return { ok: true };
+    },
+    issueRevision(documentId: string): ActionResult {
+      const current = (state.documents ?? []).find((item) => item.id === documentId);
+      const latest = current?.revisions[current.revisions.length - 1];
+      if (!current || !latest) return { ok: false, error: "That document is not on the register." };
+      if (latest.status === "approved") return { ok: false, error: "The latest revision is already issued." };
+      dispatch({ type: "issue-revision", documentId, stamp: stamp() });
+      return { ok: true };
+    },
+    setDocumentAccess(documentId: string, access: UserRole[]): ActionResult {
+      if (!(state.documents ?? []).some((item) => item.id === documentId)) return { ok: false, error: "That document is not on the register." };
+      dispatch({ type: "set-document-access", documentId, access, stamp: stamp() });
+      return { ok: true };
     },
     markNotification(id: string, read: boolean) {
       dispatch({ type: "mark-notification", id, read });

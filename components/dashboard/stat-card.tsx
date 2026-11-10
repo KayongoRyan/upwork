@@ -18,7 +18,7 @@ export function StatCard({
 }) {
   return (
     <div>
-      <Link href={href} className="block rounded-[22px] border border-black/5 bg-card p-4 transition-colors hover:border-black/10">
+      <Link href={href} prefetch={false} className="block rounded-[22px] border border-black/5 bg-card p-4 transition-colors hover:border-black/10">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm text-black/50">{label}</p>

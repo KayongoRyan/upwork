@@ -74,7 +74,7 @@ export function PmDashboard() {
             ))}
           </div>
           <Button variant="navy" asChild>
-            <Link href="/pm/tasks">
+            <Link prefetch={false} href="/pm/tasks">
               <Plus /> Assign task
             </Link>
           </Button>
@@ -97,7 +97,7 @@ export function PmDashboard() {
                 <p className="mt-0.5 text-xs text-black/45">Your active portfolio. Select a row to open it on the right.</p>
               </div>
               <Button variant="navy" size="sm" asChild>
-                <Link href="/pm/tasks">
+                <Link prefetch={false} href="/pm/tasks">
                   <Plus /> New task
                 </Link>
               </Button>
@@ -150,7 +150,7 @@ export function PmDashboard() {
                           </span>
                         </td>
                         <td className="py-3 text-right">
-                          <Link href="/pm/progress" className="text-sm font-medium text-black/70 hover:text-black" onClick={(event) => event.stopPropagation()}>
+                          <Link prefetch={false} href="/pm/progress" className="text-sm font-medium text-black/70 hover:text-black" onClick={(event) => event.stopPropagation()}>
                             View
                           </Link>
                         </td>
@@ -171,7 +171,7 @@ export function PmDashboard() {
                 </p>
               </div>
               <Button variant="navy" size="sm" asChild>
-                <Link href="/pm/tasks">
+                <Link prefetch={false} href="/pm/tasks">
                   <Plus /> Add task
                 </Link>
               </Button>
@@ -185,7 +185,7 @@ export function PmDashboard() {
                       <p className="text-sm font-medium">
                         {column.label} <span className="text-black/35">{items.length}</span>
                       </p>
-                      <Link href="/pm/tasks" className="grid size-6 place-items-center rounded-lg text-black/45 hover:bg-white" aria-label={`Add a ${column.label} task`}>
+                      <Link prefetch={false} href="/pm/tasks" className="grid size-6 place-items-center rounded-lg text-black/45 hover:bg-white" aria-label={`Add a ${column.label} task`}>
                         <Plus className="size-3.5" />
                       </Link>
                     </div>
@@ -220,7 +220,7 @@ export function PmDashboard() {
                 <p className="mt-0.5 text-xs text-black/45">Task deadlines and project finish dates.</p>
               </div>
               <Button variant="navy" size="sm" asChild>
-                <Link href="/pm/tasks">
+                <Link prefetch={false} href="/pm/tasks">
                   <Plus /> Add event
                 </Link>
               </Button>
@@ -353,10 +353,10 @@ function FocusCard({
               </span>
             ))}
           </div>
-          <Link href="/pm/progress" className="text-sm font-medium hover:underline">View details</Link>
+          <Link prefetch={false} href="/pm/progress" className="text-sm font-medium hover:underline">View details</Link>
         </div>
         {waiting ? (
-          <Link href="/pm/reports" className="mt-3 block rounded-xl bg-[#fff1eb] px-3 py-2 text-xs font-medium">
+          <Link prefetch={false} href="/pm/reports" className="mt-3 block rounded-xl bg-[#fff1eb] px-3 py-2 text-xs font-medium">
             An engineer report is waiting on this project.
           </Link>
         ) : null}
@@ -367,7 +367,7 @@ function FocusCard({
 
 function Stat({ href, icon: Icon, value, label, warn = false }: { href: string; icon: typeof FolderKanban; value: number; label: string; warn?: boolean }) {
   return (
-    <Link href={href} className="flex items-center gap-3 rounded-[22px] border border-black/5 bg-card px-4 py-3">
+    <Link prefetch={false} href={href} className="flex items-center gap-3 rounded-[22px] border border-black/5 bg-card px-4 py-3">
       <span className={cn("grid size-10 place-items-center rounded-2xl", warn ? "bg-accent text-white" : "bg-black/[0.04] text-black")}>
         <Icon className="size-4" />
       </span>
