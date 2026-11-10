@@ -37,7 +37,7 @@ Dashboard for Sarah’s projects. Today, Daily, Weekly, and Monthly filter the t
 
 Schedule opens the programme for the project picked in the dropdown. Month, Week, Daily, and Hourly change the scale. Daily and Hourly scroll to 6 Nov 2026.
 
-Tasks can be assigned. Engineer reports can be opened, approved, or rejected. Cost reports can be edited, saved, submitted to the administrator, or saved as a PDF of the figures on the form. The quantity surveyor does not submit that cost report.
+Tasks can be assigned. Engineer reports can be opened, approved, or rejected. Cost reports can be edited, saved, submitted to the administrator, or saved as a PDF of the figures on the form. A statement the quantity surveyor sends shows up here first.
 
 ## Site engineer
 
@@ -45,4 +45,4 @@ Today’s site for Lydia on KGL-CGT-25. File today’s report opens the shift fo
 
 ## Quantity surveyor
 
-Bill of quantities, measured expenditure, and the financial statement for KGL-CGT-25. Notices on that project show here. The project manager is the one who submits the cost report.
+Bill of quantities, measured expenditure, and the financial statement for KGL-CGT-25. Send that statement to the project manager. Notices on that project show here. The project manager submits the cost report to the administrator.

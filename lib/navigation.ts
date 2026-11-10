@@ -175,7 +175,7 @@ export const pmNavItems: NavItem[] = [
     label: "Cost reports",
     icon: FileBarChart,
     section: "Management",
-    description: "Quantity surveyor statements. You submit the cost report.",
+    description: "Statements the surveyor sends you. You submit the cost report.",
   },
   {
     href: "/pm/notifications",
@@ -246,7 +246,7 @@ export const qsNavItems: NavItem[] = [
     label: "Financial report",
     icon: FileBarChart,
     section: "Management",
-    description: "Cost statement for the assigned project.",
+    description: "Cost statement for the assigned project. Send it to the project manager.",
   },
   {
     href: "/qs/notices",

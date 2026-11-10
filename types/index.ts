@@ -253,6 +253,18 @@ export interface CalendarEvent {
   date: string;
 }
 
+/** A note the administrator writes on another portal's work. Only the project manager of that work sees it. */
+export type WorkKind = "project" | "task" | "report" | "cost" | "progress" | "boq" | "event";
+
+export interface WorkComment {
+  id: string;
+  kind: WorkKind;
+  workId: string;
+  projectId: string;
+  body: string;
+  createdAt: string;
+}
+
 /** A progress percentage saved from the project manager progress page. */
 export interface ProgressMark {
   id: string;
@@ -278,6 +290,7 @@ export interface AdminState {
   monthlyActivity: MonthlyPoint[];
   progressMarks: ProgressMark[];
   calendarEvents: CalendarEvent[];
+  workComments: WorkComment[];
 }
 
 export type ProjectInput = Omit<Project, "id" | "createdAt">;

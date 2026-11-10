@@ -1,6 +1,6 @@
-import { billLines, expenditureFor, linesActual, parseBoq } from "@/lib/boq";
+import { billLines, expenditureFor, linesActual, parseBoq, sameBill } from "@/lib/boq";
 import { createSeedState } from "@/lib/mock-data/seed";
-import { PREVIEW_ACTOR_ID, PREVIEW_PM_ID } from "@/lib/utils";
+import { formatMoney, PREVIEW_ACTOR_ID, PREVIEW_PM_ID } from "@/lib/utils";
 import type {
   ActivityLog,
   ActivityStatus,
@@ -22,6 +22,7 @@ import type {
   TaskPriority,
   UserInput,
   UserRole,
+  WorkKind,
 } from "@/types";
 
 interface Stamp {
@@ -60,11 +61,15 @@ export type AdminAction =
   | { type: "update-boq"; surveyorId: string; id: string; input: BoqInput; stamp: Stamp }
   | { type: "delete-boq"; surveyorId: string; id: string; stamp: Stamp }
   | { type: "submit-cost-report"; projectId: string; surveyorId: string; stamp: Stamp }
+  | { type: "send-cost-report"; surveyorId: string; stamp: Stamp }
+  | { type: "delete-cost-report"; id: string; stamp: Stamp }
   | { type: "revise-cost-bill"; projectId: string; lines: { id: string; estimatedQty: number; actualQty: number; unitRate: number }[]; stamp: Stamp }
   | { type: "register-document"; document: Omit<ProjectDocument, "id" | "revisions">; revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt">; stamp: Stamp }
   | { type: "revise-document"; documentId: string; revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt" | "status">; stamp: Stamp }
   | { type: "issue-revision"; documentId: string; stamp: Stamp }
   | { type: "set-document-access"; documentId: string; access: ProjectDocument["access"]; stamp: Stamp }
+  | { type: "add-work-comment"; kind: WorkKind; workId: string; projectId: string; body: string; stamp: Stamp }
+  | { type: "delete-work-comment"; id: string; stamp: Stamp }
   | { type: "mark-notification"; id: string; read: boolean }
   | { type: "mark-all-notifications" }
   | { type: "update-settings"; patch: Partial<AdminState["settings"]>; stamp?: Stamp }
@@ -683,6 +688,57 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         actor,
       );
     }
+    case "send-cost-report": {
+      const surveyor = activeSurveyor(state, action.surveyorId);
+      const project = surveyor?.projectId ? state.projects.find((item) => item.id === surveyor.projectId) : undefined;
+      const lines = surveyor?.projectId ? billLines(state.boq, surveyor.projectId) : [];
+      if (!surveyor || !project || lines.length === 0) return state;
+      const already = (state.costReports ?? []).some(
+        (report) => report.projectId === project.id && report.submittedBy === surveyor.id && sameBill(report.lines, lines),
+      );
+      if (already) return state;
+      const name = `${surveyor.firstName} ${surveyor.lastName}`;
+      const manager = state.users.find((user) => user.id === project.managerId);
+      const managerName = manager ? `${manager.firstName} ${manager.lastName}` : "the project manager";
+      const report: CostReport = {
+        id: action.stamp.id,
+        projectId: project.id,
+        surveyorId: surveyor.id,
+        status: "pending",
+        lines,
+        submittedAt: action.stamp.at,
+        submittedBy: surveyor.id,
+      };
+      return audit(
+        {
+          ...state,
+          costReports: [report, ...(state.costReports ?? [])],
+          notifications: maybeNotify(state, action.stamp, {
+            type: "project",
+            title: `${project.code} cost statement sent`,
+            message: `${name} sent the cost statement for ${project.name} to ${managerName}. Measured expenditure is ${formatMoney(linesActual(lines))}.`,
+            source: "quantity_surveyor",
+            senderName: name,
+            projectId: project.id,
+          }),
+        },
+        action.stamp,
+        "Sent cost statement",
+        "Reports",
+        project.code,
+        "success",
+        { id: surveyor.id, name },
+      );
+    }
+    case "delete-cost-report": {
+      const id = action.id;
+      return {
+        ...state,
+        costReports: (state.costReports ?? []).filter((report) => report.id !== id),
+        notifications: state.notifications.filter((item) => item.id !== `ntf-${id}`),
+        activityLogs: state.activityLogs.filter((item) => item.id !== `log-${id}`),
+      };
+    }
     case "submit-cost-report": {
       const project = managedProject(state, action.projectId);
       const surveyor = state.users.find((user) => user.id === action.surveyorId && user.role === "quantity_surveyor" && user.status === "active" && user.projectId === action.projectId);
@@ -838,6 +894,37 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         "success",
       );
     }
+    case "add-work-comment": {
+      const body = action.body.trim();
+      if (body.length < 3 || body.length > 500 || !action.workId) return state;
+      return audit(
+        {
+          ...state,
+          workComments: [
+            {
+              id: action.stamp.id,
+              kind: action.kind,
+              workId: action.workId,
+              projectId: action.projectId,
+              body,
+              createdAt: action.stamp.at,
+            },
+            ...(state.workComments ?? []),
+          ],
+        },
+        action.stamp,
+        "Commented on portal work",
+        "Notifications",
+        action.workId,
+        "success",
+      );
+    }
+    case "delete-work-comment":
+      return {
+        ...state,
+        workComments: (state.workComments ?? []).filter((item) => item.id !== action.id),
+        activityLogs: state.activityLogs.filter((item) => item.id !== `log-${action.id}`),
+      };
     case "mark-notification":
       return {
         ...state,

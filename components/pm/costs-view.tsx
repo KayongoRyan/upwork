@@ -1,6 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { ManagerNotes } from "@/components/pm/manager-notes";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { billLines, formatPercent, lineActual, lineEstimate, lineVariance, linesActual, linesEstimate, sameBill } from "@/lib/boq";
@@ -33,10 +34,13 @@ export function PmCosts() {
           const live = billLines(data.boq, project.id);
           const estimated = linesEstimate(live);
           const expenditure = linesActual(live);
-          const latest = data.costReports.find((report) => report.projectId === project.id);
-          const filed = latest && sameBill(latest.lines, live);
+          const reports = data.costReports.filter((report) => report.projectId === project.id);
+          const submitted = reports.find((report) => report.status === "submitted");
+          const received = reports.find((report) => report.status === "pending");
+          const filed = submitted && sameBill(submitted.lines, live);
+          const handed = received && sameBill(received.lines, live);
           return (
-            <article key={project.id} className="rounded-[22px] border border-black/5 bg-card p-4 sm:p-5">
+            <article key={project.id} id={project.id} className="scroll-mt-28 rounded-[22px] border border-black/5 bg-card p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs text-black/45">{project.code}</p>
@@ -48,14 +52,21 @@ export function PmCosts() {
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" form={`bill-${project.id}`} formAction="/api/pm/costs/pdf" variant="outline">Save as PDF</Button>
                   <Button type="submit" form={`bill-${project.id}`} formAction="/api/pm/costs" className="bg-[#ff5c22] text-white hover:bg-[#e64e18]">
-                    {latest && !filed ? "Submit updated figures" : "Submit cost report"}
+                    {submitted && !filed ? "Submit updated figures" : "Submit cost report"}
                   </Button>
                 </div>
               </div>
-              {filed && latest?.submittedAt ? (
-                <p className="mt-3 text-sm">Submitted {formatDateTime(latest.submittedAt)}. You can still change these figures, then save or submit them.</p>
-              ) : latest ? (
-                <p className="mt-3 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">The bill has changed since the last submission.</p>
+              {filed && submitted?.submittedAt ? (
+                <p className="mt-3 text-sm">
+                  Submitted {formatDateTime(submitted.submittedAt)}. You can still change these figures, then save or submit them.
+                  {handed && received?.submittedAt ? ` ${surveyor ? fullName(surveyor) : "The surveyor"} sent these figures on ${formatDateTime(received.submittedAt)}.` : ""}
+                </p>
+              ) : handed && received?.submittedAt ? (
+                <p className="mt-3 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">
+                  {surveyor ? fullName(surveyor) : "The surveyor"} sent this statement on {formatDateTime(received.submittedAt)}. Submit it to the administrator when it is ready.
+                </p>
+              ) : submitted || received ? (
+                <p className="mt-3 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">The bill has changed since the last statement.</p>
               ) : (
                 <p className="mt-3 text-sm text-black/55">Not submitted yet.</p>
               )}
@@ -112,6 +123,7 @@ export function PmCosts() {
                 </div>
               </form>
               <p className="mt-3 text-xs text-black/45">Cost variance against the budget is {formatMoney(expenditure - project.budget)}.</p>
+              <ManagerNotes notes={data.comments.filter((item) => item.projectId === project.id && (item.kind === "cost" || item.kind === "boq" || item.kind === "project"))} />
             </article>
           );
         })}

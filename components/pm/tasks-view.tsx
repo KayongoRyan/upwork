@@ -4,6 +4,7 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { ManagerNotes } from "@/components/pm/manager-notes";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { usePm } from "@/lib/data/admin-store";
 import { taskPriorities, taskPriorityLabel, taskStatusLabel, taskStatuses } from "@/lib/labels";
 import { formatDate, fullName } from "@/lib/utils";
 import { taskSchema, type TaskFormValues } from "@/lib/validations/schemas";
-import type { TaskItem, TaskPriority, TaskStatus } from "@/types";
+import type { TaskItem, TaskPriority, TaskStatus, WorkComment } from "@/types";
 
 const selectClass = "h-10 w-full rounded-lg border border-input bg-white px-3 text-sm text-foreground outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
 
@@ -29,7 +30,15 @@ export function PmTasks() {
       <AssignForm projects={data.projects} people={people} onCreate={data.createTask} />
       <ul className="mt-4 space-y-2">
         {tasks.map((task) => (
-          <ScheduleRow key={task.id} task={task} projects={data.projects} people={people} onSave={data.scheduleTask} onStatus={data.setTaskStatus} />
+          <ScheduleRow
+            key={task.id}
+            task={task}
+            projects={data.projects}
+            people={people}
+            notes={data.comments.filter((item) => item.kind === "task" && item.workId === task.id)}
+            onSave={data.scheduleTask}
+            onStatus={data.setTaskStatus}
+          />
         ))}
       </ul>
     </div>
@@ -104,12 +113,14 @@ function ScheduleRow({
   task,
   projects,
   people,
+  notes,
   onSave,
   onStatus,
 }: {
   task: TaskItem;
   projects: { id: string; code: string }[];
   people: string[];
+  notes: WorkComment[];
   onSave: (id: string, input: { projectId: string; assignee: string; dueDate: string; priority: TaskPriority }) => { ok: true } | { ok: false; error: string };
   onStatus: (id: string, status: TaskStatus) => void;
 }) {
@@ -119,7 +130,7 @@ function ScheduleRow({
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const options = people.includes(assignee) ? people : [assignee, ...people];
   return (
-    <li className="grid gap-2 rounded-[22px] border border-black/5 bg-card p-3 lg:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))_auto] lg:items-end">
+    <li id={task.id} className="scroll-mt-28 grid gap-2 rounded-[22px] border border-black/5 bg-card p-3 lg:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))_auto] lg:items-end">
       <div>
         <p className="text-sm font-medium">{task.title}</p>
         <p className="text-xs text-muted-foreground">{taskStatusLabel[task.status]} · due {formatDate(task.dueDate)}</p>
@@ -163,6 +174,7 @@ function ScheduleRow({
           {taskPriorities.map((item) => <option key={item} value={item}>{taskPriorityLabel[item]}</option>)}
         </select>
       </label>
+      <ManagerNotes notes={notes} className="lg:col-span-full" />
     </li>
   );
 }

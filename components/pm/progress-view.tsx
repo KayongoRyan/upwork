@@ -1,6 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { ManagerNotes } from "@/components/pm/manager-notes";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
@@ -25,7 +26,7 @@ export function PmProgress() {
           const locked = project.status === "completed";
           const mark = data.progressMarks.find((item) => item.projectId === project.id);
           return (
-            <form key={project.id} className="grid gap-3 rounded-[22px] border border-black/5 bg-card p-4 sm:grid-cols-[1fr_180px] sm:items-end" action="/api/pm/progress" method="post">
+            <form key={project.id} id={project.id} className="scroll-mt-28 grid gap-3 rounded-[22px] border border-black/5 bg-card p-4 sm:grid-cols-[1fr_180px] sm:items-end" action="/api/pm/progress" method="post">
               <input type="hidden" name="projectId" value={project.id} />
               <div>
                 <p className="text-xs text-black/45">{project.code}</p>
@@ -47,6 +48,7 @@ export function PmProgress() {
                     {locked ? "Completed" : "Save progress"}
                   </Button>
                 </div>
+                <ManagerNotes notes={data.comments.filter((item) => item.kind === "progress" && item.projectId === project.id)} />
               </div>
             </form>
           );
