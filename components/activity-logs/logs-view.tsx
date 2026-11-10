@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Search } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { Pagination } from "@/components/shared/pagination";
@@ -10,12 +12,18 @@ import { useAdmin } from "@/lib/data/admin-store";
 import { formatDateTime } from "@/lib/utils";
 
 export function LogsView() {
+  const params = useSearchParams();
+  const urlQuery = params.get("find") ?? "";
+  const urlUser = params.get("user") ?? "all";
+  const urlModule = params.get("module") ?? "all";
+  const urlFrom = params.get("from") ?? "";
+  const urlTo = params.get("to") ?? "";
   const { activityLogs } = useAdmin();
-  const [query, setQuery] = useState("");
-  const [user, setUser] = useState("all");
-  const [moduleName, setModuleName] = useState("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [query, setQuery] = useState(urlQuery);
+  const [user, setUser] = useState(urlUser);
+  const [moduleName, setModuleName] = useState(urlModule);
+  const [from, setFrom] = useState(urlFrom);
+  const [to, setTo] = useState(urlTo);
   const [page, setPage] = useState(1);
   const users = [...new Set(activityLogs.map((log) => log.userName))].sort();
   const modules = [...new Set(activityLogs.map((log) => log.module))].sort();
@@ -47,19 +55,31 @@ export function LogsView() {
   return (
     <div>
       <PageHeader title="System activity logs" description="A preview trail of who changed which record. New edits in this session appear at the top." />
-      <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search action or record" />
-        <select aria-label="User" value={user} onChange={(event) => setUser(event.target.value)} className="h-10 rounded-lg border border-input bg-white px-3 text-sm">
+      <form action="/admin/activity-logs" method="get" className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="flex gap-2">
+          <Input
+            key={urlQuery}
+            name="find"
+            defaultValue={urlQuery}
+            onInput={(event) => setQuery(event.currentTarget.value)}
+            placeholder="Search action or record"
+            aria-label="Search action or record"
+          />
+          <button type="submit" className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent text-white" aria-label="Search logs">
+            <Search className="size-4" />
+          </button>
+        </div>
+        <select name="user" aria-label="User" defaultValue={urlUser} onChange={(event) => setUser(event.target.value)} className="h-10 rounded-lg border border-input bg-white px-3 text-sm">
           <option value="all">All users</option>
-          {users.map((name) => <option key={name}>{name}</option>)}
+          {users.map((name) => <option key={name} value={name}>{name}</option>)}
         </select>
-        <select aria-label="Module" value={moduleName} onChange={(event) => setModuleName(event.target.value)} className="h-10 rounded-lg border border-input bg-white px-3 text-sm">
+        <select name="module" aria-label="Module" defaultValue={urlModule} onChange={(event) => setModuleName(event.target.value)} className="h-10 rounded-lg border border-input bg-white px-3 text-sm">
           <option value="all">All modules</option>
-          {modules.map((name) => <option key={name}>{name}</option>)}
+          {modules.map((name) => <option key={name} value={name}>{name}</option>)}
         </select>
-        <Input aria-label="From date" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-        <Input aria-label="To date" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-      </div>
+        <Input name="from" aria-label="From date" type="date" defaultValue={urlFrom} onInput={(event) => setFrom(event.currentTarget.value)} />
+        <Input name="to" aria-label="To date" type="date" defaultValue={urlTo} onInput={(event) => setTo(event.currentTarget.value)} />
+      </form>
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px] text-sm">
