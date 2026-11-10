@@ -39,7 +39,7 @@ const articles = [
   },
   {
     title: "What the preview administrator can do",
-    body: "Amina Nalwoga is the sample administrator shown in the header. You can rename that profile in Settings. The account cannot be deactivated or deleted, so the preview always has an administrator.",
+    body: "Amina Uwase is the sample administrator shown in the header. You can rename that profile in Settings. The account cannot be deactivated or deleted, so the preview always has an administrator.",
   },
 ];
 

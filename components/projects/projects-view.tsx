@@ -24,13 +24,16 @@ import type { ProjectFormValues } from "@/lib/validations/schemas";
 
 export function ProjectsView() {
   const data = useAdmin();
-  const focus = useSearchParams().get("focus");
+  const params = useSearchParams();
+  const focus = params.get("focus");
+  const create = params.get("create") === "1";
   const [seenFocus, setSeenFocus] = useState(focus);
   const [viewId, setViewId] = useState<string | null>(focus);
   const [editor, setEditor] = useState<Project | null | "new">(null);
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
-  const status = useSearchParams().get("status") ?? "all";
+  const status = params.get("status") ?? "all";
   const [formError, setFormError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
     setViewId(focus);
@@ -77,13 +80,30 @@ export function ProjectsView() {
       <PageHeader
         title="Projects"
         description="Register and maintain the construction portfolio. Changes stay in this browser session."
-        actions={
-          <Button type="button" onClick={() => { setFormError(null); setEditor("new"); }}>
-            <Plus />
-            Create project
-          </Button>
-        }
+        actions={<Button asChild><a href="/admin/projects?create=1"><Plus />Create project</a></Button>}
       />
+      {create && !saved ? (
+        <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
+          <h2 className="text-base font-semibold">Create project</h2>
+          <p className="mt-1 mb-4 text-sm text-black/55">Saved in this preview only. Budget figures are demonstration data.</p>
+          <ProjectForm
+            managers={managers}
+            serverError={formError ?? params.get("error")}
+            onCancel={() => { window.location.assign("/admin/projects"); }}
+            onSubmit={(values) => {
+              const result = data.createProject(values);
+              if (!result.ok) {
+                setFormError(result.error);
+                return;
+              }
+              toast.success("Project created in this preview.");
+              setFormError(null);
+              setSaved(true);
+              window.history.replaceState(null, "", "/admin/projects");
+            }}
+          />
+        </section>
+      ) : null}
       <div className="mb-4 flex flex-col gap-3 sm:flex-row">
         <Input value={table.query} onChange={(event) => table.setQuery(event.target.value)} placeholder="Search name, code, client, location, manager" className="sm:max-w-md" />
         <select
@@ -177,15 +197,15 @@ export function ProjectsView() {
         )}
       </div>
 
-      <Dialog open={editor !== null} onOpenChange={(open) => { if (!open) setEditor(null); }}>
-        {editor !== null ? (
+      <Dialog open={editor !== null && editor !== "new"} onOpenChange={(open) => { if (!open) setEditor(null); }}>
+        {editor !== null && editor !== "new" ? (
           <DialogContent
             className="sm:max-w-2xl"
-            title={editor === "new" ? "Create project" : "Edit project"}
+            title="Edit project"
             description="Saved in this preview only. Budget figures are demonstration data."
           >
             <ProjectForm
-              project={editor === "new" ? null : editor}
+              project={editor}
               managers={managers}
               serverError={formError}
               onCancel={() => setEditor(null)}
