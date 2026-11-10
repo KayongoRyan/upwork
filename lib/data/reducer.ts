@@ -14,6 +14,8 @@ import type {
   EngineerReportInput,
   EngineerReportStatus,
   NotificationType,
+  DocumentRevision,
+  ProjectDocument,
   ProjectInput,
   TaskInput,
   TaskItem,
@@ -55,6 +57,10 @@ export type AdminAction =
   | { type: "update-boq"; surveyorId: string; id: string; input: BoqInput; stamp: Stamp }
   | { type: "delete-boq"; surveyorId: string; id: string; stamp: Stamp }
   | { type: "submit-cost-report"; projectId: string; surveyorId: string; stamp: Stamp }
+  | { type: "register-document"; document: Omit<ProjectDocument, "id" | "revisions">; revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt">; stamp: Stamp }
+  | { type: "revise-document"; documentId: string; revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt" | "status">; stamp: Stamp }
+  | { type: "issue-revision"; documentId: string; stamp: Stamp }
+  | { type: "set-document-access"; documentId: string; access: ProjectDocument["access"]; stamp: Stamp }
   | { type: "mark-notification"; id: string; read: boolean }
   | { type: "mark-all-notifications" }
   | { type: "update-settings"; patch: Partial<AdminState["settings"]>; stamp?: Stamp }
@@ -130,6 +136,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
             employee.projectId === project.id ? { ...employee, projectId: null } : employee,
           ),
           tasks: state.tasks.filter((task) => task.projectId !== project.id),
+          documents: (state.documents ?? []).filter((item) => item.projectId !== project.id),
           boq: state.boq.filter((item) => item.projectId !== project.id),
           costReports: (state.costReports ?? []).filter((item) => item.projectId !== project.id),
         },
@@ -603,6 +610,120 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         actor,
       );
     }
+    case "register-document": {
+      const document: ProjectDocument = {
+        ...action.document,
+        id: action.stamp.id,
+        number: action.document.number.trim().toUpperCase(),
+        access: withAdmin(action.document.access),
+        revisions: [
+          {
+            ...action.revision,
+            id: `${action.stamp.id}-rev`,
+            revision: "01",
+            uploadedAt: action.stamp.at,
+          },
+        ],
+      };
+      return audit(
+        {
+          ...state,
+          documents: [document, ...(state.documents ?? [])],
+          notifications: maybeNotify(state, action.stamp, {
+            type: "project",
+            title: `${document.number} registered`,
+            message: document.revisions[0].status === "approved"
+              ? `${document.title} Rev 01 is issued.`
+              : `${document.title} Rev 01 is not issued. Do not build from it.`,
+            projectId: document.projectId,
+          }),
+        },
+        action.stamp,
+        "Registered document",
+        "Documents",
+        document.number,
+        document.revisions[0].status === "approved" ? "success" : "warning",
+      );
+    }
+    case "revise-document": {
+      const current = (state.documents ?? []).find((item) => item.id === action.documentId);
+      if (!current) return state;
+      const code = nextRevision(current);
+      const revision: DocumentRevision = {
+        ...action.revision,
+        id: action.stamp.id,
+        revision: code,
+        status: "in_review",
+        uploadedAt: action.stamp.at,
+      };
+      return audit(
+        {
+          ...state,
+          documents: (state.documents ?? []).map((item) =>
+            item.id === current.id ? { ...item, revisions: [...item.revisions, revision] } : item,
+          ),
+          notifications: maybeNotify(state, action.stamp, {
+            type: "status",
+            title: `${current.number} Rev ${code} is not issued`,
+            message: `${current.title} has a new file in review. Keep building from the issued revision.`,
+            projectId: current.projectId,
+          }),
+        },
+        action.stamp,
+        "Uploaded a revision",
+        "Documents",
+        `${current.number} Rev ${code}`,
+        "warning",
+      );
+    }
+    case "issue-revision": {
+      const current = (state.documents ?? []).find((item) => item.id === action.documentId);
+      const latest = current?.revisions[current.revisions.length - 1];
+      if (!current || !latest || latest.status === "approved") return state;
+      return audit(
+        {
+          ...state,
+          documents: (state.documents ?? []).map((item) =>
+            item.id === current.id
+              ? {
+                  ...item,
+                  revisions: item.revisions.map((revision) =>
+                    revision.id === latest.id ? { ...revision, status: "approved" } : revision,
+                  ),
+                }
+              : item,
+          ),
+          notifications: maybeNotify(state, action.stamp, {
+            type: "status",
+            title: `${current.number} Rev ${latest.revision} issued`,
+            message: `${current.title} Rev ${latest.revision} is now the revision to build from. Earlier revisions are superseded.`,
+            projectId: current.projectId,
+          }),
+        },
+        action.stamp,
+        "Issued revision",
+        "Documents",
+        `${current.number} Rev ${latest.revision}`,
+        "success",
+      );
+    }
+    case "set-document-access": {
+      const current = (state.documents ?? []).find((item) => item.id === action.documentId);
+      if (!current) return state;
+      return audit(
+        {
+          ...state,
+          documents: (state.documents ?? []).map((item) =>
+            item.id === current.id ? { ...item, access: withAdmin(action.access) } : item,
+          ),
+        },
+        action.stamp,
+        "Changed document access",
+        "Documents",
+        current.number,
+        "success",
+      );
+    }
     case "mark-notification":
       return {
         ...state,
@@ -717,6 +838,16 @@ function measure(
 
 function managedProject(state: AdminState, projectId: string) {
   return state.projects.find((project) => project.id === projectId && project.managerId === PREVIEW_PM_ID);
+}
+
+function withAdmin(access: ProjectDocument["access"]): ProjectDocument["access"] {
+  return access.includes("administrator") ? access : ["administrator", ...access];
+}
+
+function nextRevision(document: ProjectDocument) {
+  const latest = document.revisions[document.revisions.length - 1];
+  const current = latest ? Number(latest.revision) : 0;
+  return String((Number.isFinite(current) ? current : document.revisions.length) + 1).padStart(2, "0");
 }
 
 function pmActor(state: AdminState) {

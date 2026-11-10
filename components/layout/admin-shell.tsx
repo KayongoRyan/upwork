@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Toaster } from "sonner";
 import { useAdmin } from "@/lib/data/admin-store";
 import { Header } from "@/components/layout/header";
@@ -21,23 +20,17 @@ function Frame({ children }: { children: React.ReactNode }) {
   const { settings } = useAdmin();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const reduce = useReducedMotion();
 
   return (
     <div className="shell min-h-screen bg-background">
-      <AnimatePresence>
-        {mobileOpen ? (
-          <motion.button
-            type="button"
-            aria-label="Close navigation"
-            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-            initial={reduce ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={reduce ? undefined : { opacity: 0 }}
-            onClick={() => setMobileOpen(false)}
-          />
-        ) : null}
-      </AnimatePresence>
+      {mobileOpen ? (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      ) : null}
       <Sidebar
         collapsed={collapsed}
         mobileOpen={mobileOpen}

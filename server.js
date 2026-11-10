@@ -26,20 +26,15 @@ app.prepare().then(() => {
   for (const portal of portals) bindPortal(portal, upgrade, 0);
 });
 
-function bindPortal(portal, upgrade, attempt) {
-  if (attempt >= attempts) {
-    const last = portal.port + (attempts - 1) * step;
-    console.error(`${portal.label}  no free port from ${portal.port} to ${last}`);
-    return;
-  }
-
-  const port = portal.port + attempt * step;
+function createPortalServer(upgrade) {
   const server = createServer((req, res) => {
     req.headers["x-cpmis-ports"] = JSON.stringify(global.__cpmisPorts ?? {});
-    // A refresh aborts the in-flight page. Close our side immediately so the
-    // socket does not sit in CLOSE_WAIT and stall the next load.
-    req.on("close", () => {
-      if (!res.writableEnded) res.destroy();
+    // A refresh aborts the in-flight page. Drop that request so the socket is
+    // not left in CLOSE_WAIT. req "close" is the wrong signal: it also fires
+    // when a GET has been read, which is before the response is written, and
+    // destroying then truncates the page so the browser retries forever.
+    res.on("close", () => {
+      if (!res.writableFinished) req.destroy();
     });
     handle(req, res, parse(req.url, true));
   });
@@ -50,7 +45,28 @@ function bindPortal(portal, upgrade, attempt) {
   server.on("upgrade", (req, socket, head) => {
     upgrade(req, socket, head).catch(() => socket.destroy());
   });
-  server.once("error", (error) => {
+  return server;
+}
+
+function announce(portal, port) {
+  const current = global.__cpmisPorts ?? {};
+  if (current[portal.id] === port) return;
+  current[portal.id] = port;
+  global.__cpmisPorts = current;
+  const note = port === portal.port ? "" : ` (${portal.port} was in use)`;
+  console.log(`${portal.label}  http://${hostname}:${port}${portal.home}${note}`);
+}
+
+function bindPortal(portal, upgrade, attempt) {
+  if (attempt >= attempts) {
+    const last = portal.port + (attempts - 1) * step;
+    console.error(`${portal.label}  no free port from ${portal.port} to ${last}`);
+    return;
+  }
+
+  const port = portal.port + attempt * step;
+  const v4 = createPortalServer(upgrade);
+  v4.once("error", (error) => {
     if (error.code === "EADDRINUSE") {
       console.warn(`${portal.label}  ${port} is in use, trying ${port + step}`);
       bindPortal(portal, upgrade, attempt + 1);
@@ -58,11 +74,14 @@ function bindPortal(portal, upgrade, attempt) {
     }
     console.error(error);
   });
-  server.listen(port, hostname, () => {
-    const current = global.__cpmisPorts ?? {};
-    current[portal.id] = port;
-    global.__cpmisPorts = current;
-    const note = port === portal.port ? "" : ` (${portal.port} was in use)`;
-    console.log(`${portal.label}  http://${hostname}:${port}${portal.home}${note}`);
+  // localhost is both 127.0.0.1 and ::1 on Windows. Binding the hostname once
+  // only accepts whichever family DNS returns first, and the other hangs.
+  v4.listen(port, "127.0.0.1", () => {
+    announce(portal, port);
+    const v6 = createPortalServer(upgrade);
+    v6.once("error", (error) => {
+      console.warn(`${portal.label}  IPv6 ${port} unavailable (${error.code})`);
+    });
+    v6.listen(port, "::1");
   });
 }

@@ -8,12 +8,13 @@ import { EmploymentBadge, PriorityBadge, ProjectStatusBadge, TaskStatusBadge } f
 import { Badge } from "@/components/ui/badge";
 import { lineActual, lineEstimate, lineVariance } from "@/lib/boq";
 import { useAdmin } from "@/lib/data/admin-store";
+import { documentCategoryLabel, issuedRevision, issueWarning, latestRevision, standing, standingLabel } from "@/lib/documents";
+import { portalUrl } from "@/lib/portals";
 import { roleLabel } from "@/lib/labels";
 import {
   milestoneState,
   plannedProgress,
   workspaceFor,
-  type ProjectDocument,
   type ProjectEquipment,
 } from "@/lib/project-workspace";
 import { DEMO_TODAY, PREVIEW_PM_ID, daysUntil, formatDate, formatDateTime, formatMoney, fullName } from "@/lib/utils";
@@ -44,12 +45,6 @@ const equipmentLabel: Record<ProjectEquipment["status"], string> = {
   on_site: "On site",
   idle: "Idle",
   off_hire: "Off hire",
-};
-
-const documentLabel: Record<ProjectDocument["kind"], string> = {
-  drawing: "Drawing",
-  contract: "Contract",
-  attachment: "Attachment",
 };
 
 const milestoneLabel = { done: "Done", due: "Due", overdue: "Overdue", upcoming: "Upcoming" } as const;
@@ -135,6 +130,11 @@ export function ProjectWorkspace({ portal }: { portal: "admin" | "pm" }) {
               <Fact label="Expected completion" value={formatDate(project.expectedEndDate)} />
               <Fact label="Against 6 Nov 2026" value={days < 0 ? `${Math.abs(days)} days past the date` : `${days} days left`} />
             </div>
+            {portal === "pm" ? (
+              <Link href={`/pm/schedule?project=${project.id}`} className="mt-3 inline-block text-sm font-medium text-accent hover:underline">
+                Open the programme
+              </Link>
+            ) : null}
             <Table
               className="mt-4"
               empty="No milestones on this project."
@@ -264,11 +264,30 @@ export function ProjectWorkspace({ portal }: { portal: "admin" | "pm" }) {
             )}
           </Section>
 
-          <Section id="documents" title="Documents" hint="Drawings, contracts, and attachments held on the project file. These are demonstration records, not downloadable files.">
+          <Section id="documents" title="Documents" hint="Controlled revisions for this project. Build from the issued revision only.">
+            <a
+              href={portal === "admin" ? `/admin/documents?project=${project.id}` : portalUrl("administrator", `/admin/documents?project=${project.id}`)}
+              className="mb-3 inline-block text-sm font-medium text-accent hover:underline"
+            >
+              Open the register
+            </a>
             <Table
               empty="No documents filed."
-              head={["Document", "Kind", "Reference", "Date"]}
-              rows={pack.documents.map((item) => [item.name, documentLabel[item.kind], item.reference, formatDate(item.date)])}
+              head={["Number", "Document", "Category", "Latest", "Issued"]}
+              rows={(data.documents ?? [])
+                .filter((item) => item.projectId === project.id)
+                .map((item) => {
+                  const latest = latestRevision(item);
+                  const issued = issuedRevision(item);
+                  const state = latest ? standing(item, latest) : "draft";
+                  return [
+                    item.number,
+                    item.title,
+                    documentCategoryLabel[item.category],
+                    latest ? `Rev ${latest.revision} · ${standingLabel[state]}` : "—",
+                    issued ? `Rev ${issued.revision}` : issueWarning(item) ? "Not issued" : "—",
+                  ];
+                })}
             />
           </Section>
 

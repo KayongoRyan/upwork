@@ -23,7 +23,7 @@ export function QsDashboard() {
           <p className="mt-1 text-sm text-black/45">Measured cost on your assigned project. Amounts are in RWF.</p>
         </div>
         <Button asChild>
-          <Link href="/qs/boq">
+          <Link prefetch={false} href="/qs/boq">
             <Ruler /> Open the bill
           </Link>
         </Button>
@@ -66,7 +66,7 @@ export function QsDashboard() {
         <section className="rounded-[22px] border border-black/5 bg-card p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Largest variances</h2>
-            <Link href="/qs/reports" className="text-sm font-medium text-accent">Report</Link>
+            <Link prefetch={false} href="/qs/reports" className="text-sm font-medium text-accent">Report</Link>
           </div>
           <ul className="mt-3 divide-y divide-black/5">
             {ranked.slice(0, 5).map((item) => {
@@ -92,7 +92,7 @@ export function QsDashboard() {
 
 function Stat({ href, icon: Icon, value, label, warn }: { href: string; icon: typeof Wallet; value: string; label: string; warn?: boolean }) {
   return (
-    <Link href={href} className="rounded-[22px] border border-black/5 bg-card p-4">
+    <Link prefetch={false} href={href} className="rounded-[22px] border border-black/5 bg-card p-4">
       <span className={cn("grid size-9 place-items-center rounded-2xl", warn ? "bg-[#fff1eb] text-accent" : "bg-black/[0.04] text-black")}>
         <Icon className="size-4" />
       </span>

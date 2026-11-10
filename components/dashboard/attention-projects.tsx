@@ -26,7 +26,7 @@ export function AttentionProjects({
             <li key={project.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Link href={`/admin/projects?focus=${project.id}`} className="font-medium hover:underline">
+                  <Link prefetch={false} href={`/admin/projects?focus=${project.id}`} className="font-medium hover:underline">
                     {project.name}
                   </Link>
                   <ProjectStatusBadge status={project.status} />

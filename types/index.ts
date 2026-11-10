@@ -197,6 +197,46 @@ export interface OrgSettings {
   profileTitle: string;
 }
 
+export type DocumentCategory =
+  | "drawing"
+  | "contract"
+  | "boq"
+  | "photograph"
+  | "technical"
+  | "minutes"
+  | "inspection"
+  | "correspondence";
+
+export type RevisionStatus = "draft" | "in_review" | "approved";
+
+export interface DocumentRevision {
+  id: string;
+  revision: string;
+  fileName: string;
+  fileType: string;
+  size: number;
+  note: string;
+  status: RevisionStatus;
+  uploadedBy: string;
+  uploadedAt: string;
+  /** Set only for a file uploaded in this preview. Seed revisions have no bytes. */
+  dataUrl?: string;
+}
+
+/** One controlled document. Older revisions stay on the record when a new file is added. */
+export interface ProjectDocument {
+  id: string;
+  projectId: string;
+  number: string;
+  title: string;
+  category: DocumentCategory;
+  discipline: string;
+  ownerId: string;
+  /** Roles that may open the file. The administrator is always included. */
+  access: UserRole[];
+  revisions: DocumentRevision[];
+}
+
 export interface MonthlyPoint {
   month: string;
   started: number;
@@ -214,6 +254,7 @@ export interface AdminState {
   reports: EngineerReport[];
   boq: BoqItem[];
   costReports: CostReport[];
+  documents: ProjectDocument[];
   settings: OrgSettings;
   monthlyActivity: MonthlyPoint[];
 }

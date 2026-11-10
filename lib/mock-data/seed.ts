@@ -1,4 +1,5 @@
 import { expenditureFor } from "@/lib/boq";
+import { createDocuments } from "@/lib/mock-data/documents";
 import type { AdminState, BoqItem } from "@/types";
 
 /**
@@ -416,6 +417,7 @@ export function createSeedState(): AdminState {
     ],
     boq,
     costReports: [],
+    documents: createDocuments(),
     notifications: [
       note("ntf-15", "project", "quantity_surveyor", "David Oketch", "EBB-CGT-25 quantities measured", "David Oketch measured Entebbe Cargo Terminal Expansion. Expenditure is the sum of actual quantity times unit rate on that bill.", false, "2026-11-06T08:05:00Z", "prj-cargo"),
       note("ntf-13", "project", "site_engineer", "Lydia Atim", "EBB-CGT-25 daily report submitted", "Lydia Atim filed a site report for Entebbe Cargo Terminal Expansion (2026-10-27 to 2026-11-02) at 44% progress.", false, "2026-11-03T16:10:00Z", "prj-cargo"),

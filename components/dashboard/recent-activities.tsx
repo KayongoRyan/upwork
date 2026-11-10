@@ -11,7 +11,7 @@ export function RecentActivities({ logs }: { logs: ActivityLog[] }) {
           <h2 className="text-sm font-semibold">Recent activity</h2>
           <p className="text-xs text-muted-foreground">Latest records in the preview log</p>
         </div>
-        <Link href="/admin/activity-logs" className="text-sm font-medium text-info hover:underline">
+        <Link prefetch={false} href="/admin/activity-logs" className="text-sm font-medium text-info hover:underline">
           View log
         </Link>
       </header>

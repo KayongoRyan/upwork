@@ -66,6 +66,7 @@ export function Sidebar({
                     <li key={item.href}>
                       <Link
                         href={item.href}
+                        prefetch={false}
                         title={collapsed ? item.label : undefined}
                         onClick={onNavigate}
                         className={cn(
@@ -88,6 +89,7 @@ export function Sidebar({
 
       <Link
         href={profileHref}
+        prefetch={false}
         onClick={onNavigate}
         className={cn(
           "nav-row mx-3 mb-3 flex items-center gap-3 rounded-2xl px-2 py-2 hover:bg-light-gray",

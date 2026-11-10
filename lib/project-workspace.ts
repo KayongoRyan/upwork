@@ -25,14 +25,6 @@ export interface ProjectEquipment {
   assignedOn: string;
 }
 
-export interface ProjectDocument {
-  id: string;
-  name: string;
-  kind: "drawing" | "contract" | "attachment";
-  reference: string;
-  date: string;
-}
-
 export interface ProjectRisk {
   id: string;
   title: string;
@@ -55,7 +47,6 @@ export interface ProjectWorkspaceData {
   milestones: ProjectMilestone[];
   materials: ProjectMaterial[];
   equipment: ProjectEquipment[];
-  documents: ProjectDocument[];
   risks: ProjectRisk[];
   labour: LabourGang[];
 }
@@ -64,7 +55,6 @@ const empty: ProjectWorkspaceData = {
   milestones: [],
   materials: [],
   equipment: [],
-  documents: [],
   risks: [],
   labour: [],
 };
@@ -110,11 +100,6 @@ const records: Record<string, ProjectWorkspaceData> = {
       eq("eq-bypass-2", "20 t excavator", "PLT-008", "on_site", "Isaac Tumusiime", "2025-03-04"),
       eq("eq-bypass-3", "Tipper truck", "PLT-031", "idle", "Pool", "2026-10-11"),
     ],
-    documents: [
-      doc("doc-bypass-1", "Contract agreement", "contract", "KLA-NBX-24-C01", "2025-02-18"),
-      doc("doc-bypass-2", "Carriageway plan and profile", "drawing", "DWG-NBX-110", "2026-08-14"),
-      doc("doc-bypass-3", "Interim valuation 07", "attachment", "VAL-NBX-07", "2026-11-05"),
-    ],
     risks: [
       risk("rsk-bypass-1", "Drainage shop drawings still with the client", "issue", "medium", "mitigating", "Piers cannot be poured until the drawings are approved.", "Helen Nabirye is chasing the comment sheet this week.", "Helen Nabirye"),
       risk("rsk-bypass-2", "Rain on the northern cut", "delay", "low", "open", "A wet week slips the base course by about four days.", "Keep the stockpile covered and hold a dry-weather pour window.", "Isaac Tumusiime"),
@@ -142,11 +127,6 @@ const records: Record<string, ProjectWorkspaceData> = {
       eq("eq-cargo-2", "Mobile crane 50 t", "PLT-019", "on_site", "Daniel Opio", "2026-07-01"),
       eq("eq-cargo-3", "Telehandler", "PLT-027", "on_site", "Martha Akello", "2026-06-20"),
     ],
-    documents: [
-      doc("doc-cargo-1", "Works contract", "contract", "EBB-CGT-25-C01", "2025-05-20"),
-      doc("doc-cargo-2", "Cold-room steel drawings", "drawing", "DWG-EBB-014", "2026-09-28"),
-      doc("doc-cargo-3", "Apron bay 3 inspection", "attachment", "PHO-EBB-103", "2026-10-20"),
-    ],
     risks: [
       risk("rsk-cargo-1", "Cold-room steel package has not arrived", "delay", "high", "open", "Completion is 18 Nov 2026 and the steel is still short. The hall cannot close.", "Recover the balance tonnes and rebaseline the customs hall programme.", "Sarah Namakula"),
       risk("rsk-cargo-2", "Night pour cancelled — no concrete delivery", "issue", "high", "mitigating", "Apron bay 4 has not started. The pump is standing.", "Hold the pump until the next confirmed delivery, then pour bay 4.", "Lydia Atim"),
@@ -173,11 +153,6 @@ const records: Record<string, ProjectWorkspaceData> = {
       eq("eq-bridge-1", "Underbridge unit", "PLT-041", "on_site", "Moses Wanyama", "2026-10-01"),
       eq("eq-bridge-2", "Lighting tower", "PLT-044", "idle", "Pool", "2026-11-01"),
     ],
-    documents: [
-      doc("doc-bridge-1", "Rehabilitation contract", "contract", "JJA-NBM-23-C01", "2024-10-12"),
-      doc("doc-bridge-2", "Bearing schedule", "drawing", "DWG-NBM-006", "2026-07-19"),
-      doc("doc-bridge-3", "Night closure method statement", "attachment", "MS-NBM-12", "2026-11-05"),
-    ],
     risks: [
       risk("rsk-bridge-1", "Night closure not confirmed", "delay", "medium", "mitigating", "The east bearing replacement cannot start without the 28 Nov closure.", "Moses Wanyama is waiting on the traffic authority.", "Moses Wanyama"),
     ],
@@ -201,11 +176,6 @@ const records: Record<string, ProjectWorkspaceData> = {
       eq("eq-hospital-1", "Tower crane", "PLT-052", "idle", "Stood down", "2026-10-28"),
       eq("eq-hospital-2", "Materials hoist", "PLT-053", "off_hire", "Off hire", "2026-10-30"),
     ],
-    documents: [
-      doc("doc-hospital-1", "Works contract", "contract", "MBR-RHW-25-C01", "2025-08-04"),
-      doc("doc-hospital-2", "Theatre layout", "drawing", "DWG-RHW-020", "2026-09-12"),
-      doc("doc-hospital-3", "Funding pause instruction", "attachment", "SI-RHW-04", "2026-10-28"),
-    ],
     risks: [
       risk("rsk-hospital-1", "Funding review has paused the site", "delay", "high", "open", "Works stay on hold until the client confirms the next certificate.", "Protect stored finishes and keep the review on 25 Nov.", "Peter Ochieng"),
       risk("rsk-hospital-2", "Stored finishes can spoil in the pause", "issue", "medium", "mitigating", "Boards and fittings are in an open store.", "Robert Mbabazi is sheeting the store and logging moisture.", "Robert Mbabazi"),
@@ -226,11 +196,6 @@ const records: Record<string, ProjectWorkspaceData> = {
     ],
     equipment: [
       eq("eq-drain-1", "Excavator", "PLT-061", "off_hire", "Off hire", "2026-08-31"),
-    ],
-    documents: [
-      doc("doc-drain-1", "Works contract", "contract", "KLA-NKV-22-C01", "2023-12-02"),
-      doc("doc-drain-2", "As-built channel plan", "drawing", "DWG-NKV-ASB", "2026-08-28"),
-      doc("doc-drain-3", "Practical completion certificate", "attachment", "PC-NKV-01", "2026-08-30"),
     ],
     risks: [
       risk("rsk-drain-1", "Defects liability watch", "issue", "low", "closed", "No open defects at handover.", "Liability period is on the certificate. No further mitigation.", "Sarah Namakula"),
@@ -255,11 +220,6 @@ const records: Record<string, ProjectWorkspaceData> = {
       eq("eq-gulu-1", "Grader", "PLT-071", "on_site", "Emmanuel Twesigye", "2026-08-18"),
       eq("eq-gulu-2", "Water bowser", "PLT-074", "idle", "Pool", "2026-09-01"),
     ],
-    documents: [
-      doc("doc-gulu-1", "Package contract", "contract", "GUL-RD-26-C01", "2026-06-11"),
-      doc("doc-gulu-2", "Road alignment", "drawing", "DWG-GUL-003", "2026-07-02"),
-      doc("doc-gulu-3", "Gravel measurement note", "attachment", "MS-GUL-02", "2026-11-03"),
-    ],
     risks: [
       risk("rsk-gulu-1", "Gravel stockpile is short of the programme", "delay", "high", "open", "Surfacing cannot start on the first 4 km.", "Mobilise the balance stockpile before 22 Nov.", "Emmanuel Twesigye"),
     ],
@@ -278,10 +238,6 @@ const records: Record<string, ProjectWorkspaceData> = {
       mat("mat-schools-1", "Classroom blocks — not yet called", "nr", 8, 0, 0),
     ],
     equipment: [],
-    documents: [
-      doc("doc-schools-1", "Consultancy appointment", "contract", "KSE-SCH-25-C01", "2026-09-22"),
-      doc("doc-schools-2", "Sketch layouts", "drawing", "DWG-SCH-SK", "2026-10-18"),
-    ],
     risks: [
       risk("rsk-schools-1", "Plot surveys are not confirmed", "issue", "medium", "open", "Design cannot be frozen, so the site start stays in 2027.", "Joseph Mugisha is booking the four school plots.", "Joseph Mugisha"),
     ],
@@ -303,11 +259,6 @@ const records: Record<string, ProjectWorkspaceData> = {
     equipment: [
       eq("eq-ind-1", "Trencher", "PLT-081", "on_site", "George Wasswa", "2026-09-12"),
       eq("eq-ind-2", "Compactor", "PLT-084", "idle", "Christine Auma", "2026-10-02"),
-    ],
-    documents: [
-      doc("doc-ind-1", "Utilities contract", "contract", "JJA-IND-24-C01", "2025-03-08"),
-      doc("doc-ind-2", "Duct bank sections", "drawing", "DWG-IND-044", "2026-06-30"),
-      doc("doc-ind-3", "Recovery plan request", "attachment", "LTR-IND-19", "2026-11-04"),
     ],
     risks: [
       risk("rsk-ind-1", "Utility contractor missed the October milestone", "delay", "high", "open", "The programme date of 2 Oct 2026 has passed at 35% progress.", "Chase the recovery plan and keep the east trench safe.", "George Wasswa"),
@@ -337,10 +288,6 @@ function eq(
   assignedOn: string,
 ): ProjectEquipment {
   return { id, name, code, status, operator, assignedOn };
-}
-
-function doc(id: string, name: string, kind: ProjectDocument["kind"], reference: string, date: string): ProjectDocument {
-  return { id, name, kind, reference, date };
 }
 
 function risk(
