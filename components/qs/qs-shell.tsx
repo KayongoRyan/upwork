@@ -28,7 +28,7 @@ function Frame({ children }: { children: React.ReactNode }) {
   const code = data.project?.code ?? "";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="shell min-h-screen bg-background">
       <AnimatePresence>
         {mobileOpen ? (
           <motion.button
@@ -52,7 +52,7 @@ function Frame({ children }: { children: React.ReactNode }) {
         items={qsNavItems}
         onNavigate={() => setMobileOpen(false)}
       />
-      <div className={cn("min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-[108px]" : "lg:pl-[276px]")}>
+      <div className={cn("shell-main min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-[108px]" : "lg:pl-[276px]")}>
         <Header
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((value) => !value)}

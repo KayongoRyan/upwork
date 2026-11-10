@@ -1,7 +1,4 @@
-"use client";
-
 import Link from "next/link";
-import { motion, useReducedMotion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +8,6 @@ export function StatCard({
   label,
   value,
   trend,
-  index = 0,
 }: {
   href: string;
   icon: LucideIcon;
@@ -20,13 +16,8 @@ export function StatCard({
   trend?: { text: string; tone: "up" | "down" | "flat" };
   index?: number;
 }) {
-  const reduce = useReducedMotion();
   return (
-    <motion.div
-      initial={reduce ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay: reduce ? 0 : index * 0.03 }}
-    >
+    <div>
       <Link href={href} className="block rounded-[22px] border border-black/5 bg-card p-4 transition-colors hover:border-black/10">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -52,6 +43,6 @@ export function StatCard({
           </p>
         ) : null}
       </Link>
-    </motion.div>
+    </div>
   );
 }

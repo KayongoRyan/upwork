@@ -36,8 +36,17 @@ function bindPortal(portal, upgrade, attempt) {
   const port = portal.port + attempt * step;
   const server = createServer((req, res) => {
     req.headers["x-cpmis-ports"] = JSON.stringify(global.__cpmisPorts ?? {});
+    // A refresh aborts the in-flight page. Close our side immediately so the
+    // socket does not sit in CLOSE_WAIT and stall the next load.
+    req.on("close", () => {
+      if (!res.writableEnded) res.destroy();
+    });
     handle(req, res, parse(req.url, true));
   });
+  server.keepAliveTimeout = 8_000;
+  server.headersTimeout = 20_000;
+  server.requestTimeout = 60_000;
+  server.timeout = 60_000;
   server.on("upgrade", (req, socket, head) => {
     upgrade(req, socket, head).catch(() => socket.destroy());
   });

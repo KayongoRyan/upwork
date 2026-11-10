@@ -1,15 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3f3f3;
+  --light-gray: #e6e6e6;
+  --background: #e6e6e6;
   --foreground: #111111;
   --card: #ffffff;
   --card-foreground: #111111;
   --primary: #111111;
   --primary-foreground: #ffffff;
-  --secondary: #f6f6f6;
+  --secondary: #e6e6e6;
   --secondary-foreground: #111111;
-  --muted: #f4f4f4;
+  --muted: #e6e6e6;
   --muted-foreground: #6f6f6f;
   --accent: #ff5c22;
   --accent-foreground: #ffffff;
@@ -30,6 +31,7 @@
 }
 
 @theme inline {
+  --color-light-gray: var(--light-gray);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -98,6 +100,33 @@ textarea {
 .compact-tables table th {
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
+}
+
+.shell > aside {
+  width: 248px;
+}
+
+@media (min-width: 1024px) {
+  .shell:has(#nav-collapse:checked) > aside {
+    width: 84px !important;
+  }
+  .shell:has(#nav-collapse:checked) > .shell-main {
+    padding-left: 108px !important;
+  }
+  .shell:has(#nav-collapse:checked) .when-expanded {
+    display: none !important;
+  }
+  .shell:has(#nav-collapse:checked) .nav-row {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .shell:has(#nav-collapse:checked) .icon-expanded {
+    display: none;
+  }
+  .shell:has(#nav-collapse:checked) .icon-collapsed {
+    display: block;
+  }
 }
 
 @keyframes fade {

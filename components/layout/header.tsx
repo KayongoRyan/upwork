@@ -63,14 +63,16 @@ export function Header({
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 bg-[#f3f3f3]/90 px-3 pt-3 pb-2 backdrop-blur sm:px-5 lg:px-6">
+    <header className="sticky top-0 z-[60] bg-light-gray/90 px-3 pt-3 pb-2 backdrop-blur sm:px-5 lg:px-6">
       <div className="flex items-center gap-2 sm:gap-3">
         <button type="button" className="grid size-11 place-items-center rounded-2xl border border-black/5 bg-white text-black lg:hidden" onClick={onOpenMobile} aria-label="Open navigation">
           <Menu className="size-4" />
         </button>
-        <button type="button" className="hidden size-11 place-items-center rounded-2xl border border-black/5 bg-white text-black lg:grid" onClick={onToggleCollapse} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
-          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-        </button>
+        <input id="nav-collapse" type="checkbox" className="sr-only" defaultChecked={collapsed} />
+        <label htmlFor="nav-collapse" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} className="hidden size-11 cursor-pointer place-items-center rounded-2xl border border-black/5 bg-white text-black lg:grid">
+          <PanelLeftClose className="icon-expanded size-4" />
+          <PanelLeftOpen className="icon-collapsed hidden size-4" />
+        </label>
         <button type="button" onClick={() => setSearchOpen(true)} className="flex h-12 min-w-0 flex-1 items-center gap-3 rounded-2xl border border-black/5 bg-white px-4 text-left text-sm text-black/40">
           <Search className="size-4 shrink-0" />
           <span className="truncate">Search projects, people, pages</span>
