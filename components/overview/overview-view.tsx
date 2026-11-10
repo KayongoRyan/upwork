@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { ProjectStatusBadge } from "@/components/shared/status-badge";
 import { useAdmin } from "@/lib/data/admin-store";
@@ -10,7 +10,7 @@ import { formatMoney } from "@/lib/utils";
 
 export function OverviewView() {
   const data = useAdmin();
-  const [status, setStatus] = useState("all");
+  const status = useSearchParams().get("status") ?? "all";
   const projects = data.projects.filter((project) => status === "all" || project.status === status);
 
   return (
@@ -19,7 +19,18 @@ export function OverviewView() {
         title="Project overview"
         description="A portfolio view of progress and budget use. Open a card to edit the record."
         actions={
-          <select aria-label="Status" value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 rounded-lg border border-input bg-white px-3 text-sm">
+          <select
+            key={status}
+            name="status"
+            aria-label="Status"
+            data-status-go="/admin/overview"
+            defaultValue={status}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              window.location.assign(value === "all" ? "/admin/overview" : `/admin/overview?status=${encodeURIComponent(value)}`);
+            }}
+            className="h-10 rounded-lg border border-input bg-white px-3 text-sm"
+          >
             <option value="all">All statuses</option>
             {projectStatuses.map((item) => <option key={item} value={item}>{projectStatusLabel[item]}</option>)}
           </select>
