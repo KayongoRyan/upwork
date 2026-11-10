@@ -61,32 +61,29 @@ export function Header({
           <PanelLeftOpen className="icon-collapsed hidden size-4" />
         </label>
         <SearchField pages={search?.pages} projectIds={search?.projectIds} projectBase={search?.projectBase} />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className="relative grid size-11 place-items-center rounded-2xl border border-black/5 bg-white text-black" aria-label="Notifications">
-              <Bell className="size-4" />
-              {unread.length > 0 ? <span className="absolute top-2.5 right-2.5 size-2 rounded-full bg-accent" /> : null}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-80">
-            <DropdownMenuLabel>{unread.length} unread</DropdownMenuLabel>
-            {notifications.slice(0, 5).map((item) => (
-              <DropdownMenuItem key={item.id} onSelect={() => markNotification(item.id, true)} className="items-start">
-                <span className="min-w-0">
-                  <span className="flex items-center gap-2">
-                    {!item.read ? <span className="size-1.5 rounded-full bg-accent" /> : null}
-                    <span className="truncate font-medium">{item.title}</span>
-                  </span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{item.senderName} · {formatDateTime(item.createdAt)}</span>
-                </span>
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href={links.notifications} prefetch={false}>Open notifications</Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <details className="relative">
+          <summary className="relative grid size-11 cursor-pointer list-none place-items-center rounded-2xl border border-black/5 bg-white text-black [&::-webkit-details-marker]:hidden" aria-label="Notifications">
+            <Bell className="size-4" />
+            {unread.length > 0 ? <span className="absolute top-2.5 right-2.5 size-2 rounded-full bg-accent" /> : null}
+          </summary>
+          <div className="absolute right-0 top-[calc(100%+8px)] z-[80] w-80 max-w-[calc(100vw-1.5rem)] rounded-[22px] border border-black/5 bg-white p-2 shadow-[0_18px_50px_rgba(0,0,0,0.12)]">
+            <p className="px-2 py-1.5 text-xs text-black/45">{unread.length} unread</p>
+            <ul>
+              {notifications.slice(0, 5).map((item) => (
+                <li key={item.id}>
+                  <a href={links.notifications} onClick={() => markNotification(item.id, true)} className="block rounded-lg px-2 py-2 hover:bg-light-gray">
+                    <span className="flex items-center gap-2">
+                      {!item.read ? <span className="size-1.5 shrink-0 rounded-full bg-accent" /> : null}
+                      <span className="truncate text-sm font-medium">{item.title}</span>
+                    </span>
+                    <span className="mt-0.5 block text-xs text-black/45">{item.senderName} · {formatDateTime(item.createdAt)}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <a href={links.notifications} className="mt-1 block rounded-lg px-2 py-2 text-sm font-medium hover:bg-[#fff1eb]">Open notifications</a>
+          </div>
+        </details>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className="flex items-center gap-2.5 rounded-2xl border border-black/5 bg-white py-1 pr-3 pl-1">
