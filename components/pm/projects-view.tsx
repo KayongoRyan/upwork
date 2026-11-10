@@ -23,7 +23,9 @@ export function PmProjects() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs text-black/45">{project.code}</p>
-                  <h2 className="text-base font-semibold">{project.name}</h2>
+                  <h2 className="text-base font-semibold">
+                    <Link href={`/pm/projects/${project.id}`} className="hover:underline">{project.name}</Link>
+                  </h2>
                   <p className="mt-1 text-sm text-muted-foreground">{project.location} · {project.client}</p>
                 </div>
                 <ProjectStatusBadge status={project.status} />
@@ -37,7 +39,10 @@ export function PmProjects() {
                   <p className="text-xs text-muted-foreground">{days < 0 ? `${Math.abs(days)} days past the date` : `${days} days left`}</p>
                 </div>
               </div>
-              <Link href="/pm/progress" className="mt-4 inline-block text-sm font-medium text-accent hover:underline">Update progress</Link>
+              <div className="mt-4 flex gap-4">
+                <Link href={`/pm/projects/${project.id}`} className="text-sm font-medium text-accent hover:underline">Open workspace</Link>
+                <Link href="/pm/progress" className="text-sm font-medium text-black/55 hover:underline">Update progress</Link>
+              </div>
             </article>
           );
         })}

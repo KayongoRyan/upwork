@@ -66,6 +66,7 @@ function Frame({ children }: { children: React.ReactNode }) {
             switchLabel: "Administrator portal",
           }}
           crumbs={{ items: pmNavItems, root: { href: "/pm", label: "CPMIS" } }}
+          search={{ pages: pmNavItems, projectIds: projects.map((project) => project.id), projectBase: "/pm/projects" }}
         />
         <main className="px-3 pt-2 pb-6 sm:px-5 lg:px-6">
           {children}

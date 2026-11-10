@@ -15,11 +15,13 @@ export function SearchDialog({
   onOpenChange,
   pages = navItems,
   projectIds,
+  projectBase,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pages?: typeof navItems;
   projectIds?: string[];
+  projectBase?: string;
 }) {
   const router = useRouter();
   const { projects, users, employees } = useAdmin();
@@ -76,7 +78,7 @@ export function SearchDialog({
                 key={project.id}
                 title={project.name}
                 meta={project.code}
-                onClick={() => go(allowed ? "/se" : `/admin/projects?focus=${project.id}`)}
+                onClick={() => go(projectBase ? `${projectBase}/${project.id}` : allowed ? "/se" : `/admin/projects/${project.id}`)}
               />
             ))}
             {needle && projectHits.length === 0 ? <p className="px-2 text-xs text-muted-foreground">No projects</p> : null}

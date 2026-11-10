@@ -37,7 +37,7 @@ export function Header({
   scope?: "all" | "field" | "site";
   siteCode?: string;
   portfolio?: { id: string; code: string; name: string }[];
-  search?: { pages: NavItem[]; projectIds: string[] };
+  search?: { pages: NavItem[]; projectIds: string[]; projectBase?: string };
 }) {
   const { settings, notifications: allNotifications, markNotification } = useAdmin();
   const notifications = scope === "field"
@@ -141,7 +141,7 @@ export function Header({
         <Breadcrumbs items={crumbs?.items ?? navItems} root={crumbs?.root ?? { href: "/admin", label: "CPMIS" }} />
         <span className="rounded-full bg-[#fff1eb] px-2 py-0.5 text-[11px] font-medium text-black">Demo data</span>
       </div>
-      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} pages={search?.pages} projectIds={search?.projectIds} />
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} pages={search?.pages} projectIds={search?.projectIds} projectBase={search?.projectBase} />
     </header>
   );
 }
