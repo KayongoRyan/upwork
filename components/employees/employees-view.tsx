@@ -24,7 +24,9 @@ import type { Employee } from "@/types";
 
 export function EmployeesView() {
   const data = useAdmin();
-  const focus = useSearchParams().get("focus");
+  const params = useSearchParams();
+  const focus = params.get("focus");
+  const register = params.get("register") === "1";
   const [seenFocus, setSeenFocus] = useState(focus);
   const [viewId, setViewId] = useState<string | null>(focus);
   const [editor, setEditor] = useState<Employee | "new" | null>(null);
@@ -34,6 +36,7 @@ export function EmployeesView() {
   const [department, setDepartment] = useState("all");
   const [status, setStatus] = useState("all");
   const [formError, setFormError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
     setViewId(focus);
@@ -84,8 +87,30 @@ export function EmployeesView() {
       <PageHeader
         title="Employees"
         description="Company workforce. These records are separate from application user accounts."
-        actions={<Button type="button" onClick={() => { setFormError(null); setEditor("new"); }}><Plus />Register employee</Button>}
+        actions={<Button asChild><a href="/admin/employees?register=1"><Plus />Register employee</a></Button>}
       />
+      {register && !saved ? (
+        <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
+          <h2 className="text-base font-semibold">Register employee</h2>
+          <p className="mt-1 mb-4 text-sm text-black/55">Workforce record only. This does not create a login.</p>
+          <EmployeeForm
+            projects={data.projects}
+            serverError={formError ?? params.get("error")}
+            onCancel={() => { window.location.assign("/admin/employees"); }}
+            onSubmit={(values) => {
+              const result = data.createEmployee(values);
+              if (!result.ok) {
+                setFormError(result.error);
+                return;
+              }
+              toast.success("Employee registered in this preview.");
+              setFormError(null);
+              setSaved(true);
+              window.history.replaceState(null, "", "/admin/employees");
+            }}
+          />
+        </section>
+      ) : null}
       <div className="mb-4 flex flex-col gap-3 lg:flex-row">
         <Input value={table.query} onChange={(event) => table.setQuery(event.target.value)} placeholder="Search name, ID, position, or phone" className="lg:max-w-sm" />
         <select aria-label="Department" value={department} onChange={(event) => setDepartment(event.target.value)} className="h-10 rounded-lg border border-input bg-white px-3 text-sm">

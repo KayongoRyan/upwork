@@ -85,23 +85,27 @@ export function signed(value: number) {
   return String(value);
 }
 
-export function downloadCsv(filename: string, rows: Record<string, string | number>[]) {
+export function buildCsv(rows: Record<string, string | number>[]) {
   const headers = Object.keys(rows[0] ?? { Notice: "No rows" });
   const escape = (value: string | number) => {
     const text = String(value ?? "");
     if (/[",\n]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
     return text;
   };
-  const body = rows.length
-    ? [headers.join(","), ...rows.map((row) => headers.map((header) => escape(row[header] ?? "")).join(","))]
-    : ["Notice", "No rows matched the current filters"];
-  const blob = new Blob([body.join("\n")], { type: "text/csv;charset=utf-8" });
+  if (rows.length === 0) return "Notice\nNo rows matched the current filters";
+  return [headers.join(","), ...rows.map((row) => headers.map((header) => escape(row[header] ?? "")).join(","))].join("\n");
+}
+
+export function downloadCsv(filename: string, rows: Record<string, string | number>[]) {
+  const blob = new Blob([buildCsv(rows)], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function clamp(value: number, min: number, max: number) {
