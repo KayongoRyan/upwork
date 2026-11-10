@@ -12,7 +12,8 @@ import { programmeFor } from "@/lib/schedule";
 import { DEMO_TODAY, cn, formatDate } from "@/lib/utils";
 
 const ROW = 44;
-const LEFT = "grid grid-cols-[28px_40px_minmax(180px,1fr)_88px_88px_44px_96px_40px] items-center gap-1 px-2";
+const LEFT = "grid grid-cols-[28px_minmax(0,1fr)_40px] items-center gap-1 px-2 lg:grid-cols-[28px_40px_minmax(180px,1fr)_88px_88px_44px_96px_40px]";
+const WIDE = "hidden lg:block";
 const SCALES = ["month", "week", "day", "hour"] as const;
 type Scale = (typeof SCALES)[number];
 const SCALE_LABEL: Record<Scale, string> = { month: "Month", week: "Week", day: "Daily", hour: "Hourly" };
@@ -73,9 +74,9 @@ export function PmSchedule() {
       />
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <form action="/pm/schedule" method="get" data-report-form>
+          <form action="/pm/schedule" method="get" data-report-form className="grid w-full min-w-0 sm:w-auto">
             <input type="hidden" name="scale" value={scale} />
-            <select aria-label="Project" name="project" defaultValue={projectId} className="h-10 rounded-xl border border-input bg-white px-3 text-sm">
+            <select aria-label="Project" name="project" defaultValue={projectId} className="h-10 w-full min-w-0 rounded-xl border border-input bg-white px-3 text-sm sm:w-auto">
               {data.projects.map((item) => (
                 <option key={item.id} value={item.id}>{item.code} — {item.name}</option>
               ))}
@@ -124,15 +125,15 @@ export function PmSchedule() {
           style={{ maxHeight: "70vh" }}
         >
           <div className="flex min-w-max">
-            <div className="sticky left-0 z-20 w-[680px] shrink-0 border-r border-black/5 bg-white">
+            <div className="sticky left-0 z-20 w-[220px] shrink-0 border-r border-black/5 bg-white sm:w-[360px] lg:w-[680px]">
               <div className={cn(LEFT, "sticky top-0 z-30 border-b border-black/5 bg-white text-[11px] font-medium tracking-wide text-muted-foreground uppercase")} style={{ height: headerHeight }}>
                 <span />
-                <span>WBS</span>
+                <span className={WIDE}>WBS</span>
                 <span>Activity</span>
-                <span>Start</span>
-                <span>Finish</span>
-                <span>Days</span>
-                <span>Pred.</span>
+                <span className={WIDE}>Start</span>
+                <span className={WIDE}>Finish</span>
+                <span className={WIDE}>Days</span>
+                <span className={WIDE}>Pred.</span>
                 <span>%</span>
               </div>
               {visible.map((row) => (
@@ -210,7 +211,7 @@ function ScheduleLabel({
       ) : (
         <span />
       )}
-      <button type="button" className="truncate text-left text-xs text-black/45" onClick={onSelect}>{row.wbs}</button>
+      <button type="button" className={cn("truncate text-left text-xs text-black/45", WIDE)} onClick={onSelect}>{row.wbs}</button>
       <button type="button" className="flex min-w-0 items-center gap-1 text-left" onClick={onSelect}>
         {row.kind === "milestone" ? <span className="inline-block size-2 shrink-0 rotate-45 bg-black" /> : null}
         <span className="truncate">{row.name}</span>
@@ -218,10 +219,10 @@ function ScheduleLabel({
         {row.delayed ? <Badge tone="amber">Delayed</Badge> : null}
         {activity && activity.kind === "milestone" && activity.plannedFinish === DEMO_TODAY && activity.progress < 100 ? <Badge tone="amber">Due</Badge> : null}
       </button>
-      <span className="text-xs">{formatDate(row.plannedStart)}</span>
-      <span className="text-xs">{formatDate(row.plannedFinish)}</span>
-      <span className="text-xs">{row.kind === "milestone" ? "0" : row.duration}</span>
-      <span className="truncate text-xs text-black/55">{activity ? predecessorText(activity) : "—"}</span>
+      <span className={cn("text-xs", WIDE)}>{formatDate(row.plannedStart)}</span>
+      <span className={cn("text-xs", WIDE)}>{formatDate(row.plannedFinish)}</span>
+      <span className={cn("text-xs", WIDE)}>{row.kind === "milestone" ? "0" : row.duration}</span>
+      <span className={cn("truncate text-xs text-black/55", WIDE)}>{activity ? predecessorText(activity) : "—"}</span>
       <span className="text-xs">{row.progress}%</span>
     </div>
   );

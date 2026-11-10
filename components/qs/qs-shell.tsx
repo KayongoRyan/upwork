@@ -21,35 +21,25 @@ export function QsShell({ children }: { children: React.ReactNode }) {
 function Frame({ children }: { children: React.ReactNode }) {
   const data = useQuantitySurveyor();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const name = data.actor ? fullName(data.actor) : "Quantity surveyor";
   const code = data.project?.code ?? "";
 
   return (
     <div className="shell min-h-screen bg-background">
-      {mobileOpen ? (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      ) : null}
+      <label htmlFor="nav-mobile" aria-label="Close navigation" className="nav-scrim fixed inset-0 z-40 bg-black/40" />
       <Sidebar
         collapsed={collapsed}
-        mobileOpen={mobileOpen}
         profileName={name}
         profileTitle={code ? `${code} · Quantity surveyor` : "Quantity surveyor"}
         portalLabel="Quantity surveyor"
         profileHref="/qs"
         items={qsNavItems}
-        onNavigate={() => setMobileOpen(false)}
+        onNavigate={() => undefined}
       />
       <div className={cn("shell-main min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-[108px]" : "lg:pl-[276px]")}>
         <Header
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((value) => !value)}
-          onOpenMobile={() => setMobileOpen(true)}
           scope="field"
           portfolio={data.project ? [data.project] : []}
           identity={{ name, email: data.actor?.email ?? "", role: "Quantity surveyor" }}

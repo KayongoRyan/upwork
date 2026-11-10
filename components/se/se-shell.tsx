@@ -21,35 +21,25 @@ export function SeShell({ children }: { children: React.ReactNode }) {
 function Frame({ children }: { children: React.ReactNode }) {
   const data = useSiteEngineer();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const name = data.actor ? fullName(data.actor) : "Site engineer";
   const code = data.project?.code ?? "";
 
   return (
     <div className="shell min-h-screen bg-background">
-      {mobileOpen ? (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      ) : null}
+      <label htmlFor="nav-mobile" aria-label="Close navigation" className="nav-scrim fixed inset-0 z-40 bg-black/40" />
       <Sidebar
         collapsed={collapsed}
-        mobileOpen={mobileOpen}
         profileName={name}
         profileTitle={code ? `${code} · Site engineer` : "Site engineer"}
         portalLabel="Site engineer"
         profileHref="/se"
         items={seNavItems}
-        onNavigate={() => setMobileOpen(false)}
+        onNavigate={() => undefined}
       />
       <div className={cn("shell-main min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-[108px]" : "lg:pl-[276px]")}>
         <Header
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((value) => !value)}
-          onOpenMobile={() => setMobileOpen(true)}
           scope="site"
           siteCode={code}
           identity={{ name, email: data.actor?.email ?? "", role: "Site engineer" }}

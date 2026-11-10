@@ -19,27 +19,18 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 function Frame({ children }: { children: React.ReactNode }) {
   const { settings } = useAdmin();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
     <div className="shell min-h-screen bg-background">
-      {mobileOpen ? (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      ) : null}
+      <label htmlFor="nav-mobile" aria-label="Close navigation" className="nav-scrim fixed inset-0 z-40 bg-black/40" />
       <Sidebar
         collapsed={collapsed}
-        mobileOpen={mobileOpen}
         profileName={settings.profileName}
         profileTitle={settings.profileTitle}
-        onNavigate={() => setMobileOpen(false)}
+        onNavigate={() => undefined}
       />
       <div className={cn("shell-main min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-[108px]" : "lg:pl-[276px]", settings.compactTables && "compact-tables")}>
-        <Header collapsed={collapsed} onToggleCollapse={() => setCollapsed((value) => !value)} onOpenMobile={() => setMobileOpen(true)} />
+        <Header collapsed={collapsed} onToggleCollapse={() => setCollapsed((value) => !value)} />
         <main className="px-3 pt-2 pb-6 sm:px-5 lg:px-6">
           {children}
           <p className="mt-8 text-xs text-muted-foreground">
