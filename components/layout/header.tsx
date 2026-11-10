@@ -13,7 +13,6 @@ import { formatDateTime, initials } from "@/lib/utils";
 export function Header({
   collapsed,
   onToggleCollapse,
-  onOpenMobile,
   identity,
   links = {
     notifications: "/admin/notifications",
@@ -29,7 +28,6 @@ export function Header({
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
-  onOpenMobile: () => void;
   identity?: { name: string; email: string; role: string };
   links?: { notifications: string; settings: string; switchHref: string; switchLabel: string };
   crumbs?: { items: NavItem[]; root: { href: string; label: string } };
@@ -53,16 +51,17 @@ export function Header({
   return (
     <header className="sticky top-0 z-[60] bg-light-gray/90 px-3 pt-3 pb-2 backdrop-blur sm:px-5 lg:px-6">
       <div className="flex items-center gap-2 sm:gap-3">
-        <button type="button" className="grid size-11 place-items-center rounded-2xl border border-black/5 bg-white text-black lg:hidden" onClick={onOpenMobile} aria-label="Open navigation">
+        <input id="nav-mobile" type="checkbox" className="sr-only" />
+        <label htmlFor="nav-mobile" aria-label="Open navigation" className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-2xl border border-black/5 bg-white text-black lg:hidden">
           <Menu className="size-4" />
-        </button>
+        </label>
         <input id="nav-collapse" type="checkbox" className="sr-only" defaultChecked={collapsed} />
         <label htmlFor="nav-collapse" aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} className="hidden size-11 cursor-pointer place-items-center rounded-2xl border border-black/5 bg-white text-black lg:grid">
           <PanelLeftClose className="icon-expanded size-4" />
           <PanelLeftOpen className="icon-collapsed hidden size-4" />
         </label>
         <SearchField pages={search?.pages} projectIds={search?.projectIds} projectBase={search?.projectBase} />
-        <details className="relative">
+        <details className="relative shrink-0">
           <summary className="relative grid size-11 cursor-pointer list-none place-items-center rounded-2xl border border-black/5 bg-white text-black [&::-webkit-details-marker]:hidden" aria-label="Notifications">
             <Bell className="size-4" />
             {unread.length > 0 ? <span className="absolute top-2.5 right-2.5 size-2 rounded-full bg-accent" /> : null}
@@ -87,7 +86,7 @@ export function Header({
         </details>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="flex items-center gap-2.5 rounded-2xl border border-black/5 bg-white py-1 pr-3 pl-1">
+            <button type="button" className="flex shrink-0 items-center gap-2.5 rounded-2xl border border-black/5 bg-white py-1 pr-3 pl-1">
               <span className="grid size-9 place-items-center rounded-full bg-black text-xs font-semibold text-white">
                 {initials(name)}
               </span>

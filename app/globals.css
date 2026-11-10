@@ -106,6 +106,51 @@ textarea {
   width: 248px;
 }
 
+.shell-main {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Wide tables sit in grid cells. Let the cell shrink so the table scrolls inside the card. */
+.shell-main main :where(.grid > *, .flex > *) {
+  min-width: 0;
+}
+
+.shell-main main :where(.overflow-x-auto, .overflow-auto) {
+  max-width: 100%;
+}
+
+.shell-main main :where(select, input, textarea) {
+  max-width: 100%;
+}
+
+.nav-scrim {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .shell > aside {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(248px, 86vw) !important;
+    border-radius: 0;
+    transform: translateX(-110%);
+  }
+
+  .shell:has(#nav-mobile:checked) > aside {
+    transform: translateX(0);
+  }
+
+  .shell:has(#nav-mobile:checked) .nav-scrim {
+    display: block;
+  }
+
+  .shell:has(#nav-mobile:checked) > .shell-main > header {
+    z-index: 30;
+  }
+}
+
 @media (min-width: 1024px) {
   .shell:has(#nav-collapse:checked) > aside {
     width: 84px !important;

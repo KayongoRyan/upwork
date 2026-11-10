@@ -21,34 +21,24 @@ export function PmShell({ children }: { children: React.ReactNode }) {
 function Frame({ children }: { children: React.ReactNode }) {
   const { actor, projects } = usePm();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const name = actor ? fullName(actor) : "Project manager";
 
   return (
     <div className="shell min-h-screen bg-background">
-      {mobileOpen ? (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      ) : null}
+      <label htmlFor="nav-mobile" aria-label="Close navigation" className="nav-scrim fixed inset-0 z-40 bg-black/40" />
       <Sidebar
         collapsed={collapsed}
-        mobileOpen={mobileOpen}
         profileName={name}
         profileTitle="Project manager"
         portalLabel="Project manager"
         profileHref="/pm"
         items={pmNavItems}
-        onNavigate={() => setMobileOpen(false)}
+        onNavigate={() => undefined}
       />
       <div className={cn("shell-main min-h-screen transition-[padding] duration-200", collapsed ? "lg:pl-[108px]" : "lg:pl-[276px]")}>
         <Header
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((value) => !value)}
-          onOpenMobile={() => setMobileOpen(true)}
           scope="field"
           userId={actor?.id}
           portfolio={projects}

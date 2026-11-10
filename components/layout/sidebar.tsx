@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 
 export function Sidebar({
   collapsed,
-  mobileOpen,
   profileName,
   profileTitle,
   onNavigate,
@@ -17,7 +16,6 @@ export function Sidebar({
   profileHref = "/admin/settings",
 }: {
   collapsed: boolean;
-  mobileOpen: boolean;
   profileName: string;
   profileTitle: string;
   onNavigate: () => void;
@@ -32,8 +30,6 @@ export function Sidebar({
       className={cn(
         "fixed z-50 flex flex-col overflow-hidden bg-white text-black shadow-[0_12px_40px_rgba(0,0,0,0.05)]",
         "top-3 bottom-3 left-3 rounded-[28px] border border-black/5",
-        "max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:!w-[248px] max-lg:rounded-none",
-        mobileOpen ? "translate-x-0" : "-translate-x-[120%] lg:translate-x-0",
         "transition-[width,transform] duration-200",
       )}
     >
