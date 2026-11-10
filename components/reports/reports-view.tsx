@@ -3,7 +3,6 @@
 import { Children, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { Download } from "lucide-react";
-import { toast } from "sonner";
 import { MonthlyActivityChart } from "@/components/dashboard/monthly-activity-chart";
 import { ProjectStatusChart } from "@/components/dashboard/project-status-chart";
 import { WorkforceChart } from "@/components/dashboard/workforce-chart";
@@ -12,7 +11,7 @@ import { ProjectStatusBadge, TaskStatusBadge } from "@/components/shared/status-
 import { Button } from "@/components/ui/button";
 import { useAdmin } from "@/lib/data/admin-store";
 import { budgetTotals, countProjects, overlapsRange } from "@/lib/metrics";
-import { downloadCsv, formatDate, formatMoney } from "@/lib/utils";
+import { formatDate, formatMoney } from "@/lib/utils";
 
 export function ReportsView() {
   const data = useAdmin();
@@ -45,28 +44,15 @@ export function ReportsView() {
     return text ? `/admin/reports?${text}` : "/admin/reports";
   }
 
-  function exportCsv() {
-    downloadCsv("cpmis-project-report-demo.csv", projects.map((project) => ({
-      Code: project.code,
-      Name: project.name,
-      Status: project.status,
-      Progress: project.progress,
-      BudgetRWF_demo: project.budget,
-      SpentRWF_demo: project.spent,
-      Manager: data.managerName(project),
-      Location: project.location,
-      Start: project.startDate,
-      ExpectedCompletion: project.expectedEndDate,
-    })));
-    toast.success("Downloaded the filtered demonstration report.");
-  }
+  const exportQuery = new URLSearchParams({ from, to });
+  if (projectId !== "all") exportQuery.set("project", projectId);
 
   return (
     <div>
       <PageHeader
         title="Reports & analytics"
         description="Sample performance, workforce, and budget figures for this preview. Do not treat the amounts as company accounts."
-        actions={<Button type="button" onClick={exportCsv} disabled={projects.length === 0}><Download />Export CSV</Button>}
+        actions={<Button asChild><a href={`/api/reports?${exportQuery.toString()}`}><Download />Export CSV</a></Button>}
       />
       <div className="mb-4 rounded-[22px] border border-accent/30 bg-[#fff1eb] px-4 py-3 text-sm text-black">
         Demonstration data in RWF. The monthly trend is a fixed sample series. Project counts, progress, and budget bars follow the records currently in this session.
