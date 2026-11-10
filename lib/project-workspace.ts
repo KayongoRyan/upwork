@@ -96,13 +96,13 @@ const records: Record<string, ProjectWorkspaceData> = {
       mat("mat-bypass-3", "Precast drainage pipes", "m", 4200, 3900, 3100),
     ],
     equipment: [
-      eq("eq-bypass-1", "Asphalt paver", "PLT-014", "on_site", "Daniel Opio", "2026-09-02"),
-      eq("eq-bypass-2", "20 t excavator", "PLT-008", "on_site", "Isaac Tumusiime", "2025-03-04"),
+      eq("eq-bypass-1", "Asphalt paver", "PLT-014", "on_site", "Daniel Hakizimana", "2026-09-02"),
+      eq("eq-bypass-2", "20 t excavator", "PLT-008", "on_site", "Isaac Ndayambaje", "2025-03-04"),
       eq("eq-bypass-3", "Tipper truck", "PLT-031", "idle", "Pool", "2026-10-11"),
     ],
     risks: [
-      risk("rsk-bypass-1", "Drainage shop drawings still with the client", "issue", "medium", "mitigating", "Piers cannot be poured until the drawings are approved.", "Helen Nabirye is chasing the comment sheet this week.", "Helen Nabirye"),
-      risk("rsk-bypass-2", "Rain on the northern cut", "delay", "low", "open", "A wet week slips the base course by about four days.", "Keep the stockpile covered and hold a dry-weather pour window.", "Isaac Tumusiime"),
+      risk("rsk-bypass-1", "Drainage shop drawings still with the client", "issue", "medium", "mitigating", "Piers cannot be poured until the drawings are approved.", "Helen Uwera is chasing the comment sheet this week.", "Helen Uwera"),
+      risk("rsk-bypass-2", "Rain on the northern cut", "delay", "low", "open", "A wet week slips the base course by about four days.", "Keep the stockpile covered and hold a dry-weather pour window.", "Isaac Ndayambaje"),
     ],
     labour: [
       gang("lab-bypass-1", "Earthworks", 46, 44),
@@ -124,12 +124,12 @@ const records: Record<string, ProjectWorkspaceData> = {
     ],
     equipment: [
       eq("eq-cargo-1", "Concrete pump", "PLT-022", "idle", "Unassigned", "2026-10-18"),
-      eq("eq-cargo-2", "Mobile crane 50 t", "PLT-019", "on_site", "Daniel Opio", "2026-07-01"),
-      eq("eq-cargo-3", "Telehandler", "PLT-027", "on_site", "Martha Akello", "2026-06-20"),
+      eq("eq-cargo-2", "Mobile crane 50 t", "PLT-019", "on_site", "Daniel Hakizimana", "2026-07-01"),
+      eq("eq-cargo-3", "Telehandler", "PLT-027", "on_site", "Martha Umutoni", "2026-06-20"),
     ],
     risks: [
-      risk("rsk-cargo-1", "Cold-room steel package has not arrived", "delay", "high", "open", "Completion is 18 Nov 2026 and the steel is still short. The hall cannot close.", "Recover the balance tonnes and rebaseline the customs hall programme.", "Sarah Namakula"),
-      risk("rsk-cargo-2", "Night pour cancelled — no concrete delivery", "issue", "high", "mitigating", "Apron bay 4 has not started. The pump is standing.", "Hold the pump until the next confirmed delivery, then pour bay 4.", "Lydia Atim"),
+      risk("rsk-cargo-1", "Cold-room steel package has not arrived", "delay", "high", "open", "Completion is 18 Nov 2026 and the steel is still short. The hall cannot close.", "Recover the balance tonnes and rebaseline the customs hall programme.", "Sarah Mukamana"),
+      risk("rsk-cargo-2", "Night pour cancelled — no concrete delivery", "issue", "high", "mitigating", "Apron bay 4 has not started. The pump is standing.", "Hold the pump until the next confirmed delivery, then pour bay 4.", "Lydia Mukeshimana"),
     ],
     labour: [
       gang("lab-cargo-1", "Concrete", 30, 22),
@@ -150,11 +150,11 @@ const records: Record<string, ProjectWorkspaceData> = {
       mat("mat-bridge-3", "Night-shift concrete", "m3", 80, 40, 28),
     ],
     equipment: [
-      eq("eq-bridge-1", "Underbridge unit", "PLT-041", "on_site", "Moses Wanyama", "2026-10-01"),
+      eq("eq-bridge-1", "Underbridge unit", "PLT-041", "on_site", "Moses Bizimana", "2026-10-01"),
       eq("eq-bridge-2", "Lighting tower", "PLT-044", "idle", "Pool", "2026-11-01"),
     ],
     risks: [
-      risk("rsk-bridge-1", "Night closure not confirmed", "delay", "medium", "mitigating", "The east bearing replacement cannot start without the 28 Nov closure.", "Moses Wanyama is waiting on the traffic authority.", "Moses Wanyama"),
+      risk("rsk-bridge-1", "Night closure not confirmed", "delay", "medium", "mitigating", "The east bearing replacement cannot start without the 28 Nov closure.", "Moses Bizimana is waiting on the traffic authority.", "Moses Bizimana"),
     ],
     labour: [
       gang("lab-bridge-1", "Night shift", 14, 8),
@@ -177,8 +177,8 @@ const records: Record<string, ProjectWorkspaceData> = {
       eq("eq-hospital-2", "Materials hoist", "PLT-053", "off_hire", "Off hire", "2026-10-30"),
     ],
     risks: [
-      risk("rsk-hospital-1", "Funding review has paused the site", "delay", "high", "open", "Works stay on hold until the client confirms the next certificate.", "Protect stored finishes and keep the review on 25 Nov.", "Peter Ochieng"),
-      risk("rsk-hospital-2", "Stored finishes can spoil in the pause", "issue", "medium", "mitigating", "Boards and fittings are in an open store.", "Robert Mbabazi is sheeting the store and logging moisture.", "Robert Mbabazi"),
+      risk("rsk-hospital-1", "Funding review has paused the site", "delay", "high", "open", "Works stay on hold until the client confirms the next certificate.", "Protect stored finishes and keep the review on 25 Nov.", "Peter Habimana"),
+      risk("rsk-hospital-2", "Stored finishes can spoil in the pause", "issue", "medium", "mitigating", "Boards and fittings are in an open store.", "Robert Nkurunziza is sheeting the store and logging moisture.", "Robert Nkurunziza"),
     ],
     labour: [
       gang("lab-hospital-1", "Caretaker crew", 8, 4),
@@ -198,7 +198,7 @@ const records: Record<string, ProjectWorkspaceData> = {
       eq("eq-drain-1", "Excavator", "PLT-061", "off_hire", "Off hire", "2026-08-31"),
     ],
     risks: [
-      risk("rsk-drain-1", "Defects liability watch", "issue", "low", "closed", "No open defects at handover.", "Liability period is on the certificate. No further mitigation.", "Sarah Namakula"),
+      risk("rsk-drain-1", "Defects liability watch", "issue", "low", "closed", "No open defects at handover.", "Liability period is on the certificate. No further mitigation.", "Sarah Mukamana"),
     ],
     labour: [
       gang("lab-drain-1", "Close-out crew", 10, 0),
@@ -217,11 +217,11 @@ const records: Record<string, ProjectWorkspaceData> = {
       mat("mat-gulu-3", "Street-light columns", "nr", 120, 0, 0),
     ],
     equipment: [
-      eq("eq-gulu-1", "Grader", "PLT-071", "on_site", "Emmanuel Twesigye", "2026-08-18"),
+      eq("eq-gulu-1", "Grader", "PLT-071", "on_site", "Emmanuel Habimana", "2026-08-18"),
       eq("eq-gulu-2", "Water bowser", "PLT-074", "idle", "Pool", "2026-09-01"),
     ],
     risks: [
-      risk("rsk-gulu-1", "Gravel stockpile is short of the programme", "delay", "high", "open", "Surfacing cannot start on the first 4 km.", "Mobilise the balance stockpile before 22 Nov.", "Emmanuel Twesigye"),
+      risk("rsk-gulu-1", "Gravel stockpile is short of the programme", "delay", "high", "open", "Surfacing cannot start on the first 4 km.", "Mobilise the balance stockpile before 22 Nov.", "Emmanuel Habimana"),
     ],
     labour: [
       gang("lab-gulu-1", "Roadworks", 36, 14),
@@ -257,12 +257,12 @@ const records: Record<string, ProjectWorkspaceData> = {
       mat("mat-ind-3", "Road base", "m3", 3600, 2000, 1600),
     ],
     equipment: [
-      eq("eq-ind-1", "Trencher", "PLT-081", "on_site", "George Wasswa", "2026-09-12"),
-      eq("eq-ind-2", "Compactor", "PLT-084", "idle", "Christine Auma", "2026-10-02"),
+      eq("eq-ind-1", "Trencher", "PLT-081", "on_site", "George Nsabimana", "2026-09-12"),
+      eq("eq-ind-2", "Compactor", "PLT-084", "idle", "Christine Murekatete", "2026-10-02"),
     ],
     risks: [
-      risk("rsk-ind-1", "Utility contractor missed the October milestone", "delay", "high", "open", "The programme date of 2 Oct 2026 has passed at 35% progress.", "Chase the recovery plan and keep the east trench safe.", "George Wasswa"),
-      risk("rsk-ind-2", "Open trench on the east access road", "issue", "medium", "mitigating", "The water main trench is a fall risk for other contractors.", "Barriers stay up until the main is backfilled.", "George Wasswa"),
+      risk("rsk-ind-1", "Utility contractor missed the October milestone", "delay", "high", "open", "The programme date of 2 Oct 2026 has passed at 35% progress.", "Chase the recovery plan and keep the east trench safe.", "George Nsabimana"),
+      risk("rsk-ind-2", "Open trench on the east access road", "issue", "medium", "mitigating", "The water main trench is a fall risk for other contractors.", "Barriers stay up until the main is backfilled.", "George Nsabimana"),
     ],
     labour: [
       gang("lab-ind-1", "Utilities", 20, 12),

@@ -24,7 +24,9 @@ import type { UserAccount } from "@/types";
 
 export function UsersView() {
   const data = useAdmin();
-  const focus = useSearchParams().get("focus");
+  const params = useSearchParams();
+  const focus = params.get("focus");
+  const add = params.get("add") === "1";
   const [seenFocus, setSeenFocus] = useState(focus);
   const [viewId, setViewId] = useState<string | null>(focus);
   const [editor, setEditor] = useState<UserAccount | "new" | null>(null);
@@ -32,6 +34,7 @@ export function UsersView() {
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("all");
   const [formError, setFormError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
     setViewId(focus);
@@ -82,8 +85,30 @@ export function UsersView() {
       <PageHeader
         title="User management"
         description="Application accounts only. Workforce records that do not sign in live under Employees."
-        actions={<Button type="button" onClick={() => { setFormError(null); setEditor("new"); }}><Plus />Add user</Button>}
+        actions={<Button asChild><a href="/admin/users?add=1"><Plus />Add user</a></Button>}
       />
+      {add && !saved ? (
+        <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
+          <h2 className="text-base font-semibold">Add user</h2>
+          <p className="mt-1 mb-4 text-sm text-black/55">Preview account only. This does not send an invitation or set a password.</p>
+          <UserForm
+            projects={data.projects}
+            serverError={formError ?? params.get("error")}
+            onCancel={() => { window.location.assign("/admin/users"); }}
+            onSubmit={(values) => {
+              const result = data.createUser(values);
+              if (!result.ok) {
+                setFormError(result.error);
+                return;
+              }
+              toast.success("User added in this preview.");
+              setFormError(null);
+              setSaved(true);
+              window.history.replaceState(null, "", "/admin/users");
+            }}
+          />
+        </section>
+      ) : null}
       <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Mini label="Total users" value={counts.total} />
         <Mini label="Active" value={counts.active} />
@@ -142,10 +167,10 @@ export function UsersView() {
         {table.total === 0 ? <EmptyState title="No users match" body="Adjust the search or filters." /> : <Pagination page={table.page} pageCount={table.pageCount} total={table.total} pageSize={6} onPage={table.setPage} />}
       </div>
 
-      <Dialog open={editor !== null} onOpenChange={(open) => { if (!open) setEditor(null); }}>
-        {editor !== null ? (
-          <DialogContent className="sm:max-w-2xl" title={editor === "new" ? "Add user" : "Edit user"} description="This creates a preview account. It does not send an invitation or set a password.">
-            <UserForm user={editor === "new" ? null : editor} projects={data.projects} serverError={formError} onCancel={() => setEditor(null)} onSubmit={save} />
+      <Dialog open={editor !== null && editor !== "new"} onOpenChange={(open) => { if (!open) setEditor(null); }}>
+        {editor !== null && editor !== "new" ? (
+          <DialogContent className="sm:max-w-2xl" title="Edit user" description="This updates the preview account. It does not send an invitation or set a password.">
+            <UserForm user={editor} projects={data.projects} serverError={formError} onCancel={() => setEditor(null)} onSubmit={save} />
           </DialogContent>
         ) : null}
       </Dialog>

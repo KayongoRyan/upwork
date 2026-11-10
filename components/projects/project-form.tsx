@@ -1,10 +1,9 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { projectStatusLabel, projectStatuses } from "@/lib/labels";
 import { projectSchema, type ProjectFormValues } from "@/lib/validations/schemas";
 import type { Project, UserAccount } from "@/types";
@@ -57,13 +56,19 @@ export function ProjectForm({
   const errors = form.formState.errors;
 
   return (
-    <form className="grid gap-4" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+    <form
+      className="grid gap-4"
+      action={project ? undefined : "/api/projects"}
+      method={project ? undefined : "post"}
+      onSubmit={form.handleSubmit(onSubmit)}
+      noValidate
+    >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Project name" htmlFor="name" error={errors.name?.message}>
           <Input id="name" {...form.register("name")} />
         </Field>
         <Field label="Project code" htmlFor="code" error={errors.code?.message}>
-          <Input id="code" {...form.register("code")} placeholder="KLA-NBX-27" />
+          <Input id="code" {...form.register("code")} placeholder="KGL-NBX-27" />
         </Field>
       </div>
       <Field label="Description" htmlFor="description" error={errors.description?.message}>
@@ -77,44 +82,18 @@ export function ProjectForm({
           <Input id="location" {...form.register("location")} />
         </Field>
         <Field label="Project manager" error={errors.managerId?.message}>
-          <Controller
-            control={form.control}
-            name="managerId"
-            render={({ field }) => (
-              <Select value={field.value || undefined} onValueChange={field.onChange}>
-                <SelectTrigger aria-label="Project manager">
-                  <SelectValue placeholder="Choose a manager" />
-                </SelectTrigger>
-                <SelectContent>
-                  {managers.map((manager) => (
-                    <SelectItem key={manager.id} value={manager.id}>
-                      {manager.firstName} {manager.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
+          <select aria-label="Project manager" className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm" defaultValue={project?.managerId ?? managers[0]?.id ?? ""} {...form.register("managerId")}>
+            {managers.map((manager) => (
+              <option key={manager.id} value={manager.id}>{manager.firstName} {manager.lastName}</option>
+            ))}
+          </select>
         </Field>
         <Field label="Status" error={errors.status?.message}>
-          <Controller
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger aria-label="Project status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {projectStatuses.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {projectStatusLabel[status]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
+          <select aria-label="Project status" className="h-10 w-full rounded-lg border border-input bg-white px-3 text-sm" defaultValue={project?.status ?? "planning"} {...form.register("status")}>
+            {projectStatuses.map((status) => (
+              <option key={status} value={status}>{projectStatusLabel[status]}</option>
+            ))}
+          </select>
         </Field>
         <Field label="Start date" htmlFor="startDate" error={errors.startDate?.message}>
           <Input id="startDate" type="date" {...form.register("startDate")} />
@@ -134,14 +113,21 @@ export function ProjectForm({
               <Input id="progress" type="number" min={0} max={100} {...form.register("progress")} />
             </Field>
           </>
-        ) : null}
+        ) : (
+          <>
+            <input type="hidden" {...form.register("spent")} />
+            <input type="hidden" {...form.register("progress")} />
+          </>
+        )}
       </div>
       {serverError ? <p className="text-sm text-destructive">{serverError}</p> : null}
       {managers.length === 0 ? <p className="text-sm text-destructive">Add a project manager before creating a project.</p> : null}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
+        {project ? (
+          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+        ) : (
+          <Button asChild variant="outline"><a href="/admin/projects">Cancel</a></Button>
+        )}
         <Button type="submit" disabled={managers.length === 0}>
           {project ? "Save changes" : "Create project"}
         </Button>

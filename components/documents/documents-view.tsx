@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { useAdmin } from "@/lib/data/admin-store";
 import {
@@ -28,16 +27,18 @@ const MAX_BYTES = 512 * 1024;
 export function DocumentsView() {
   const data = useAdmin();
   const documents = data.documents ?? [];
-  const requested = useSearchParams().get("project");
-  const requestedDoc = useSearchParams().get("doc");
+  const params = useSearchParams();
+  const requested = params.get("project");
+  const requestedDoc = params.get("doc");
+  const register = params.get("register") === "1";
+  const revise = params.get("revise");
   const [seen, setSeen] = useState(requested);
   const [seenDoc, setSeenDoc] = useState(requestedDoc);
   const [projectId, setProjectId] = useState(requested && data.projects.some((item) => item.id === requested) ? requested : "all");
   const [category, setCategory] = useState<DocumentCategory | "all">("all");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(requestedDoc);
-  const [registerOpen, setRegisterOpen] = useState(false);
-  const [reviseId, setReviseId] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   if (requested !== seen) {
     setSeen(requested);
     if (requested && data.projects.some((item) => item.id === requested)) setProjectId(requested);
@@ -72,13 +73,57 @@ export function DocumentsView() {
         description="Controlled register. A new file is a revision. Site work uses the issued revision only. An in-review drawing is not permission to build."
         actions={
           <>
-            <Button type="button" variant="outline" onClick={() => setReviseId(rows[0]?.id ?? documents[0]?.id ?? null)} disabled={documents.length === 0}>
-              Upload revision
-            </Button>
-            <Button type="button" onClick={() => setRegisterOpen(true)}>Register document</Button>
+            <Button asChild variant="outline"><a href="/admin/documents?revise=1">Upload revision</a></Button>
+            <Button asChild><a href="/admin/documents?register=1">Register document</a></Button>
           </>
         }
       />
+      {register && !saved ? (
+        <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
+          <h2 className="text-base font-semibold">Register document</h2>
+          <p className="mt-1 mb-4 text-sm text-black/55">The first file is Rev 01. Leave it in review unless it is ready to build from.</p>
+          <RegisterForm
+            projects={data.projects}
+            users={data.users}
+            serverError={params.get("error")}
+            onSubmit={(document, revision) => {
+              const result = data.registerDocument(document, revision);
+              if (!result.ok) {
+                toast.error(result.error);
+                return;
+              }
+              toast.success(revision.status === "approved" ? "Document issued as Rev 01." : "Document registered. Rev 01 is not issued.");
+              setSaved(true);
+              window.history.replaceState(null, "", "/admin/documents");
+            }}
+          />
+        </section>
+      ) : null}
+      {revise && !register && !saved ? (
+        <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
+          <h2 className="text-base font-semibold">Upload revision</h2>
+          <p className="mt-1 mb-4 text-sm text-black/55">The new file stays in review. The issued revision does not change until you issue this one.</p>
+          {documents.length === 0 ? <p className="text-sm text-black/55">Register a document before uploading a revision.</p> : (
+            <ReviseForm
+              key={revise}
+              documents={documents}
+              initialId={documents.some((item) => item.id === revise) ? revise : documents[0].id}
+              serverError={params.get("error")}
+              onSubmit={(documentId, revision) => {
+                const result = data.reviseDocument(documentId, revision);
+                if (!result.ok) {
+                  toast.error(result.error);
+                  return;
+                }
+                toast.success("Revision uploaded. It is not issued.");
+                setSaved(true);
+                setOpenId(documentId);
+                window.history.replaceState(null, "", `/admin/documents?doc=${documentId}`);
+              }}
+            />
+          )}
+        </section>
+      ) : null}
       <div className="mb-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Documents" value={String(rows.length)} />
         <Stat label="Issued" value={String(issued)} />
@@ -137,7 +182,7 @@ export function DocumentsView() {
                     issued={issuedRev}
                     users={data.users}
                     onToggle={() => setOpenId(openId === item.id ? null : item.id)}
-                    onRevise={() => setReviseId(item.id)}
+                    onReviseHref={`/admin/documents?revise=${item.id}`}
                     onIssue={() => {
                       const result = data.issueRevision(item.id);
                       if (!result.ok) toast.error(result.error);
@@ -157,46 +202,6 @@ export function DocumentsView() {
         {rows.length === 0 ? <p className="px-4 py-8 text-sm text-muted-foreground">No documents match.</p> : null}
       </div>
 
-      <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
-        <DialogContent title="Register document" description="The first file is Rev 01. Leave it in review unless it is ready to build from." className="sm:max-w-xl">
-          <RegisterForm
-            projects={data.projects}
-            users={data.users}
-            onCancel={() => setRegisterOpen(false)}
-            onSubmit={(document, revision) => {
-              const result = data.registerDocument(document, revision);
-              if (!result.ok) {
-                toast.error(result.error);
-                return;
-              }
-              toast.success(revision.status === "approved" ? "Document issued as Rev 01." : "Document registered. Rev 01 is not issued.");
-              setRegisterOpen(false);
-            }}
-          />
-        </DialogContent>
-      </Dialog>
-      <Dialog open={reviseId !== null} onOpenChange={(open) => { if (!open) setReviseId(null); }}>
-        <DialogContent title="Upload revision" description="The new file stays in review. The issued revision does not change until you issue this one." className="sm:max-w-xl">
-          {reviseId ? (
-            <ReviseForm
-              key={reviseId}
-              documents={documents}
-              initialId={reviseId}
-              onCancel={() => setReviseId(null)}
-              onSubmit={(documentId, revision) => {
-                const result = data.reviseDocument(documentId, revision);
-                if (!result.ok) {
-                  toast.error(result.error);
-                  return;
-                }
-                toast.success("Revision uploaded. It is not issued.");
-                setReviseId(null);
-                setOpenId(documentId);
-              }}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -210,7 +215,7 @@ function DocumentBlock({
   issued,
   users,
   onToggle,
-  onRevise,
+  onReviseHref,
   onIssue,
   onAccess,
 }: {
@@ -222,7 +227,7 @@ function DocumentBlock({
   issued: DocumentRevision | null;
   users: { id: string; firstName: string; lastName: string }[];
   onToggle: () => void;
-  onRevise: () => void;
+  onReviseHref: string;
   onIssue: () => void;
   onAccess: (access: UserRole[]) => void;
 }) {
@@ -250,7 +255,7 @@ function DocumentBlock({
         <tr className="border-t border-black/5 bg-light-gray/40">
           <td colSpan={8} className="px-3 py-3">
             <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={onRevise}>Upload next revision</Button>
+              <Button asChild size="sm" variant="outline"><a href={onReviseHref}>Upload next revision</a></Button>
               {latest && latest.status !== "approved" ? <Button type="button" size="sm" onClick={onIssue}>Issue Rev {latest.revision}</Button> : null}
             </div>
             <table className="mt-3 w-full min-w-[720px] text-sm">
@@ -326,95 +331,95 @@ function AccessEditor({ access, onSave }: { access: UserRole[]; onSave: (access:
 function RegisterForm({
   projects,
   users,
-  onCancel,
+  serverError,
   onSubmit,
 }: {
   projects: { id: string; code: string; name: string }[];
   users: { id: string; firstName: string; lastName: string }[];
-  onCancel: () => void;
+  serverError?: string | null;
   onSubmit: (document: Omit<ProjectDocument, "id" | "revisions">, revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt">) => void;
 }) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
-  const [number, setNumber] = useState("");
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<DocumentCategory>("drawing");
-  const [discipline, setDiscipline] = useState("General");
-  const [ownerId, setOwnerId] = useState(users[0]?.id ?? "");
-  const [status, setStatus] = useState<RevisionStatus>("in_review");
-  const [note, setNote] = useState("");
-  const [roles, setRoles] = useState<UserRole[]>(["administrator", "project_manager", "site_engineer", "quantity_surveyor"]);
-  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
 
   return (
     <form
       className="grid gap-3"
+      action="/api/documents"
+      method="post"
+      encType="multipart/form-data"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!file) {
+        const data = new FormData(event.currentTarget);
+        const file = data.get("file");
+        if (!(file instanceof File) || file.size === 0) {
           toast.error("Choose a file.");
           return;
         }
         setBusy(true);
+        const access = data.getAll("access").filter((value): value is UserRole => typeof value === "string");
         readUpload(file)
           .then((upload) => {
             onSubmit(
-              { projectId, number, title, category, discipline: discipline.trim() || "General", ownerId, access: roles },
-              { ...upload, note: note.trim(), status, uploadedBy: "u-admin" },
+              {
+                projectId: String(data.get("projectId") ?? ""),
+                number: String(data.get("number") ?? ""),
+                title: String(data.get("title") ?? ""),
+                category: String(data.get("category") ?? "drawing") as DocumentCategory,
+                discipline: String(data.get("discipline") ?? "General"),
+                ownerId: String(data.get("ownerId") ?? ""),
+                access,
+              },
+              { ...upload, note: String(data.get("note") ?? "").trim(), status: String(data.get("status") ?? "in_review") as RevisionStatus, uploadedBy: "u-admin" },
             );
           })
           .catch((error: Error) => toast.error(error.message))
           .finally(() => setBusy(false));
       }}
     >
+      {serverError ? <p className="text-sm text-destructive">{serverError}</p> : null}
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1"><Label>Number</Label><Input value={number} onChange={(event) => setNumber(event.target.value)} placeholder="DWG-EBB-015" /></label>
-        <label className="grid gap-1"><Label>Title</Label><Input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+        <label className="grid gap-1"><Label>Number</Label><Input name="number" placeholder="DWG-KGL-015" required /></label>
+        <label className="grid gap-1"><Label>Title</Label><Input name="title" required /></label>
         <label className="grid gap-1">
           <Label>Project</Label>
-          <select className={selectClass} value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+          <select name="projectId" className={selectClass} defaultValue={projects[0]?.id ?? ""}>
             {projects.map((project) => <option key={project.id} value={project.id}>{project.code} — {project.name}</option>)}
           </select>
         </label>
         <label className="grid gap-1">
           <Label>Category</Label>
-          <select className={selectClass} value={category} onChange={(event) => setCategory(event.target.value as DocumentCategory)}>
+          <select name="category" className={selectClass} defaultValue="drawing">
             {categories.map((item) => <option key={item} value={item}>{documentCategoryLabel[item]}</option>)}
           </select>
         </label>
-        <label className="grid gap-1"><Label>Discipline</Label><Input value={discipline} onChange={(event) => setDiscipline(event.target.value)} /></label>
+        <label className="grid gap-1"><Label>Discipline</Label><Input name="discipline" defaultValue="General" /></label>
         <label className="grid gap-1">
           <Label>Owner</Label>
-          <select className={selectClass} value={ownerId} onChange={(event) => setOwnerId(event.target.value)}>
+          <select name="ownerId" className={selectClass} defaultValue={users[0]?.id ?? ""}>
             {users.map((user) => <option key={user.id} value={user.id}>{fullName(user)}</option>)}
           </select>
         </label>
         <label className="grid gap-1">
           <Label>Rev 01 standing</Label>
-          <select className={selectClass} value={status} onChange={(event) => setStatus(event.target.value as RevisionStatus)}>
+          <select name="status" className={selectClass} defaultValue="in_review">
             <option value="draft">Draft — not for construction</option>
             <option value="in_review">In review — not for construction</option>
             <option value="approved">Issued — build from this</option>
           </select>
         </label>
-        <label className="grid gap-1"><Label>File</Label><Input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+        <label className="grid gap-1"><Label>File</Label><Input name="file" type="file" required /></label>
       </div>
-      <label className="grid gap-1"><Label>Revision note</Label><Textarea value={note} onChange={(event) => setNote(event.target.value)} /></label>
+      <label className="grid gap-1"><Label>Revision note</Label><Textarea name="note" /></label>
       <div className="flex flex-wrap gap-3">
         {userRoles.map((role) => (
           <label key={role} className="flex items-center gap-1.5 text-xs">
-            <input
-              type="checkbox"
-              checked={role === "administrator" || roles.includes(role)}
-              disabled={role === "administrator"}
-              onChange={(event) => setRoles(event.target.checked ? [...roles, role] : roles.filter((item) => item !== role))}
-            />
+            <input type="checkbox" name="access" value={role} defaultChecked disabled={role === "administrator"} />
             {roleLabel[role]}
           </label>
         ))}
       </div>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button asChild variant="outline"><a href="/admin/documents">Cancel</a></Button>
         <Button type="submit" disabled={busy}>{busy ? "Reading file" : "Register"}</Button>
       </div>
     </form>
@@ -424,49 +429,52 @@ function RegisterForm({
 function ReviseForm({
   documents,
   initialId,
-  onCancel,
+  serverError,
   onSubmit,
 }: {
   documents: ProjectDocument[];
   initialId: string;
-  onCancel: () => void;
+  serverError?: string | null;
   onSubmit: (documentId: string, revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt" | "status">) => void;
 }) {
-  const [documentId, setDocumentId] = useState(initialId);
-  const [note, setNote] = useState("");
-  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
-  const current = documents.find((item) => item.id === documentId);
+  const current = documents.find((item) => item.id === initialId);
   const issued = current ? issuedRevision(current) : null;
   return (
     <form
       className="grid gap-3"
+      action="/api/documents/revise"
+      method="post"
+      encType="multipart/form-data"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!file) {
+        const data = new FormData(event.currentTarget);
+        const file = data.get("file");
+        if (!(file instanceof File) || file.size === 0) {
           toast.error("Choose a file.");
           return;
         }
         setBusy(true);
         readUpload(file)
-          .then((upload) => onSubmit(documentId, { ...upload, note: note.trim(), uploadedBy: "u-admin" }))
+          .then((upload) => onSubmit(String(data.get("documentId") ?? initialId), { ...upload, note: String(data.get("note") ?? "").trim(), uploadedBy: "u-admin" }))
           .catch((error: Error) => toast.error(error.message))
           .finally(() => setBusy(false));
       }}
     >
+      {serverError ? <p className="text-sm text-destructive">{serverError}</p> : null}
       <label className="grid gap-1">
         <Label>Document</Label>
-        <select className={selectClass} value={documentId} onChange={(event) => setDocumentId(event.target.value)}>
+        <select name="documentId" className={selectClass} defaultValue={initialId}>
           {documents.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.title}</option>)}
         </select>
       </label>
       <p className="text-sm text-black/60">
         {issued ? `Construction stays on Rev ${issued.revision} until you issue the new file.` : "Nothing is issued yet. This upload still starts in review."}
       </p>
-      <label className="grid gap-1"><Label>File</Label><Input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
-      <label className="grid gap-1"><Label>What changed</Label><Textarea value={note} onChange={(event) => setNote(event.target.value)} /></label>
+      <label className="grid gap-1"><Label>File</Label><Input name="file" type="file" required /></label>
+      <label className="grid gap-1"><Label>What changed</Label><Textarea name="note" /></label>
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button asChild variant="outline"><a href="/admin/documents">Cancel</a></Button>
         <Button type="submit" disabled={busy}>{busy ? "Reading file" : "Upload as in review"}</Button>
       </div>
     </form>
