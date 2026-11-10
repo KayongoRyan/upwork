@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -27,7 +26,6 @@ export function NotificationsView() {
   const data = useAdmin();
   const [filter, setFilter] = useState<(typeof typeFilters)[number]>("all");
   const [portal, setPortal] = useState<(typeof portalFilters)[number]>("all");
-  const reduce = useReducedMotion();
   const items = data.notifications.filter((item) => {
     const typeOk = filter === "all" || (filter === "unread" ? !item.read : item.type === filter);
     const portalOk =
@@ -60,13 +58,7 @@ export function NotificationsView() {
       {items.length === 0 ? <EmptyState title="No notifications" body="Nothing matches this filter." /> : (
         <ul className="space-y-2">
           {items.map((item) => (
-            <motion.li
-              layout
-              key={item.id}
-              initial={reduce ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl border border-border bg-card px-4 py-3"
-            >
+            <li key={item.id} className="rounded-[22px] border border-black/5 bg-card px-4 py-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -82,7 +74,7 @@ export function NotificationsView() {
                   {item.read ? "Mark unread" : "Mark as read"}
                 </Button>
               </div>
-            </motion.li>
+            </li>
           ))}
         </ul>
       )}
