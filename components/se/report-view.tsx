@@ -1,10 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Camera } from "lucide-react";
-import { toast } from "sonner";
-import { filesToPhotos } from "@/components/se/photos";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
@@ -14,67 +11,55 @@ import type { ReportPhoto } from "@/types";
 
 export function SeReport() {
   const data = useSiteEngineer();
-  const router = useRouter();
-  const [date, setDate] = useState(DEMO_TODAY);
-  const [progress, setProgress] = useState(data.project?.progress ?? 0);
-  const [summary, setSummary] = useState("");
-  const [issues, setIssues] = useState("");
-  const [photos, setPhotos] = useState<ReportPhoto[]>([]);
-  const [busy, setBusy] = useState(false);
+  const error = useSearchParams().get("error");
+  const project = data.project;
+  const start = project?.progress ?? 0;
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        const result = data.submitDaily({ date, progress, summary, issues, photos });
-        if (!result.ok) {
-          toast.error(result.error);
-          return;
-        }
-        toast.success("Report filed. It is with your project manager.");
-        router.push("/se/history");
-      }}
-    >
+    <form action="/api/se/reports" method="post" encType="multipart/form-data">
       <PageHeader
         title="Daily report"
-        description={data.project ? `${data.project.code} · ${data.project.name}` : "No project assigned."}
-        actions={
-          <Button type="submit" disabled={!data.project || busy}>Submit report</Button>
-        }
+        description={project ? `${project.code} · ${project.name}. This shift is filed with your project manager.` : "No project assigned."}
       />
+      {error ? <p className="mb-4 rounded-2xl bg-[#fff1eb] px-4 py-3 text-sm">{error}</p> : null}
       <div className="grid gap-4 rounded-[22px] border border-black/5 bg-card p-4 sm:p-5 lg:grid-cols-2">
         <Label>
           Shift date
-          <Input className="mt-1" type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+          <Input className="mt-1" type="date" name="date" defaultValue={DEMO_TODAY} required />
         </Label>
         <Label>
-          Site progress {progress}%
-          <input className="mt-3 h-10 w-full accent-[#ff5c22]" type="range" min={0} max={100} value={progress} onChange={(event) => setProgress(Number(event.target.value))} />
+          Site progress <output className="font-normal text-black/45" htmlFor="site-progress">{start}%</output>
+          <input
+            id="site-progress"
+            className="mt-3 h-10 w-full accent-[#ff5c22]"
+            type="range"
+            name="progress"
+            min={0}
+            max={100}
+            defaultValue={start}
+            onInput={(event) => {
+              const out = event.currentTarget.labels?.[0]?.querySelector("output");
+              if (out) out.textContent = `${event.currentTarget.value}%`;
+            }}
+          />
         </Label>
         <Label className="lg:col-span-2">
           What happened
-          <Textarea className="mt-1" value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="Crew, weather, work done" required />
+          <Textarea className="mt-1" name="summary" minLength={12} maxLength={2000} placeholder="Crew, weather, work done" required />
         </Label>
         <Label className="lg:col-span-2">
           Issues
-          <Textarea className="mt-1 min-h-20" value={issues} onChange={(event) => setIssues(event.target.value)} placeholder="Delays, shortages, safety" />
+          <Textarea className="mt-1 min-h-20" name="issues" maxLength={2000} placeholder="Delays, shortages, safety" />
         </Label>
         <div className="lg:col-span-2">
-          <PhotoField
-            photos={photos}
-            busy={busy}
-            onPick={async (list) => {
-              setBusy(true);
-              try {
-                const result = await filesToPhotos(list, photos);
-                setPhotos(result.photos);
-                if (result.skipped) toast.error("Four photos is the limit for one report.");
-              } finally {
-                setBusy(false);
-              }
-            }}
-          />
+          <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-black/15 bg-white text-sm font-medium">
+            <Camera className="size-4" />
+            Add site photo
+            <input className="sr-only" type="file" name="photos" accept="image/*" capture="environment" multiple />
+          </label>
+          <p className="mt-2 text-xs text-black/45">Up to four images, 1.5 MB each.</p>
         </div>
+        <Button type="submit" disabled={!project} className="w-fit">File today’s report</Button>
       </div>
     </form>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { PhotoField } from "@/components/se/report-view";
 import { filesToPhotos } from "@/components/se/photos";
@@ -15,6 +16,7 @@ const statusLabel = { submitted: "Submitted", in_review: "In review", approved: 
 
 export function SeHistory() {
   const data = useSiteEngineer();
+  const filed = useSearchParams().get("filed");
   const reports = [...data.reports].sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
   return (
@@ -23,6 +25,7 @@ export function SeHistory() {
         title="Report history"
         description={`Reports you filed on ${data.project?.code ?? "your project"}.`}
       />
+      {filed ? <p className="mb-4 rounded-2xl bg-[#fff1eb] px-4 py-3 text-sm">Filed. It is with your project manager.</p> : null}
       {reports.length === 0 ? <p className="text-sm text-black/45">No reports yet.</p> : null}
       <div className="grid gap-3">
         {reports.map((report) => (

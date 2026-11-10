@@ -52,6 +52,7 @@ export type AdminAction =
   | { type: "set-progress"; id: string; progress: number; note: string; stamp: Stamp }
   | { type: "set-task-progress"; id: string; engineerId: string; progress: number; status: TaskInput["status"]; stamp: Stamp }
   | { type: "submit-report"; input: EngineerReportInput; stamp: Stamp; toAdmin?: boolean }
+  | { type: "delete-report"; id: string; stamp: Stamp }
   | { type: "resubmit-report"; id: string; progress: number; summary: string; issues: string; photos: EngineerReport["photos"]; stamp: Stamp }
   | { type: "open-report-review"; id: string; stamp: Stamp }
   | { type: "decide-report"; id: string; decision: Extract<EngineerReportStatus, "approved" | "rejected">; note: string; stamp: Stamp }
@@ -420,6 +421,15 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         "success",
         { id: engineer.id, name },
       );
+    }
+    case "delete-report": {
+      const id = action.id;
+      return {
+        ...state,
+        reports: state.reports.filter((item) => item.id !== id),
+        notifications: state.notifications.filter((item) => item.id !== `ntf-${id}`),
+        activityLogs: state.activityLogs.filter((item) => item.id !== `log-${id}`),
+      };
     }
     case "submit-report": {
       const project = managedProject(state, action.input.projectId);
