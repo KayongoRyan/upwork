@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -125,7 +126,9 @@ export function ProjectsView() {
             <tbody>
               {table.pageRows.map((project) => (
                 <tr key={project.id} className="border-t border-border">
-                  <td className="px-3 py-3 font-medium">{project.name}</td>
+                  <td className="px-3 py-3 font-medium">
+                    <Link href={`/admin/projects/${project.id}`} className="hover:underline">{project.name}</Link>
+                  </td>
                   <td className="px-3 py-3 font-mono text-xs">{project.code}</td>
                   <td className="px-3 py-3">{data.managerName(project)}</td>
                   <td className="px-3 py-3">{project.location}</td>
@@ -205,6 +208,9 @@ export function ProjectsView() {
             </dl>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setViewId(null)}>Close</Button>
+              <Button variant="outline" asChild>
+                <Link href={`/admin/projects/${viewing.id}`}>Open workspace</Link>
+              </Button>
               <Button type="button" onClick={() => { setViewId(null); setFormError(null); setEditor(viewing); }}>Edit</Button>
             </div>
           </DialogContent>
