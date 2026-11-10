@@ -47,9 +47,11 @@ export type AdminAction =
   | { type: "assign-task"; id: string; projectId: string; stamp: Stamp }
   | { type: "schedule-task"; id: string; projectId: string; assignee: string; dueDate: string; priority: TaskPriority; stamp: Stamp }
   | { type: "delete-task"; id: string; stamp: Stamp }
+  | { type: "add-calendar-event"; title: string; kind: "meeting" | "other"; date: string; stamp: Stamp }
+  | { type: "delete-calendar-event"; id: string; stamp: Stamp }
   | { type: "set-progress"; id: string; progress: number; note: string; stamp: Stamp }
   | { type: "set-task-progress"; id: string; engineerId: string; progress: number; status: TaskInput["status"]; stamp: Stamp }
-  | { type: "submit-report"; input: EngineerReportInput; stamp: Stamp }
+  | { type: "submit-report"; input: EngineerReportInput; stamp: Stamp; toAdmin?: boolean }
   | { type: "resubmit-report"; id: string; progress: number; summary: string; issues: string; photos: EngineerReport["photos"]; stamp: Stamp }
   | { type: "open-report-review"; id: string; stamp: Stamp }
   | { type: "decide-report"; id: string; decision: Extract<EngineerReportStatus, "approved" | "rejected">; note: string; stamp: Stamp }
@@ -57,6 +59,7 @@ export type AdminAction =
   | { type: "update-boq"; surveyorId: string; id: string; input: BoqInput; stamp: Stamp }
   | { type: "delete-boq"; surveyorId: string; id: string; stamp: Stamp }
   | { type: "submit-cost-report"; projectId: string; surveyorId: string; stamp: Stamp }
+  | { type: "revise-cost-bill"; projectId: string; lines: { id: string; estimatedQty: number; actualQty: number; unitRate: number }[]; stamp: Stamp }
   | { type: "register-document"; document: Omit<ProjectDocument, "id" | "revisions">; revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt">; stamp: Stamp }
   | { type: "revise-document"; documentId: string; revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt" | "status">; stamp: Stamp }
   | { type: "issue-revision"; documentId: string; stamp: Stamp }
@@ -247,6 +250,29 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         "warning",
       );
     }
+    case "add-calendar-event": {
+      const title = action.title.trim();
+      if (title.length < 3 || !/^\d{4}-\d{2}-\d{2}$/.test(action.date)) return state;
+      const actor = pmActor(state);
+      return audit(
+        {
+          ...state,
+          calendarEvents: [
+            { id: action.stamp.id, title, kind: action.kind === "meeting" ? "meeting" : "other", date: action.date },
+            ...(state.calendarEvents ?? []),
+          ],
+        },
+        action.stamp,
+        "Added calendar event",
+        "Schedule",
+        title,
+        "success",
+        actor,
+      );
+    }
+    case "delete-calendar-event": {
+      return { ...state, calendarEvents: (state.calendarEvents ?? []).filter((event) => event.id !== action.id) };
+    }
     case "create-task": {
       const item: TaskItem = {
         ...action.input,
@@ -332,16 +358,29 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       if (!project || project.status === "completed") return state;
       const progress = Math.min(100, Math.max(0, Math.round(action.progress)));
       const actor = pmActor(state);
+      const note = action.note.trim();
       return audit(
         {
           ...state,
           projects: state.projects.map((item) => (item.id === project.id ? { ...item, progress } : item)),
+          progressMarks: [
+            {
+              id: `mark-${action.stamp.id}`,
+              projectId: project.id,
+              progress,
+              previous: project.progress,
+              note,
+              recordedAt: action.stamp.at,
+            },
+            ...(state.progressMarks ?? []),
+          ],
           notifications: maybeNotify(state, action.stamp, {
             type: "status",
             title: `${project.code} progress updated`,
-            message: `${actor.name} set progress to ${progress}%. ${action.note}`.trim(),
+            message: `${actor.name} set progress to ${progress}%. ${note}`.trim(),
             source: "project_manager",
             senderName: actor.name,
+            projectId: project.id,
           }),
         },
         action.stamp,
@@ -401,18 +440,38 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         rejectionNote: "",
       };
       const sender = `${engineer.firstName} ${engineer.lastName}`;
+      const adminName = state.settings.profileName;
+      const manager = pmActor(state);
+      const filed = maybeNotify(state, action.stamp, {
+        type: "project",
+        title: `${project.code} daily report submitted`,
+        message: `${sender} filed a site report for ${project.name} (${report.periodStart} to ${report.periodEnd}) at ${report.progress}% progress.`,
+        source: "site_engineer",
+        senderName: sender,
+        projectId: project.id,
+      });
+      const notifications = action.toAdmin
+        ? [
+            receipt(state, action.stamp, project.id, `${project.code} report sent`, `Sent successfully to ${adminName}, who reviews this report.`),
+            {
+              id: `${action.stamp.notificationId ?? `ntf-${action.stamp.id}`}-review`,
+              type: "project" as const,
+              title: `${project.code} report submitted for review`,
+              message: `${manager.name} sent a report on ${project.name} for ${adminName} to review.`,
+              source: "project_manager" as const,
+              senderName: manager.name,
+              projectId: project.id,
+              read: false,
+              createdAt: action.stamp.at,
+            },
+            ...filed,
+          ]
+        : filed;
       return audit(
         {
           ...state,
           reports: [report, ...state.reports],
-          notifications: maybeNotify(state, action.stamp, {
-            type: "project",
-            title: `${project.code} daily report submitted`,
-            message: `${sender} filed a site report for ${project.name} (${report.periodStart} to ${report.periodEnd}) at ${report.progress}% progress.`,
-            source: "site_engineer",
-            senderName: sender,
-            projectId: project.id,
-          }),
+          notifications,
         },
         action.stamp,
         "Submitted engineer report",
@@ -447,6 +506,9 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const actor = pmActor(state);
       const approved = action.decision === "approved";
       const progress = approved ? Math.max(project.progress, report.progress) : project.progress;
+      const engineer = state.users.find((user) => user.id === report.engineerId);
+      const engineerName = engineer ? `${engineer.firstName} ${engineer.lastName}` : "the sender";
+      const comment = action.note.trim();
       return audit(
         {
           ...state,
@@ -466,11 +528,10 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
           notifications: maybeNotify(state, action.stamp, {
             type: approved ? "status" : "delay",
             title: `${project.code} report ${approved ? "approved" : "rejected"}`,
-            message: approved
-              ? `${actor.name} approved the site report. Project progress is ${progress}%.`
-              : `${actor.name} rejected the site report. ${action.note.trim()}`,
+            message: `${actor.name} sent this review to ${engineerName}: ${comment || "No comment."}${approved ? ` Project progress is ${progress}%.` : ""}`,
             source: "project_manager",
             senderName: actor.name,
+            projectId: project.id,
           }),
         },
         action.stamp,
@@ -572,6 +633,46 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         { id: surveyor.id, name },
       );
     }
+    case "revise-cost-bill": {
+      const project = managedProject(state, action.projectId);
+      if (!project || action.lines.length === 0) return state;
+      const edits = new Map(action.lines.map((line) => [line.id, line]));
+      let changed = false;
+      const boq = state.boq.map((item) => {
+        if (item.projectId !== project.id) return item;
+        const next = edits.get(item.id);
+        if (!next) return item;
+        const parsed = parseBoq({ ...item, estimatedQty: next.estimatedQty, actualQty: next.actualQty, unitRate: next.unitRate });
+        if (!parsed) return item;
+        if (parsed.estimatedQty === item.estimatedQty && parsed.actualQty === item.actualQty && parsed.unitRate === item.unitRate) return item;
+        changed = true;
+        return { ...item, estimatedQty: parsed.estimatedQty, actualQty: parsed.actualQty, unitRate: parsed.unitRate };
+      });
+      if (!changed) return state;
+      const actor = pmActor(state);
+      const spent = expenditureFor(boq, project.id);
+      return audit(
+        {
+          ...state,
+          boq,
+          projects: state.projects.map((item) => (item.id === project.id ? { ...item, spent } : item)),
+          notifications: maybeNotify(state, action.stamp, {
+            type: "project",
+            title: `${project.code} quantities revised`,
+            message: `${actor.name} edited the cost report before submission.`,
+            source: "project_manager",
+            senderName: actor.name,
+            projectId: project.id,
+          }),
+        },
+        action.stamp,
+        "Revised cost report",
+        "Reports",
+        project.code,
+        "success",
+        actor,
+      );
+    }
     case "submit-cost-report": {
       const project = managedProject(state, action.projectId);
       const surveyor = state.users.find((user) => user.id === action.surveyorId && user.role === "quantity_surveyor" && user.status === "active" && user.projectId === action.projectId);
@@ -593,14 +694,17 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         {
           ...state,
           costReports: [report, ...(state.costReports ?? [])],
-          notifications: maybeNotify(state, action.stamp, {
-            type: "project",
-            title: `${project.code} cost report submitted`,
-            message: `${actor.name} submitted ${surveyorName}'s cost statement for ${project.name}. Measured expenditure is ${expenditure} RWF.`,
-            source: "project_manager",
-            senderName: actor.name,
-            projectId: project.id,
-          }),
+          notifications: [
+            receipt(state, action.stamp, project.id, `${project.code} cost report sent`, `Sent successfully to ${state.settings.profileName}, who reviews this cost report.`),
+            ...maybeNotify(state, action.stamp, {
+              type: "project",
+              title: `${project.code} cost report submitted`,
+              message: `${actor.name} submitted ${surveyorName}'s cost statement for ${project.name}. Measured expenditure is ${expenditure} RWF. ${state.settings.profileName} reviews it.`,
+              source: "project_manager",
+              senderName: actor.name,
+              projectId: project.id,
+            }),
+          ],
         },
         action.stamp,
         "Submitted cost report",
@@ -875,6 +979,21 @@ function audit(
     status,
   };
   return { ...state, activityLogs: [entry, ...state.activityLogs] };
+}
+
+function receipt(state: AdminState, stamp: Stamp, projectId: string, title: string, message: string): AppNotification {
+  return {
+    id: `${stamp.notificationId ?? `ntf-${stamp.id}`}-ack`,
+    type: "project",
+    title,
+    message,
+    source: "administrator",
+    senderName: state.settings.profileName,
+    projectId,
+    recipientId: PREVIEW_PM_ID,
+    read: false,
+    createdAt: stamp.at,
+  };
 }
 
 function maybeNotify(

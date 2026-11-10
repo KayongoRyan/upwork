@@ -68,7 +68,7 @@ function HistoryCard({
       ) : null}
       {note ? (
         <div className="mt-3 max-w-3xl rounded-2xl bg-[#fff1eb] p-3">
-          <p className="text-xs font-semibold">{report.status === "rejected" ? "Project manager" : "Previous rejection"}</p>
+          <p className="text-xs font-semibold">Review from the project manager</p>
           <p className="mt-1 text-sm">{note}</p>
         </div>
       ) : null}

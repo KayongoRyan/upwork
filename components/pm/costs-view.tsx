@@ -1,26 +1,35 @@
 "use client";
 
-import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { billLines, formatPercent, lineActual, lineEstimate, lineVariance, linesActual, linesEstimate, sameBill } from "@/lib/boq";
 import { usePm } from "@/lib/data/admin-store";
 import { formatDateTime, formatMoney, fullName } from "@/lib/utils";
 
+const qtyClass = "h-9 w-20 rounded-xl border border-input bg-white px-2 text-right text-sm tabular-nums outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
+
 export function PmCosts() {
   const data = usePm();
+  const params = useSearchParams();
+  const sent = params.get("sent");
+  const error = params.get("error");
   const projects = data.projects.filter((project) => data.surveyors.some((user) => user.projectId === project.id) || data.boq.some((line) => line.projectId === project.id));
 
   return (
     <div>
       <PageHeader
         title="Cost reports"
-        description="Quantity surveyor statements on your projects. You submit the cost report. The figures are the measured bill for that project."
+        description="Edit the quantities and rates first. Save them, submit them, or save the same figures as a PDF. The administrator reviews what you submit."
       />
+      {error ? <p className="mb-4 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">{error}</p> : null}
+      {sent ? <p className="mb-4 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">Cost report sent successfully to {sent}, who reviews it.</p> : null}
+      {params.get("edited") ? <p className="mb-4 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">{params.get("edited")} figures saved. Submit the cost report when they are ready.</p> : null}
       {projects.length === 0 ? <p className="text-sm text-black/45">No quantity surveyor statement is on your projects.</p> : null}
       <div className="space-y-4">
         {projects.map((project) => {
           const surveyor = data.surveyors.find((user) => user.projectId === project.id);
+          const rows = data.boq.filter((item) => item.projectId === project.id).sort((a, b) => a.code.localeCompare(b.code));
           const live = billLines(data.boq, project.id);
           const estimated = linesEstimate(live);
           const expenditure = linesActual(live);
@@ -36,62 +45,72 @@ export function PmCosts() {
                     {surveyor ? fullName(surveyor) : "No surveyor assigned"} · budget {formatMoney(project.budget)} · {formatPercent(project.budget, expenditure)} used
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  disabled={filed || live.length === 0}
-                  onClick={() => {
-                    const result = data.submitCostReport(project.id);
-                    if (!result.ok) toast.error(result.error);
-                    else toast.success("Cost report submitted.");
-                  }}
-                >
-                  {latest && !filed ? "Submit updated figures" : "Submit cost report"}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" form={`bill-${project.id}`} formAction="/api/pm/costs/pdf" variant="outline">Save as PDF</Button>
+                  <Button type="submit" form={`bill-${project.id}`} formAction="/api/pm/costs" className="bg-[#ff5c22] text-white hover:bg-[#e64e18]">
+                    {latest && !filed ? "Submit updated figures" : "Submit cost report"}
+                  </Button>
+                </div>
               </div>
               {filed && latest?.submittedAt ? (
-                <p className="mt-3 text-sm">Submitted {formatDateTime(latest.submittedAt)}. This measurement is on file.</p>
+                <p className="mt-3 text-sm">Submitted {formatDateTime(latest.submittedAt)}. You can still change these figures, then save or submit them.</p>
               ) : latest ? (
                 <p className="mt-3 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">The bill has changed since the last submission.</p>
               ) : (
                 <p className="mt-3 text-sm text-black/55">Not submitted yet.</p>
               )}
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-sm">
-                  <thead className="text-xs text-black/40">
-                    <tr>
-                      <th className="py-2 font-medium">Item</th>
-                      <th className="py-2 font-medium">Qty est / act</th>
-                      <th className="py-2 text-right font-medium">Rate</th>
-                      <th className="py-2 text-right font-medium">Estimated</th>
-                      <th className="py-2 text-right font-medium">Actual</th>
-                      <th className="py-2 text-right font-medium">Variance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {live.map((line) => (
-                      <tr key={line.code} className="border-t border-black/5">
-                        <td className="py-2">
-                          <span className="font-medium">{line.code}</span>
-                          <span className="mt-0.5 block text-xs text-black/45">{line.description}</span>
-                        </td>
-                        <td className="py-2 tabular-nums">{line.estimatedQty} / {line.actualQty} {line.unit}</td>
-                        <td className="py-2 text-right tabular-nums">{formatMoney(line.unitRate)}</td>
-                        <td className="py-2 text-right tabular-nums">{formatMoney(lineEstimate(line))}</td>
-                        <td className="py-2 text-right tabular-nums">{formatMoney(lineActual(line))}</td>
-                        <td className="py-2 text-right tabular-nums">{formatMoney(lineVariance(line))}</td>
+              <form id={`bill-${project.id}`} className="mt-4" action="/api/pm/costs/edit" method="post">
+                <input type="hidden" name="projectId" value={project.id} />
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="text-xs text-black/40">
+                      <tr>
+                        <th className="py-2 font-medium">Item</th>
+                        <th className="py-2 font-medium">Qty est / act</th>
+                        <th className="py-2 text-right font-medium">Rate</th>
+                        <th className="py-2 text-right font-medium">Estimated</th>
+                        <th className="py-2 text-right font-medium">Actual</th>
+                        <th className="py-2 text-right font-medium">Variance</th>
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t border-black/5 font-semibold">
-                      <td className="py-2" colSpan={3}>Measured total</td>
-                      <td className="py-2 text-right tabular-nums">{formatMoney(estimated)}</td>
-                      <td className="py-2 text-right tabular-nums">{formatMoney(expenditure)}</td>
-                      <td className="py-2 text-right tabular-nums">{formatMoney(expenditure - estimated)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {rows.map((line) => (
+                        <tr key={line.id} className="border-t border-black/5">
+                          <td className="py-2">
+                            <span className="font-medium">{line.code}</span>
+                            <span className="mt-0.5 block text-xs text-black/45">{line.description}</span>
+                          </td>
+                          <td className="py-2">
+                            <span className="flex items-center gap-1">
+                              <input className={qtyClass} name={`estimated-${line.id}`} type="number" min={0} step="0.001" defaultValue={line.estimatedQty} aria-label={`${line.code} estimated quantity`} required />
+                              <span className="text-black/30">/</span>
+                              <input className={qtyClass} name={`actual-${line.id}`} type="number" min={0} step="0.001" defaultValue={line.actualQty} aria-label={`${line.code} actual quantity`} required />
+                              <span className="text-xs text-black/45">{line.unit}</span>
+                            </span>
+                          </td>
+                          <td className="py-2 text-right">
+                            <input className={`${qtyClass} ml-auto w-[6.75rem]`} name={`rate-${line.id}`} type="number" min={0} step="1" defaultValue={line.unitRate} aria-label={`${line.code} rate`} required />
+                          </td>
+                          <td className="whitespace-nowrap py-2 pl-3 text-right text-xs tabular-nums">{formatMoney(lineEstimate(line))}</td>
+                          <td className="whitespace-nowrap py-2 pl-3 text-right text-xs tabular-nums">{formatMoney(lineActual(line))}</td>
+                          <td className="whitespace-nowrap py-2 pl-3 text-right text-xs tabular-nums">{formatMoney(lineVariance(line))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-black/5 font-semibold">
+                        <td className="py-2" colSpan={3}>Measured total</td>
+                        <td className="whitespace-nowrap py-2 pl-3 text-right text-xs tabular-nums">{formatMoney(estimated)}</td>
+                        <td className="whitespace-nowrap py-2 pl-3 text-right text-xs tabular-nums">{formatMoney(expenditure)}</td>
+                        <td className="whitespace-nowrap py-2 pl-3 text-right text-xs tabular-nums">{formatMoney(expenditure - estimated)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <Button type="submit" variant="outline">Save changes</Button>
+                </div>
+              </form>
               <p className="mt-3 text-xs text-black/45">Cost variance against the budget is {formatMoney(expenditure - project.budget)}.</p>
             </article>
           );

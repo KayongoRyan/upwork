@@ -191,7 +191,7 @@ export function useAdmin() {
       if (!project) return { ok: false, error: "Choose one of your projects." };
       if (!engineer) return { ok: false, error: "Choose an active site engineer." };
       if (input.periodEnd < input.periodStart) return { ok: false, error: "Period end must be on or after the start." };
-      dispatch({ type: "submit-report", input, stamp: stamp() });
+      dispatch({ type: "submit-report", input, stamp: stamp(), toAdmin: true });
       return { ok: true };
     },
     openReportReview(id: string): ActionResult {
@@ -310,6 +310,8 @@ export function usePm() {
     reports: data.reports.filter((report) => ids.has(report.projectId)),
     boq: data.boq.filter((item) => ids.has(item.projectId)),
     costReports: (data.costReports ?? []).filter((report) => ids.has(report.projectId)),
+    progressMarks: (data.progressMarks ?? []).filter((mark) => ids.has(mark.projectId)),
+    events: data.calendarEvents ?? [],
     surveyors: data.users.filter((user) => user.role === "quantity_surveyor" && user.status === "active" && user.projectId && ids.has(user.projectId)),
     engineers: data.users.filter((user) => user.role === "site_engineer" && user.status === "active"),
     crew: data.employees.filter((employee) => employee.projectId && ids.has(employee.projectId) && employee.status !== "inactive"),

@@ -95,6 +95,8 @@ export interface AppNotification {
   senderName: string;
   /** Project this notice belongs to. The managing project manager receives it. */
   projectId: string | null;
+  /** Account that should see this notice in its own bell. */
+  recipientId?: string | null;
   read: boolean;
   createdAt: string;
 }
@@ -244,6 +246,23 @@ export interface MonthlyPoint {
   updates: number;
 }
 
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  kind: "meeting" | "other";
+  date: string;
+}
+
+/** A progress percentage saved from the project manager progress page. */
+export interface ProgressMark {
+  id: string;
+  projectId: string;
+  progress: number;
+  previous: number;
+  note: string;
+  recordedAt: string;
+}
+
 export interface AdminState {
   projects: Project[];
   users: UserAccount[];
@@ -257,6 +276,8 @@ export interface AdminState {
   documents: ProjectDocument[];
   settings: OrgSettings;
   monthlyActivity: MonthlyPoint[];
+  progressMarks: ProgressMark[];
+  calendarEvents: CalendarEvent[];
 }
 
 export type ProjectInput = Omit<Project, "id" | "createdAt">;

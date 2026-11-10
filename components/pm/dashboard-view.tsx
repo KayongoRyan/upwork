@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { CalendarDays, ChevronLeft, ChevronRight, FolderKanban, ListTodo, Plus, TriangleAlert, Users } from "lucide-react";
+import { PmProgressChart } from "@/components/pm/progress-chart";
 import { PriorityBadge, ProjectStatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { usePm } from "@/lib/data/admin-store";
@@ -30,10 +32,18 @@ const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function PmDashboard() {
   const data = usePm();
-  const [period, setPeriod] = useState<Period>("monthly");
+  const params = useSearchParams();
+  const requested = params.get("period");
+  const period = periods.some((item) => item.id === requested) ? (requested as Period) : "monthly";
+  const eventOpen = params.get("event") === "1";
+  const added = params.get("added");
+  const eventError = params.get("error");
+  const dayQuery = params.get("day");
+  const pickedDay = dayQuery && /^\d{4}-\d{2}-\d{2}$/.test(dayQuery) ? dayQuery : null;
+  const selectedDay = pickedDay ?? DEMO_TODAY;
+  const showEventForm = eventOpen && pickedDay !== null;
   const [focusId, setFocusId] = useState(data.projects.find((project) => project.status === "delayed")?.id ?? data.projects[0]?.id ?? "");
-  const [month, setMonth] = useState({ year: 2026, month: 10 });
-  const [selectedDay, setSelectedDay] = useState<string>(DEMO_TODAY);
+  const [month, setMonth] = useState(() => monthOf(selectedDay));
 
   const firstName = data.actor?.firstName ?? "there";
   const visibleTasks = data.tasks.filter((task) => inPeriod(task.dueDate, period));
@@ -42,13 +52,14 @@ export function PmDashboard() {
   const activeInPeriod = visibleTasks.filter((task) => task.status !== "done");
   const team = teamOnPortfolio(data);
   const focus = data.projects.find((project) => project.id === focusId) ?? data.projects[0] ?? null;
-  const marks = useMemo(() => deadlineMarks(data.tasks, data.projects), [data.tasks, data.projects]);
+  const marks = useMemo(() => deadlineMarks(data.tasks, data.projects, data.events), [data.tasks, data.projects, data.events]);
   const cells = useMemo(() => monthCells(month.year, month.month), [month.year, month.month]);
   const monthLabel = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }).format(
     new Date(Date.UTC(month.year, month.month, 1)),
   );
   const selectedTasks = data.tasks.filter((task) => task.dueDate.slice(0, 10) === selectedDay);
   const selectedProjects = data.projects.filter((project) => project.expectedEndDate.slice(0, 10) === selectedDay);
+  const selectedEvents = data.events.filter((event) => event.date === selectedDay);
 
   return (
     <div className="space-y-4">
@@ -60,17 +71,17 @@ export function PmDashboard() {
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-2xl border border-black/5 bg-white p-1">
             {periods.map((item) => (
-              <button
+              <a
                 key={item.id}
-                type="button"
-                onClick={() => setPeriod(item.id)}
+                href={`/pm?period=${item.id}#tasks`}
+                aria-current={period === item.id ? "page" : undefined}
                 className={cn(
                   "rounded-xl px-3 py-1.5 text-sm",
                   period === item.id ? "bg-black text-white" : "text-black/55 hover:bg-black/[0.04]",
                 )}
               >
                 {item.label}
-              </button>
+              </a>
             ))}
           </div>
           <Button variant="navy" asChild>
@@ -83,24 +94,19 @@ export function PmDashboard() {
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Stat href="/pm/projects" icon={FolderKanban} value={data.projects.length} label="Total projects" />
-        <Stat href="/pm/tasks" icon={ListTodo} value={activeInPeriod.length} label="Active tasks" />
+        <Stat href={`/pm?period=${period}#tasks`} icon={ListTodo} value={activeInPeriod.length} label={`${periods.find((item) => item.id === period)?.label ?? "Monthly"} tasks`} />
         <Stat href="/pm/tasks" icon={TriangleAlert} value={overdue.length} label="Overdue tasks" warn={overdue.length > 0} />
-        <Stat href="/pm/projects" icon={Users} value={team.length} label="Team members" />
+        <Stat href="/pm/people" icon={Users} value={team.length} label="Team members" />
       </div>
+
+      <PmProgressChart projects={data.projects} marks={data.progressMarks} />
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.85fr)]">
         <div className="space-y-4">
           <section className="rounded-[22px] border border-black/5 bg-card p-4 sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold">Projects</h2>
-                <p className="mt-0.5 text-xs text-black/45">Your active portfolio. Select a row to open it on the right.</p>
-              </div>
-              <Button variant="navy" size="sm" asChild>
-                <Link prefetch={false} href="/pm/tasks">
-                  <Plus /> New task
-                </Link>
-              </Button>
+            <div>
+              <h2 className="text-base font-semibold">Projects</h2>
+              <p className="mt-0.5 text-xs text-black/45">Your active portfolio. Select a row to open it on the right.</p>
             </div>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[680px] text-left text-sm">
@@ -162,33 +168,19 @@ export function PmDashboard() {
             </div>
           </section>
 
-          <section className="rounded-[22px] border border-black/5 bg-card p-4 sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold">Task board</h2>
-                <p className="mt-0.5 text-xs text-black/45">
-                  {period === "monthly" ? "Every task on your projects." : `Tasks due inside the ${period} window from 6 Nov 2026.`}
-                </p>
-              </div>
-              <Button variant="navy" size="sm" asChild>
-                <Link prefetch={false} href="/pm/tasks">
-                  <Plus /> Add task
-                </Link>
-              </Button>
+          <section id="tasks" className="rounded-[22px] border border-black/5 bg-card p-4 sm:p-5">
+            <div>
+              <h2 className="text-base font-semibold">Task board</h2>
+              <p className="mt-0.5 text-xs text-black/45">{periodCopy(period)}</p>
             </div>
             <div className="mt-4 grid gap-3 lg:grid-cols-3">
               {columns.map((column) => {
                 const items = visibleTasks.filter((task) => task.status === column.id);
                 return (
                   <div key={column.id} className="rounded-2xl bg-black/[0.03] p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="text-sm font-medium">
-                        {column.label} <span className="text-black/35">{items.length}</span>
-                      </p>
-                      <Link prefetch={false} href="/pm/tasks" className="grid size-6 place-items-center rounded-lg text-black/45 hover:bg-white" aria-label={`Add a ${column.label} task`}>
-                        <Plus className="size-3.5" />
-                      </Link>
-                    </div>
+                    <p className="mb-2 text-sm font-medium">
+                      {column.label} <span className="text-black/35">{items.length}</span>
+                    </p>
                     <ul className="space-y-2">
                       {items.length === 0 ? <li className="px-1 py-4 text-xs text-black/35">None in this period.</li> : null}
                       {items.map((task) => {
@@ -213,18 +205,20 @@ export function PmDashboard() {
         </div>
 
         <div className="space-y-4">
-          <section className="rounded-[22px] border border-black/5 bg-card p-4 sm:p-5">
+          <section id="calendar" className="rounded-[22px] border border-black/5 bg-card p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold">Calendar</h2>
-                <p className="mt-0.5 text-xs text-black/45">Task deadlines and project finish dates.</p>
+                <p className="mt-0.5 text-xs text-black/45">Task deadlines, project finish dates, and events you add.</p>
               </div>
               <Button variant="navy" size="sm" asChild>
-                <Link prefetch={false} href="/pm/tasks">
+                <a href={calendarHref(period, { event: "1" })}>
                   <Plus /> Add event
-                </Link>
+                </a>
               </Button>
             </div>
+            {added ? <p className="mt-3 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">{added} is marked on {shortDate(selectedDay)}.</p> : null}
+            {eventOpen && !showEventForm ? <p className="mt-3 text-sm text-black/55">Click a date. Then name the meeting or other event.</p> : null}
             <div className="mt-4 flex items-center justify-between">
               <p className="text-sm font-semibold">{monthLabel}</p>
               <div className="flex gap-1">
@@ -248,10 +242,9 @@ export function PmDashboard() {
                 const today = cell.iso === DEMO_TODAY;
                 const selected = cell.iso === selectedDay;
                 return (
-                  <button
+                  <a
                     key={cell.iso}
-                    type="button"
-                    onClick={() => setSelectedDay(cell.iso!)}
+                    href={calendarHref(period, eventOpen ? { event: "1", day: cell.iso } : { day: cell.iso })}
                     className={cn(
                       "relative grid h-9 place-items-center rounded-xl text-sm",
                       selected ? "bg-black text-white" : "hover:bg-black/[0.04]",
@@ -260,12 +253,16 @@ export function PmDashboard() {
                   >
                     {cell.day}
                     {marked ? <span className={cn("absolute bottom-1 size-1 rounded-full", selected ? "bg-white" : "bg-accent")} /> : null}
-                  </button>
+                  </a>
                 );
               })}
             </div>
+            {showEventForm && pickedDay ? <EventForm period={period} day={pickedDay} error={eventError} /> : null}
             <ul className="mt-3 space-y-1 text-xs text-black/55">
-              {selectedTasks.length === 0 && selectedProjects.length === 0 ? <li>Nothing is scheduled on {shortDate(selectedDay)}.</li> : null}
+              {selectedTasks.length === 0 && selectedProjects.length === 0 && selectedEvents.length === 0 ? <li>Nothing is scheduled on {shortDate(selectedDay)}.</li> : null}
+              {selectedEvents.map((event) => (
+                <li key={event.id}>{event.kind === "meeting" ? "Meeting" : "Event"} · {event.title}</li>
+              ))}
               {selectedTasks.map((task) => (
                 <li key={task.id}>{task.title}</li>
               ))}
@@ -388,6 +385,48 @@ function Figure({ value, label }: { value: number; label: string }) {
   );
 }
 
+function EventForm({ period, day, error }: { period: Period; day: string; error: string | null }) {
+  return (
+    <form action="/api/pm/events" method="post" className="mt-3 grid gap-2 rounded-2xl bg-[#fff1eb] p-3">
+      <input type="hidden" name="period" value={period} />
+      <input type="hidden" name="date" value={day} />
+      <p className="text-sm font-medium">{shortDate(day)}</p>
+      {error ? <p className="text-sm">{error}</p> : null}
+      <label className="grid gap-1 text-xs text-black/45" htmlFor="event-title">
+        Event
+        <input id="event-title" name="title" required minLength={3} maxLength={80} placeholder="Site meeting" className="h-10 rounded-xl border border-input bg-white px-3 text-sm text-black" />
+      </label>
+      <label className="grid gap-1 text-xs text-black/45" htmlFor="event-kind">
+        Type
+        <select id="event-kind" name="kind" defaultValue="meeting" className="h-10 rounded-xl border border-input bg-white px-3 text-sm text-black">
+          <option value="meeting">Meeting</option>
+          <option value="other">Other event</option>
+        </select>
+      </label>
+      <div className="flex justify-end gap-2">
+        <a href={calendarHref(period, { day })} className="inline-flex h-8 items-center rounded-xl px-2.5 text-[13px] font-medium text-black/60">Cancel</a>
+        <Button type="submit" size="sm" className="bg-[#ff5c22] text-white hover:bg-[#e64e18]">Save</Button>
+      </div>
+    </form>
+  );
+}
+
+function calendarHref(period: Period, extra: Record<string, string> = {}) {
+  const query = new URLSearchParams({ period, ...extra });
+  return `/pm?${query.toString()}#calendar`;
+}
+
+function monthOf(iso: string) {
+  return { year: Number(iso.slice(0, 4)), month: Number(iso.slice(5, 7)) - 1 };
+}
+
+function periodCopy(period: Period) {
+  if (period === "today") return "Tasks due on 6 Nov 2026.";
+  if (period === "daily") return "Tasks due on 6 Nov 2026 or the next day.";
+  if (period === "weekly") return "Tasks due from 6 Nov 2026 through 13 Nov 2026.";
+  return "Every task on your projects.";
+}
+
 function inPeriod(due: string, period: Period) {
   if (period === "monthly") return true;
   const days = daysUntil(due);
@@ -400,10 +439,11 @@ function hottest(tasks: TaskItem[]) {
   return [...tasks].sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority])[0] ?? null;
 }
 
-function deadlineMarks(tasks: TaskItem[], projects: Project[]) {
+function deadlineMarks(tasks: TaskItem[], projects: Project[], events: { date: string }[]) {
   const marks = new Set<string>();
   for (const task of tasks) marks.add(task.dueDate.slice(0, 10));
   for (const project of projects) marks.add(project.expectedEndDate.slice(0, 10));
+  for (const event of events) marks.add(event.date.slice(0, 10));
   return marks;
 }
 

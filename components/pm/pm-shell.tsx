@@ -50,6 +50,7 @@ function Frame({ children }: { children: React.ReactNode }) {
           onToggleCollapse={() => setCollapsed((value) => !value)}
           onOpenMobile={() => setMobileOpen(true)}
           scope="field"
+          userId={actor?.id}
           portfolio={projects}
           identity={{ name, email: actor?.email ?? "", role: "Project manager" }}
           links={{

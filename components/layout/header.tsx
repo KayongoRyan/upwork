@@ -34,6 +34,7 @@ export function Header({
   links?: { notifications: string; settings: string; switchHref: string; switchLabel: string };
   crumbs?: { items: NavItem[]; root: { href: string; label: string } };
   scope?: "all" | "field" | "site";
+  userId?: string;
   siteCode?: string;
   portfolio?: { id: string; code: string; name: string }[];
   search?: { pages: NavItem[]; projectIds: string[]; projectBase?: string };

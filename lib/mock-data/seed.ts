@@ -453,6 +453,8 @@ export function createSeedState(): AdminState {
       log("log-15", "emp-06", "Patricia Mukandayisenga", "Leave recorded", "Employees", "EMP-1033", "warning", "2026-05-21T07:55:00Z"),
       log("log-16", "u-se-1", "Brian Niyonsenga", "Logged site instruction", "Tasks", "Pedestrian bridge piers", "success", "2026-04-16T14:26:00Z"),
     ],
+    progressMarks: [],
+    calendarEvents: [],
   };
 }
 
