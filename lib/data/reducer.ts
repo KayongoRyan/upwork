@@ -73,7 +73,8 @@ export type AdminAction =
   | { type: "mark-notification"; id: string; read: boolean }
   | { type: "mark-all-notifications" }
   | { type: "update-settings"; patch: Partial<AdminState["settings"]>; stamp?: Stamp }
-  | { type: "support-request"; topic: string; message: string; stamp: Stamp };
+  | { type: "support-request"; topic: string; message: string; stamp: Stamp }
+  | { type: "delete-support-note"; id: string; stamp: Stamp };
 
 export function adminReducer(state: AdminState, action: AdminAction): AdminState {
   switch (action.type) {
@@ -964,6 +965,12 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         action.topic,
         "success",
       );
+    case "delete-support-note":
+      return {
+        ...state,
+        notifications: state.notifications.filter((item) => item.id !== `ntf-${action.id}`),
+        activityLogs: state.activityLogs.filter((item) => item.id !== `log-${action.id}`),
+      };
     default:
       return state;
   }
