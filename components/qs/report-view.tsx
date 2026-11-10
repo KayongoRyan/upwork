@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { billLines, formatPercent, lineActual, lineEstimate, lineVariance, sameBill } from "@/lib/boq";
@@ -8,10 +9,16 @@ import { DEMO_TODAY, downloadCsv, formatDate, formatDateTime, formatMoney, fullN
 
 export function QsReport() {
   const data = useQuantitySurveyor();
+  const params = useSearchParams();
   const project = data.project;
   const budget = project?.budget ?? 0;
   const costVariance = data.expenditure - budget;
   const billVariance = data.expenditure - data.estimated;
+  const live = project ? billLines(data.lines, project.id) : [];
+  const sentByMe = data.statements.find((report) => report.submittedBy === data.actor?.id && sameBill(report.lines, live));
+  const managerName = data.manager ? fullName(data.manager) : "your project manager";
+  const error = params.get("error");
+  const sent = params.get("sent");
 
   return (
     <div>
@@ -19,6 +26,12 @@ export function QsReport() {
         title="Financial report"
         description={project ? `${project.code} · ${project.name} · ${formatDate(DEMO_TODAY)}` : "No project is assigned to this account."}
         actions={
+          <>
+          <form action="/api/qs/reports" method="post">
+            <Button type="submit" disabled={!project || data.lines.length === 0} className="bg-[#ff5c22] text-white hover:bg-[#e64e18]">
+              Send to project manager
+            </Button>
+          </form>
           <Button
             type="button"
             variant="navy"
@@ -53,20 +66,25 @@ export function QsReport() {
           >
             Download CSV
           </Button>
+          </>
         }
       />
+      {error ? <p className="mb-4 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">{error}</p> : null}
+      {sent ? <p className="mb-4 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">Sent to {sent}. It is on their cost reports and in their inbox.</p> : null}
       {project ? (
         <article className="rounded-[22px] border border-black/5 bg-card p-4 sm:p-5">
           <p className="mb-4 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">
-            {data.submissions[0] ? (
+            {sentByMe?.submittedAt ? (
+              <>Sent to {managerName} on {formatDateTime(sentByMe.submittedAt)}. They submit it to the administrator.</>
+            ) : data.submissions[0] ? (
               <>
-                Submitted by {data.submitter ? fullName(data.submitter) : "your project manager"} on {formatDateTime(data.submissions[0].submittedAt ?? "")}.
-                {sameBill(data.submissions[0].lines, billLines(data.lines, project.id))
-                  ? " The filed statement matches this bill."
-                  : " The bill has changed since that submission. Your project manager can file the new figures."}
+                {data.submitter ? fullName(data.submitter) : managerName} already filed this statement on {formatDateTime(data.submissions[0].submittedAt ?? "")}.
+                {sameBill(data.submissions[0].lines, live)
+                  ? " Send it if you want that copy in their inbox under your name."
+                  : " The bill has changed since that filing. Send the new figures."}
               </>
             ) : (
-              "This statement is with your project manager. They submit it from Cost reports."
+              `Send this statement to ${managerName}. They submit it from Cost reports.`
             )}
           </p>
           <header className="flex flex-wrap items-start justify-between gap-3">

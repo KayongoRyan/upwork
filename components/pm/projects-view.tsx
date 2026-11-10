@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { ManagerNotes } from "@/components/pm/manager-notes";
 import { PageHeader } from "@/components/shared/page-header";
 import { ProjectStatusBadge } from "@/components/shared/status-badge";
 import { usePm } from "@/lib/data/admin-store";
 import { daysUntil, formatDate, formatMoney } from "@/lib/utils";
 
 export function PmProjects() {
-  const { projects } = usePm();
+  const data = usePm();
+  const { projects } = data;
   return (
     <div>
       <PageHeader
@@ -19,7 +21,7 @@ export function PmProjects() {
           const days = daysUntil(project.expectedEndDate);
           const ratio = project.budget === 0 ? 0 : Math.min(100, Math.round((project.spent / project.budget) * 100));
           return (
-            <article key={project.id} className="rounded-[22px] border border-black/5 bg-card p-4">
+            <article key={project.id} id={project.id} className="scroll-mt-28 rounded-[22px] border border-black/5 bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-xs text-black/45">{project.code}</p>
@@ -43,6 +45,7 @@ export function PmProjects() {
                 <Link href={`/pm/projects/${project.id}`} className="text-sm font-medium text-accent hover:underline">Open workspace</Link>
                 <Link href="/pm/progress" className="text-sm font-medium text-black/55 hover:underline">Update progress</Link>
               </div>
+              <ManagerNotes notes={data.comments.filter((item) => item.kind === "project" && item.workId === project.id)} />
             </article>
           );
         })}

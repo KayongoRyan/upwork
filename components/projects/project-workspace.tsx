@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { ManagerNotes } from "@/components/pm/manager-notes";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmploymentBadge, PriorityBadge, ProjectStatusBadge, TaskStatusBadge } from "@/components/shared/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -105,6 +106,7 @@ export function ProjectWorkspace({ portal }: { portal: "admin" | "pm" | "se" | "
         description={`${project.code} · ${project.client} · ${project.location}`}
         actions={<ProjectStatusBadge status={project.status} />}
       />
+      {portal === "pm" ? <ManagerNotes notes={(data.workComments ?? []).filter((item) => item.projectId === project.id)} /> : null}
       <div className="lg:grid lg:grid-cols-[196px_minmax(0,1fr)] lg:items-start lg:gap-4">
         <nav className="mb-4 flex gap-1 overflow-x-auto lg:sticky lg:top-28 lg:mb-0 lg:flex-col lg:overflow-visible">
           {sections.map(([id, label]) => (

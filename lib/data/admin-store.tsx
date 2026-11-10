@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { adminReducer, type AdminAction } from "@/lib/data/reducer";
 import { billLines, estimateFor, expenditureFor, parseBoq, sameBill } from "@/lib/boq";
+import { isManagerFieldNotice } from "@/lib/notices";
 import { nextId, PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID } from "@/lib/utils";
 import type {
   ActionResult,
@@ -312,6 +313,7 @@ export function usePm() {
     costReports: (data.costReports ?? []).filter((report) => ids.has(report.projectId)),
     progressMarks: (data.progressMarks ?? []).filter((mark) => ids.has(mark.projectId)),
     events: data.calendarEvents ?? [],
+    comments: (data.workComments ?? []).filter((item) => !item.projectId || ids.has(item.projectId)),
     surveyors: data.users.filter((user) => user.role === "quantity_surveyor" && user.status === "active" && user.projectId && ids.has(user.projectId)),
     engineers: data.users.filter((user) => user.role === "site_engineer" && user.status === "active"),
     crew: data.employees.filter((employee) => employee.projectId && ids.has(employee.projectId) && employee.status !== "inactive"),
@@ -414,6 +416,8 @@ export function useQuantitySurveyor() {
     project,
     lines,
     notices,
+    manager: project ? data.users.find((user) => user.id === project.managerId) ?? null : null,
+    statements: (data.costReports ?? []).filter((report) => report.projectId === project?.id),
     submissions: (data.costReports ?? []).filter((report) => report.projectId === project?.id && report.status === "submitted"),
     submitter: data.users.find((user) => user.id === (data.costReports ?? []).find((report) => report.projectId === project?.id && report.status === "submitted")?.submittedBy) ?? null,
     estimated: project ? estimateFor(lines, project.id) : 0,
@@ -441,15 +445,7 @@ export function useQuantitySurveyor() {
   };
 }
 
-export function isManagerFieldNotice(
-  item: { source: string; projectId: string | null; title: string; message: string },
-  projects: { id: string; code: string; name: string }[],
-) {
-  if (item.source !== "site_engineer" && item.source !== "quantity_surveyor") return false;
-  if (item.projectId && projects.some((project) => project.id === item.projectId)) return true;
-  const text = `${item.title} ${item.message}`;
-  return projects.some((project) => text.includes(project.code) || text.includes(project.name));
-}
+export { isManagerFieldNotice } from "@/lib/notices";
 
 function emailTaken(users: UserAccount[], email: string, exceptId?: string) {
   const needle = email.trim().toLowerCase();

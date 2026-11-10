@@ -1,6 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { ManagerNotes } from "@/components/pm/manager-notes";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -120,6 +121,7 @@ function ReportCard({ report }: { report: EngineerReport }) {
         </div>
       ) : null}
       {report.reviewedAt ? <p className="mt-2 text-xs text-muted-foreground">Sent {formatDateTime(report.reviewedAt)}{report.decisionNote ? ` · ${report.decisionNote}` : ""}</p> : null}
+      <ManagerNotes notes={data.comments.filter((item) => item.kind === "report" && item.workId === report.id)} />
       {report.status === "submitted" ? (
         <form className="mt-3" action="/api/pm/reports/open" method="post">
           <input type="hidden" name="id" value={report.id} />
