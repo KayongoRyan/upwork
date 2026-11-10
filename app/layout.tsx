@@ -36,7 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-full">
         <script
           dangerouslySetInnerHTML={{
-            __html: `document.addEventListener("change",function(e){var t=e.target;if(!t||!t.getAttribute)return;if(t.form&&t.form.hasAttribute("data-report-form")){var q=new URLSearchParams();new FormData(t.form).forEach(function(v,k){if(typeof v!=="string"||v===""||(k==="project"&&v==="all"))return;q.set(k,v)});var s=q.toString();location.assign(t.form.getAttribute("action")+(s?"?"+s:""));return}var base=t.getAttribute("data-status-go");if(!base)return;var v=t.value;location.assign(v==="all"?base:base+"?status="+encodeURIComponent(v)+"#activities")});`,
+            __html: `document.addEventListener("change",function(e){var t=e.target;if(!t||!t.getAttribute)return;if(t.form&&t.form.hasAttribute("data-report-form")){var q=new URLSearchParams();new FormData(t.form).forEach(function(v,k){if(typeof v!=="string"||v===""||(k==="project"&&v==="all"))return;q.set(k,v)});var s=q.toString();location.assign(t.form.getAttribute("action")+(s?"?"+s:""));return}var base=t.getAttribute("data-status-go");if(!base)return;var v=t.value;location.assign(v==="all"?base:base+"?status="+encodeURIComponent(v)+"#activities")});document.addEventListener("DOMContentLoaded",function(){var node=document.querySelector("[data-scroll-today]");if(node)node.scrollLeft=Number(node.getAttribute("data-scroll-today"))||0});`,
           }}
         />
         <SearchQueryProvider query={query}>

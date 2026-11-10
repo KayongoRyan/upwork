@@ -150,6 +150,13 @@ export const pmNavItems: NavItem[] = [
     description: "Assign work and set due dates.",
   },
   {
+    href: "/pm/people",
+    label: "Team review",
+    icon: Users,
+    section: "Management",
+    description: "Review site engineers and quantity surveyors, with their tasks and reports.",
+  },
+  {
     href: "/pm/progress",
     label: "Progress",
     icon: BarChart3,

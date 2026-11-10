@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -13,16 +13,20 @@ import { DEMO_TODAY, cn, formatDate } from "@/lib/utils";
 
 const ROW = 44;
 const LEFT = "grid grid-cols-[28px_40px_minmax(180px,1fr)_88px_88px_44px_96px_40px] items-center gap-1 px-2";
+const SCALES = ["month", "week", "day", "hour"] as const;
+type Scale = (typeof SCALES)[number];
+const SCALE_LABEL: Record<Scale, string> = { month: "Month", week: "Week", day: "Daily", hour: "Hourly" };
 
 export function PmSchedule() {
   const data = usePm();
-  const requested = useSearchParams().get("project");
+  const params = useSearchParams();
+  const requested = params.get("project");
   const fallback = data.projects.find((project) => project.id === "prj-cargo")?.id ?? data.projects[0]?.id ?? "";
-  const initial = requested && data.projects.some((project) => project.id === requested) ? requested : fallback;
-  const [projectId, setProjectId] = useState(initial);
-  const [scale, setScale] = useState<"month" | "week">("month");
+  const projectId = requested && data.projects.some((project) => project.id === requested) ? requested : fallback;
+  const scale = readScale(params.get("scale"));
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const scroller = useRef<HTMLDivElement>(null);
 
   const project = data.projects.find((item) => item.id === projectId) ?? null;
   const rows = useMemo(() => programmeFor(projectId), [projectId]);
@@ -32,23 +36,29 @@ export function PmSchedule() {
   const delayed = activities.filter((row) => row.delayed);
   const criticalOpen = activities.filter((row) => row.critical && row.progress < 100);
 
-  const dayWidth = scale === "week" ? 16 : 4;
+  const dayWidth = scale === "hour" ? 24 * 16 : scale === "day" ? 32 : scale === "week" ? 16 : 4;
   const today = dayNumber(DEMO_TODAY);
   const range = useMemo(() => {
+    if (scale === "hour") return { start: today, end: today };
     if (rows.length === 0) return { start: today, end: today + 7 };
     const days = rows.flatMap((row) => [row.plannedStartDay, row.plannedFinishDay, row.actualStartDay, row.actualFinishDay].filter((day): day is number => day !== null));
     return { start: Math.min(...days, today) - 2, end: Math.max(...days, today) + 14 };
-  }, [rows, today]);
+  }, [rows, today, scale]);
   const span = range.end - range.start + 1;
   const chartWidth = span * dayWidth;
-  const headerHeight = scale === "week" ? 48 : 28;
+  const headerHeight = scale === "month" ? 28 : 48;
   const todayX = (today - range.start) * dayWidth;
 
-  function chooseProject(id: string) {
-    setProjectId(id);
-    setCollapsed([]);
-    setSelectedId(null);
-  }
+  useLayoutEffect(() => {
+    const node = scroller.current;
+    if (!node || (scale !== "day" && scale !== "hour")) return;
+    const apply = () => {
+      node.scrollLeft = Math.max(0, todayX - 24);
+    };
+    apply();
+    const frame = requestAnimationFrame(apply);
+    return () => cancelAnimationFrame(frame);
+  }, [scale, todayX, projectId]);
 
   return (
     <div>
@@ -63,26 +73,24 @@ export function PmSchedule() {
       />
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label="Project"
-            value={projectId}
-            onChange={(event) => chooseProject(event.target.value)}
-            className="h-10 rounded-xl border border-input bg-white px-3 text-sm"
-          >
-            {data.projects.map((item) => (
-              <option key={item.id} value={item.id}>{item.code} — {item.name}</option>
-            ))}
-          </select>
+          <form action="/pm/schedule" method="get" data-report-form>
+            <input type="hidden" name="scale" value={scale} />
+            <select aria-label="Project" name="project" defaultValue={projectId} className="h-10 rounded-xl border border-input bg-white px-3 text-sm">
+              {data.projects.map((item) => (
+                <option key={item.id} value={item.id}>{item.code} — {item.name}</option>
+              ))}
+            </select>
+          </form>
           <div className="flex rounded-xl bg-white p-1">
-            {(["month", "week"] as const).map((item) => (
-              <button
+            {SCALES.map((item) => (
+              <a
                 key={item}
-                type="button"
-                onClick={() => setScale(item)}
+                href={scheduleHref(projectId, item)}
+                aria-current={scale === item ? "page" : undefined}
                 className={cn("rounded-lg px-3 py-1.5 text-xs font-medium", scale === item ? "bg-black text-white" : "text-black/60")}
               >
-                {item === "month" ? "Month" : "Week"}
-              </button>
+                {SCALE_LABEL[item]}
+              </a>
             ))}
           </div>
         </div>
@@ -90,6 +98,12 @@ export function PmSchedule() {
           {delayed.length} delayed · {activities.filter((row) => row.critical).length} on the critical path · data date {formatDate(DEMO_TODAY)}
         </p>
       </div>
+      {project ? (
+        <p className="mb-3 text-sm">
+          <span className="font-medium">{project.code} — {project.name}</span>
+          <span className="text-black/55"> · {SCALE_LABEL[scale]}{scale === "hour" ? ` · ${formatDate(DEMO_TODAY)}` : ""}</span>
+        </p>
+      ) : null}
       <Legend />
       {criticalOpen.length > 0 ? (
         <p className="mt-3 text-sm">
@@ -103,7 +117,12 @@ export function PmSchedule() {
       {rows.length === 0 ? (
         <p className="mt-4 rounded-[22px] border border-black/5 bg-card px-4 py-8 text-sm text-muted-foreground">No programme has been built for this project.</p>
       ) : (
-        <div className="mt-4 overflow-auto rounded-[22px] border border-black/5 bg-card" style={{ maxHeight: "70vh" }}>
+        <div
+          ref={scroller}
+          data-scroll-today={scale === "day" || scale === "hour" ? String(Math.max(0, Math.round(todayX - 24))) : undefined}
+          className="mt-4 overflow-auto rounded-[22px] border border-black/5 bg-card"
+          style={{ maxHeight: "70vh" }}
+        >
           <div className="flex min-w-max">
             <div className="sticky left-0 z-20 w-[680px] shrink-0 border-r border-black/5 bg-white">
               <div className={cn(LEFT, "sticky top-0 z-30 border-b border-black/5 bg-white text-[11px] font-medium tracking-wide text-muted-foreground uppercase")} style={{ height: headerHeight }}>
@@ -127,7 +146,7 @@ export function PmSchedule() {
                 />
               ))}
             </div>
-            <div className="relative" style={{ width: chartWidth }}>
+            <div className="relative overflow-hidden" style={{ width: chartWidth }}>
               <ChartHeader range={range} dayWidth={dayWidth} scale={scale} height={headerHeight} />
               <div className="relative" style={{ width: chartWidth, height: visible.length * ROW }}>
                 <div className="absolute top-0 bottom-0 z-[1] w-px bg-accent" style={{ left: todayX }} />
@@ -216,24 +235,24 @@ function ChartHeader({
 }: {
   range: { start: number; end: number };
   dayWidth: number;
-  scale: "month" | "week";
+  scale: Scale;
   height: number;
 }) {
   const monthCells = bands(range.start, range.end, "month");
-  const weekCells = scale === "week" ? bands(range.start, range.end, "week") : [];
+  const detail = scale === "week" ? bands(range.start, range.end, "week") : scale === "day" ? bands(range.start, range.end, "day") : scale === "hour" ? hourCells() : [];
   return (
     <div className="sticky top-0 z-10 border-b border-black/5 bg-white" style={{ height }}>
       <div className="flex h-7">
         {monthCells.map((cell) => (
           <div key={cell.key} className="truncate border-l border-black/5 px-1 text-[11px] leading-7 text-black/55" style={{ width: cell.days * dayWidth }}>
-            {cell.label}
+            {scale === "hour" ? formatDate(isoFromDay(range.start)) : cell.label}
           </div>
         ))}
       </div>
-      {scale === "week" ? (
+      {detail.length > 0 ? (
         <div className="flex h-5">
-          {weekCells.map((cell) => (
-            <div key={cell.key} className="truncate border-l border-black/5 px-1 text-[10px] leading-5 text-black/35" style={{ width: cell.days * dayWidth }}>
+          {detail.map((cell) => (
+            <div key={cell.key} className="truncate border-l border-black/5 px-0.5 text-[10px] leading-5 text-black/35" style={{ width: cell.days * dayWidth }}>
               {cell.label}
             </div>
           ))}
@@ -352,6 +371,15 @@ function Detail({ row, activities }: { row: ProgrammeRow; activities: ProgrammeA
   );
 }
 
+function readScale(value: string | null): Scale {
+  return SCALES.find((item) => item === value) ?? "month";
+}
+
+function scheduleHref(projectId: string, scale: Scale) {
+  const query = new URLSearchParams({ project: projectId, scale });
+  return `/pm/schedule?${query.toString()}`;
+}
+
 function Legend() {
   return (
     <div className="flex flex-wrap gap-3 text-xs text-black/55">
@@ -400,19 +428,28 @@ function actualWindow(row: ProgrammeRow, today: number) {
   return { start: row.actualStartDay, end };
 }
 
-function bands(start: number, end: number, unit: "month" | "week") {
+function bands(start: number, end: number, unit: "month" | "week" | "day") {
   const cells: { key: string; label: string; days: number }[] = [];
   let cursor = start;
   while (cursor <= end) {
-    const next = unit === "week" ? Math.min(cursor + 6, end) : monthEnd(cursor, end);
+    const next = unit === "month" ? monthEnd(cursor, end) : Math.min(cursor + (unit === "week" ? 6 : 0), end);
+    const iso = isoFromDay(cursor);
     cells.push({
       key: `${unit}-${cursor}`,
-      label: unit === "week" ? formatDate(isoFromDay(cursor)).slice(0, 6) : new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(cursor * 86_400_000)),
+      label: unit === "day" ? iso.slice(8) : unit === "week" ? formatDate(iso).slice(0, 6) : new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(cursor * 86_400_000)),
       days: next - cursor + 1,
     });
     cursor = next + 1;
   }
   return cells;
+}
+
+function hourCells() {
+  return Array.from({ length: 24 }, (_, hour) => ({
+    key: `hour-${hour}`,
+    label: String(hour).padStart(2, "0"),
+    days: 1 / 24,
+  }));
 }
 
 function monthEnd(day: number, limit: number) {
