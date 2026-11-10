@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
+import { Bell, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
-import { SearchDialog } from "@/components/layout/search-dialog";
+import { SearchField } from "@/components/layout/search-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { isManagerFieldNotice, useAdmin } from "@/lib/data/admin-store";
 import { navItems, type NavItem } from "@/lib/navigation";
@@ -48,19 +47,7 @@ export function Header({
   const name = identity?.name ?? settings.profileName;
   const email = identity?.email ?? settings.profileEmail;
   const role = identity?.role ?? "Administrator";
-  const [searchOpen, setSearchOpen] = useState(false);
   const unread = notifications.filter((item) => !item.read);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setSearchOpen(true);
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   return (
     <header className="sticky top-0 z-[60] bg-light-gray/90 px-3 pt-3 pb-2 backdrop-blur sm:px-5 lg:px-6">
@@ -73,13 +60,7 @@ export function Header({
           <PanelLeftClose className="icon-expanded size-4" />
           <PanelLeftOpen className="icon-collapsed hidden size-4" />
         </label>
-        <button type="button" onClick={() => setSearchOpen(true)} className="flex h-12 min-w-0 flex-1 items-center gap-3 rounded-2xl border border-black/5 bg-white px-4 text-left text-sm text-black/40">
-          <Search className="size-4 shrink-0" />
-          <span className="truncate">Search projects, people, pages</span>
-        </button>
-        <button type="button" onClick={() => setSearchOpen(true)} className="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent text-white" aria-label="Search">
-          <Search className="size-4" />
-        </button>
+        <SearchField pages={search?.pages} projectIds={search?.projectIds} projectBase={search?.projectBase} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className="relative grid size-11 place-items-center rounded-2xl border border-black/5 bg-white text-black" aria-label="Notifications">
@@ -141,7 +122,6 @@ export function Header({
         <Breadcrumbs items={crumbs?.items ?? navItems} root={crumbs?.root ?? { href: "/admin", label: "CPMIS" }} />
         <span className="rounded-full bg-[#fff1eb] px-2 py-0.5 text-[11px] font-medium text-black">Demo data</span>
       </div>
-      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} pages={search?.pages} projectIds={search?.projectIds} projectBase={search?.projectBase} />
     </header>
   );
 }

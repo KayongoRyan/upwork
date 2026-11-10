@@ -36,11 +36,17 @@ function rememberPorts(request: NextRequest) {
   }
 }
 
+function forward(request: NextRequest) {
+  const headers = new Headers(request.headers);
+  headers.set("x-cpmis-q", request.nextUrl.searchParams.get("q") ?? "");
+  return NextResponse.next({ request: { headers } });
+}
+
 export function proxy(request: NextRequest) {
   rememberPorts(request);
   const port = requestPort(request);
   const here = portalByPort(port);
-  if (!here) return NextResponse.next();
+  if (!here) return forward(request);
 
   const { pathname, search } = request.nextUrl;
   const local = `http://localhost:${port}`;
@@ -57,7 +63,7 @@ export function proxy(request: NextRequest) {
     return redirect(`${local}${here.home}`, port);
   }
 
-  return NextResponse.next();
+  return forward(request);
 }
 
 export const config = {

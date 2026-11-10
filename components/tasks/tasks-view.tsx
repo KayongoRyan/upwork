@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { Plus, Trash2 } from "lucide-react";
@@ -19,7 +20,13 @@ import type { TaskStatus } from "@/types";
 
 export function TasksView() {
   const data = useAdmin();
-  const [projectId, setProjectId] = useState("all");
+  const requested = useSearchParams().get("project");
+  const [seenProject, setSeenProject] = useState(requested);
+  const [projectId, setProjectId] = useState(requested ?? "all");
+  if (requested !== seenProject) {
+    setSeenProject(requested);
+    if (requested) setProjectId(requested);
+  }
   const [open, setOpen] = useState(false);
   const tasks = data.tasks.filter((task) => projectId === "all" || task.projectId === projectId);
 

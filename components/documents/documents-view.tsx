@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
@@ -29,17 +29,28 @@ export function DocumentsView() {
   const data = useAdmin();
   const documents = data.documents ?? [];
   const requested = useSearchParams().get("project");
+  const requestedDoc = useSearchParams().get("doc");
   const [seen, setSeen] = useState(requested);
+  const [seenDoc, setSeenDoc] = useState(requestedDoc);
   const [projectId, setProjectId] = useState(requested && data.projects.some((item) => item.id === requested) ? requested : "all");
   const [category, setCategory] = useState<DocumentCategory | "all">("all");
   const [query, setQuery] = useState("");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(requestedDoc);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [reviseId, setReviseId] = useState<string | null>(null);
   if (requested !== seen) {
     setSeen(requested);
     if (requested && data.projects.some((item) => item.id === requested)) setProjectId(requested);
   }
+  if (requestedDoc !== seenDoc) {
+    setSeenDoc(requestedDoc);
+    setOpenId(requestedDoc);
+  }
+
+  useEffect(() => {
+    if (!openId) return;
+    document.getElementById(`doc-${openId}`)?.scrollIntoView({ block: "center" });
+  }, [openId]);
 
   const needle = query.trim().toLowerCase();
   const rows = documents.filter((item) => {
@@ -218,7 +229,7 @@ function DocumentBlock({
   const state = latest ? standing(item, latest) : "draft";
   return (
     <>
-      <tr className="border-t border-black/5">
+      <tr id={`doc-${item.id}`} className="border-t border-black/5">
         <td className="px-3 py-3 font-mono text-xs">
           <button type="button" className="hover:underline" onClick={onToggle}>{item.number}</button>
         </td>

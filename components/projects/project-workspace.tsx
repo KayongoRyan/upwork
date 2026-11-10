@@ -17,7 +17,7 @@ import {
   workspaceFor,
   type ProjectEquipment,
 } from "@/lib/project-workspace";
-import { DEMO_TODAY, PREVIEW_PM_ID, daysUntil, formatDate, formatDateTime, formatMoney, fullName } from "@/lib/utils";
+import { DEMO_TODAY, PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID, daysUntil, formatDate, formatDateTime, formatMoney, fullName } from "@/lib/utils";
 import type { EngineerReport, EngineerReportStatus } from "@/types";
 
 const sections = [
@@ -56,13 +56,15 @@ function qty(value: number) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
 }
 
-export function ProjectWorkspace({ portal }: { portal: "admin" | "pm" }) {
+export function ProjectWorkspace({ portal }: { portal: "admin" | "pm" | "se" | "qs" }) {
   const params = useParams<{ id: string }>();
   const projectId = Array.isArray(params.id) ? params.id[0] : params.id;
   const data = useAdmin();
   const project = data.projects.find((item) => item.id === projectId) ?? null;
-  const back = portal === "admin" ? "/admin/projects" : "/pm/projects";
-  const allowed = portal === "admin" || project?.managerId === PREVIEW_PM_ID;
+  const back = portal === "admin" ? "/admin/projects" : portal === "pm" ? "/pm/projects" : portal === "se" ? "/se" : "/qs";
+  const scopedId = portal === "se" ? PREVIEW_SE_ID : portal === "qs" ? PREVIEW_QS_ID : null;
+  const scopedProjectId = scopedId ? data.users.find((user) => user.id === scopedId)?.projectId : null;
+  const allowed = portal === "admin" || (portal === "pm" && project?.managerId === PREVIEW_PM_ID) || (scopedProjectId != null && scopedProjectId === project?.id);
 
   if (!project || !allowed) {
     return (
