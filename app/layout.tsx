@@ -34,6 +34,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `document.addEventListener("change",function(e){var t=e.target;if(!t||!t.getAttribute)return;var base=t.getAttribute("data-status-go");if(!base)return;var v=t.value;location.assign(v==="all"?base:base+"?status="+encodeURIComponent(v)+"#activities")});`,
+          }}
+        />
         <SearchQueryProvider query={query}>
           <PortalPortsProvider ports={readBoundPorts()}>
             <AdminProvider initialState={initialState}>{children}</AdminProvider>

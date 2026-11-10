@@ -29,7 +29,7 @@ export function ProjectsView() {
   const [viewId, setViewId] = useState<string | null>(focus);
   const [editor, setEditor] = useState<Project | null | "new">(null);
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
-  const [status, setStatus] = useState("all");
+  const status = useSearchParams().get("status") ?? "all";
   const [formError, setFormError] = useState<string | null>(null);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
@@ -87,9 +87,15 @@ export function ProjectsView() {
       <div className="mb-4 flex flex-col gap-3 sm:flex-row">
         <Input value={table.query} onChange={(event) => table.setQuery(event.target.value)} placeholder="Search name, code, client, location, manager" className="sm:max-w-md" />
         <select
+          key={status}
+          name="status"
           aria-label="Filter by status"
-          value={status}
-          onChange={(event) => setStatus(event.target.value)}
+          data-status-go="/admin/projects"
+          defaultValue={status}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            window.location.assign(value === "all" ? "/admin/projects" : `/admin/projects?status=${encodeURIComponent(value)}`);
+          }}
           className="h-10 rounded-lg border border-input bg-white px-3 text-sm"
         >
           <option value="all">All statuses</option>
