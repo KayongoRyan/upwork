@@ -1,5 +1,6 @@
 import { documentCategoryLabel } from "@/lib/documents";
 import { projectStatusLabel, roleLabel } from "@/lib/labels";
+import type { PortalId } from "@/lib/portals";
 import { fullName } from "@/lib/utils";
 import type { Employee, Project, ProjectDocument, TaskItem, UserAccount } from "@/types";
 
@@ -7,7 +8,7 @@ export type SearchHit = { key: string; title: string; meta: string; href: string
 export type SearchGroup = { title: string; items: SearchHit[] };
 
 type PageRef = { href: string; label: string; description: string; section: string };
-type PortalKind = "administrator" | "project_manager" | "site_engineer" | "quantity_surveyor";
+type PortalKind = PortalId;
 
 export function searchRecords({
   query,

@@ -13,6 +13,7 @@ const portals = [
   { id: "project_manager", label: "Project manager", port: 3001, home: "/pm" },
   { id: "site_engineer", label: "Site engineer", port: 3002, home: "/se" },
   { id: "quantity_surveyor", label: "Quantity surveyor", port: 3003, home: "/qs" },
+  { id: "vertexa", label: "Vertexa Group", port: 3030, home: "/vertexa" },
 ];
 
 const hostname = "localhost";
