@@ -24,8 +24,9 @@ npm run dev
 - Project manager: http://localhost:3001/pm
 - Site engineer: http://localhost:3002/se
 - Quantity surveyor: http://localhost:3003/qs
+- Vertexa Group: http://localhost:3030
 
-If a port is taken, that portal steps up by 10 (3000, then 3010, then 3020) until it binds. The URL it actually bound is printed at startup. Links between portals follow those ports.
+Each portal starts at its preferred port and steps up by 10 if that port is taken. The URL it actually bound is printed at startup. Links between portals follow those ports.
 
 ## Administrator
 
