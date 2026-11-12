@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { VertexaNavigation } from "@/components/vertexa/navigation";
+import { ScrollRevealWords } from "@/components/vertexa/scroll-reveal-words";
 import { portalUrl } from "@/lib/portals";
 
 export const metadata: Metadata = {
@@ -48,16 +49,14 @@ export default function VertexaPage() {
 
       <section className="vx-hero" id="main-content" aria-labelledby="vx-hero-title">
         <div className="vx-hero-title-wrap">
-          <p className="vx-eyebrow" data-reveal="up">Independent building / Thoughtful by design</p>
+          <p className="vx-hero-description" data-reveal="up">
+            Thoughtful homes, built with care and shaped around the way you live.
+          </p>
           <h1 id="vx-hero-title">Vertexa</h1>
-          <div className="vx-hero-baseline" data-reveal="up">
-            <p>Homes shaped around you.</p>
-            <a href="#projects">
-              Explore our work <span aria-hidden="true">↓</span>
-            </a>
-          </div>
         </div>
+      </section>
 
+      <section className="vx-hero-image-section" aria-label="Featured home">
         <div
           className="vx-hero-image"
           data-reveal="image"
@@ -74,7 +73,7 @@ export default function VertexaPage() {
         </div>
       </section>
 
-      <section className="vx-philosophy" id="philosophy" aria-labelledby="vx-philosophy-title">
+      <section className="vx-philosophy" id="philosophy" aria-labelledby="vx-philosophy-title" data-flow-section>
         <div className="vx-section-label" data-reveal="up">
           <span>01</span>
           <span className="vx-label-rule" />
@@ -82,8 +81,12 @@ export default function VertexaPage() {
         </div>
 
         <div className="vx-philosophy-grid">
-          <h2 id="vx-philosophy-title" data-reveal="up">
-            A home should feel like it could only belong to you.
+          <h2
+            id="vx-philosophy-title"
+            aria-label="A home should feel like it could only belong to you."
+            data-word-reveal
+          >
+            <ScrollRevealWords text="A home should feel like it could only belong to you." />
           </h2>
           <div className="vx-philosophy-copy" data-reveal="up">
             <p>
@@ -116,52 +119,67 @@ export default function VertexaPage() {
         </div>
       </section>
 
-      <section className="vx-projects" id="projects" aria-labelledby="vx-projects-title">
-        <div className="vx-projects-heading">
-          <div>
-            <div className="vx-section-label" data-reveal="up">
-              <span>02</span>
-              <span className="vx-label-rule" />
-              <span>What we build</span>
-            </div>
-            <h2 id="vx-projects-title" data-reveal="up">Room for your next chapter.</h2>
-          </div>
-          <p data-reveal="up">
-            Whether you are starting fresh or reimagining the place you call
-            home, every project starts with your vision.
-          </p>
-        </div>
-
-        <div className="vx-project-grid">
-          {projects.map((project, index) => (
-            <article
-              className={`vx-project ${project.className}`}
-              key={project.name}
-            >
-              <a className="vx-project-image" href="#contact" data-reveal="image">
-                <span
-                  className="vx-project-photo"
-                  role="img"
-                  aria-label={project.alt}
-                  style={{ backgroundImage: `url('${project.image}')` }}
-                />
-                <span className="vx-project-arrow" aria-hidden="true">
-                  ↗
-                </span>
-              </a>
-              <div className="vx-project-caption" data-reveal="up">
-                <div>
-                  <span>{project.category}</span>
-                  <h3>{project.name}</h3>
-                </div>
-                <span className="vx-project-index">0{index + 1}</span>
+      <section
+        className="vx-projects"
+        id="projects"
+        aria-labelledby="vx-projects-title"
+        data-scroll-gallery
+      >
+        <div className="vx-projects-stage">
+          <div className="vx-projects-heading">
+            <div>
+              <div className="vx-section-label" data-reveal="up">
+                <span>02</span>
+                <span className="vx-label-rule" />
+                <span>What we build</span>
               </div>
-            </article>
-          ))}
+              <h2
+                id="vx-projects-title"
+                aria-label="Room for your next chapter."
+                data-word-reveal
+              >
+                <ScrollRevealWords text="Room for your next chapter." />
+              </h2>
+            </div>
+            <p data-reveal="up">
+              Whether you are starting fresh or reimagining the place you call
+              home, every project starts with your vision.
+            </p>
+          </div>
+
+          <div className="vx-project-grid">
+            {projects.map((project, index) => (
+              <article
+                className={`vx-project ${project.className}`}
+                key={project.name}
+              >
+                <a className="vx-project-image" href="#contact" data-reveal="image">
+                  <span
+                    className="vx-project-photo"
+                    role="img"
+                    aria-label={project.alt}
+                    style={{ backgroundImage: `url('${project.image}')` }}
+                  />
+                  <span className="vx-project-arrow" aria-hidden="true">
+                    ↗
+                  </span>
+                </a>
+                <div className="vx-project-caption" data-reveal="up">
+                  <div>
+                    <span>{project.category}</span>
+                    <h3 aria-label={project.name} data-word-reveal>
+                      <ScrollRevealWords text={project.name} />
+                    </h3>
+                  </div>
+                  <span className="vx-project-index">0{index + 1}</span>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="vx-approach" id="approach" aria-labelledby="vx-approach-title">
+      <section className="vx-approach" id="approach" aria-labelledby="vx-approach-title" data-flow-section>
         <div
           className="vx-approach-image"
           data-reveal="image"
@@ -174,7 +192,13 @@ export default function VertexaPage() {
             <span className="vx-label-rule" />
             <span>Working together</span>
           </div>
-          <h2 id="vx-approach-title" data-reveal="up">Good things take good collaboration.</h2>
+          <h2
+            id="vx-approach-title"
+            aria-label="Good things take good collaboration."
+            data-word-reveal
+          >
+            <ScrollRevealWords text="Good things take good collaboration." />
+          </h2>
           <p data-reveal="up">
             We bring your ideas, considered design, and careful building
             together. One clear conversation at a time, from first thoughts to
@@ -186,12 +210,16 @@ export default function VertexaPage() {
         </div>
       </section>
 
-      <section className="vx-contact" id="contact" aria-labelledby="vx-contact-title">
+      <section className="vx-contact" id="contact" aria-labelledby="vx-contact-title" data-flow-section>
         <p className="vx-eyebrow" data-reveal="up">Your place, your way</p>
-        <h2 id="vx-contact-title" data-reveal="up">
-          Have a home in mind?
+        <h2
+          id="vx-contact-title"
+          aria-label="Have a home in mind? Let's talk about it."
+          data-word-reveal
+        >
+          <ScrollRevealWords text="Have a home in mind?" />
           <br />
-          Let&apos;s talk about it.
+          <ScrollRevealWords text="Let's talk about it." />
         </h2>
         <a className="vx-contact-link" href="mailto:hello@vertexagroup.com" data-reveal="up">
           Get in touch <span aria-hidden="true">↗</span>
@@ -201,11 +229,16 @@ export default function VertexaPage() {
       <footer className="vx-footer">
         <div className="vx-footer-top">
           <div className="vx-footer-nav-column">
-            <p className="vx-footer-kicker">
+            <p className="vx-footer-kicker" data-reveal="up">
               <span className="vx-footer-dot" />
               Homes shaped around you
             </p>
-            <a className="vx-wordmark vx-footer-wordmark" href="/vertexa" aria-label="Vertexa Group home">
+            <a
+              className="vx-wordmark vx-footer-wordmark"
+              href="/vertexa"
+              aria-label="Vertexa Group home"
+              data-reveal="up"
+            >
               <span className="vx-symbol" aria-hidden="true">
                 <span />
                 <span />
@@ -216,7 +249,7 @@ export default function VertexaPage() {
                 VERTEXA <span>GROUP</span>
               </span>
             </a>
-            <nav className="vx-footer-nav" aria-label="Footer navigation">
+            <nav className="vx-footer-nav" aria-label="Footer navigation" data-reveal="up">
               <a href="#philosophy">Our philosophy</a>
               <a href="#projects">What we build</a>
               <a href="#approach">Our approach</a>
@@ -225,7 +258,11 @@ export default function VertexaPage() {
           </div>
 
           <div className="vx-footer-side">
-            <nav className="vx-footer-quicklinks" aria-label="Contact links">
+            <nav
+              className="vx-footer-quicklinks"
+              aria-label="Contact links"
+              data-reveal="up"
+            >
               <a href="mailto:hello@vertexagroup.com">
                 Email <span aria-hidden="true">↗</span>
               </a>
@@ -234,7 +271,11 @@ export default function VertexaPage() {
               </a>
             </nav>
 
-            <a className="vx-footer-feature" href="mailto:hello@vertexagroup.com">
+            <a
+              className="vx-footer-feature"
+              href="mailto:hello@vertexagroup.com"
+              data-reveal="up"
+            >
               <span className="vx-footer-feature-label">
                 <span className="vx-footer-dot" />
                 Have a project in mind?
@@ -243,6 +284,7 @@ export default function VertexaPage() {
                 className="vx-footer-feature-image"
                 role="img"
                 aria-label="A warm, contemporary home and garden"
+                data-reveal="image"
               />
               <span className="vx-footer-feature-link">
                 Start a conversation <span aria-hidden="true">↗</span>
@@ -251,11 +293,16 @@ export default function VertexaPage() {
           </div>
         </div>
 
-        <a className="vx-footer-giant" href="/vertexa" aria-label="Vertexa Group home">
+        <a
+          className="vx-footer-giant"
+          href="/vertexa"
+          aria-label="Vertexa Group home"
+          data-reveal="brand"
+        >
           Vertexa
         </a>
 
-        <div className="vx-footer-bottom">
+        <div className="vx-footer-bottom" data-reveal="up">
           <span>© {new Date().getFullYear()} Vertexa Group</span>
           <span>Thoughtful homes. Built for living.</span>
           <a href={workspaceUrl}>Project workspace <span aria-hidden="true">↗</span></a>

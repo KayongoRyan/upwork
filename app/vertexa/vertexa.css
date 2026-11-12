@@ -8,6 +8,7 @@
   color: var(--vx-ink);
   background: var(--vx-paper);
   font-family: var(--font-vertexa-poppins), "Segoe UI", sans-serif;
+  overflow-x: clip;
 }
 
 .vertexa *,
@@ -32,7 +33,7 @@
 }
 
 .vx-header {
-  position: fixed;
+  position: absolute;
   z-index: 40;
   top: 27px;
   left: 0;
@@ -88,8 +89,8 @@
 }
 
 .vx-menu {
-  position: absolute;
-  top: 50%;
+  position: fixed;
+  top: 59px;
   left: 50%;
   transform: translate(-50%, -50%);
 }
@@ -332,6 +333,7 @@
 }
 
 .vx-hero {
+  min-height: 100svh;
   background: var(--vx-paper);
 }
 
@@ -342,39 +344,50 @@
 
 .vx-hero-title-wrap {
   position: relative;
-  padding: calc(100px + clamp(100px, 16vw, 235px)) 3.2vw 0;
+  display: flex;
+  min-height: 100svh;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: clamp(110px, 16vh, 180px) 3.2vw 24px;
 }
 
-.vx-hero .vx-eyebrow {
-  max-width: 340px;
-  margin-left: auto;
-  text-align: right;
+.vx-hero-description {
+  position: relative;
+  align-self: flex-end;
+  max-width: min(460px, 43vw);
+  margin: auto 0;
+  padding-left: 22px;
+  color: #33302d;
+  font-size: clamp(15px, 1.35vw, 21px);
+  line-height: 1.55;
 }
 
-.vx-eyebrow {
-  margin: 0;
-  color: var(--vx-muted);
-  font-size: 9px;
-  font-weight: 550;
-  letter-spacing: 0.16em;
-  line-height: 1.7;
-  text-transform: uppercase;
+.vx-hero-description::before {
+  position: absolute;
+  top: 0.48em;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  background: var(--vx-orange);
+  content: "";
 }
 
 .vx-hero h1 {
-  margin: 10px 0 0;
+  width: calc(100% + 6.4vw);
+  margin: 10px 0 0 -3.2vw;
   color: var(--vx-orange);
-  font-size: clamp(112px, 21vw, 296px);
+  font-size: clamp(80px, 28.2vw, 560px);
   font-weight: 650;
-  letter-spacing: -0.105em;
+  letter-spacing: -0.045em;
   line-height: 0.82;
+  white-space: nowrap;
 }
 
 .vx-hero-baseline {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 28px 0 35px;
+  margin: 28px 0 0;
 }
 
 .vx-hero-baseline p {
@@ -399,10 +412,18 @@
   font-size: 17px;
 }
 
+.vx-hero-image-section {
+  display: flex;
+  min-height: 100svh;
+  align-items: center;
+  padding: 84px 3.2vw 24px;
+}
+
 .vx-hero-image {
   position: relative;
-  min-height: min(840px, 72vw);
-  margin: 0 3.2vw;
+  width: 100%;
+  height: calc(100svh - 108px);
+  min-height: 320px;
   overflow: hidden;
   background-color: #9c9991;
 }
@@ -461,7 +482,11 @@
 }
 
 .vx-philosophy {
-  padding: 145px 9.5vw 125px;
+  display: flex;
+  min-height: 100svh;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(90px, 12vh, 145px) 9.5vw clamp(80px, 10vh, 125px);
 }
 
 .vx-section-label {
@@ -552,6 +577,7 @@
 }
 
 .vx-projects {
+  min-height: 100svh;
   overflow-x: clip;
   padding: 100px 3.2vw 145px;
   background: #f5f4f1;
@@ -662,7 +688,7 @@
 .vx-approach {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
-  min-height: 670px;
+  min-height: 100svh;
   background: var(--vx-paper);
 }
 
@@ -703,7 +729,7 @@
 
 .vx-contact {
   display: flex;
-  min-height: 480px;
+  min-height: 100svh;
   align-items: center;
   flex-direction: column;
   justify-content: center;
@@ -742,7 +768,7 @@
 
 .vx-footer {
   position: relative;
-  min-height: 780px;
+  min-height: 100svh;
   overflow: hidden;
   padding: 74px 3.2vw 22px;
   background: var(--vx-ink);
@@ -1025,22 +1051,48 @@
   }
 }
 
-@keyframes vx-heading-reveal {
+@keyframes vx-word-rise {
   from {
-    clip-path: inset(0 0 100%);
     opacity: 0;
-    transform: translate3d(0, 0.12em, 0);
+    transform: translate3d(0, 115%, 0);
   }
   to {
-    clip-path: inset(0);
     opacity: 1;
     transform: translate3d(0, 0, 0);
   }
 }
 
+@keyframes vx-section-arrive {
+  from {
+    opacity: 0.55;
+    transform: translate3d(0, 54px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes vx-project-arrive {
+  from {
+    opacity: 0.35;
+    transform: translate3d(0, 72px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes vx-gallery-track {
+  to {
+    transform: translate3d(calc(-100% + 93.6vw), 0, 0);
+  }
+}
+
 @keyframes vx-image-reveal {
   from {
-    clip-path: inset(0 0 100% 0);
+    clip-path: inset(100% 0 0 0);
   }
   to {
     clip-path: inset(0);
@@ -1058,7 +1110,7 @@
 
 @keyframes vx-project-image-reveal {
   from {
-    clip-path: inset(0 0 100%);
+    clip-path: inset(100% 0 0 0);
     transform: scale(1.035);
   }
   to {
@@ -1069,12 +1121,34 @@
 
 @keyframes vx-approach-image-reveal {
   from {
-    clip-path: inset(0 0 100%);
+    clip-path: inset(100% 0 0 0);
     background-position: center 38%;
   }
   to {
     clip-path: inset(0);
     background-position: center 62%;
+  }
+}
+
+@keyframes vx-footer-brand-reveal {
+  from {
+    clip-path: inset(100% 0 0);
+    opacity: 0.25;
+    transform: translate3d(0, 7vh, 0);
+  }
+  to {
+    clip-path: inset(0);
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes vx-project-photo-parallax {
+  from {
+    translate: 0 6%;
+  }
+  to {
+    translate: 0 -6%;
   }
 }
 
@@ -1110,8 +1184,93 @@
   }
 
   .vertexa h2[data-reveal="up"] {
-    animation-name: vx-heading-reveal;
-    animation-range: entry 0% entry 65%;
+    animation-name: vx-reveal-up;
+  }
+
+  .vertexa [data-flow-section] {
+    animation: vx-section-arrive linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 72%;
+  }
+
+  .vertexa .vx-projects[data-scroll-gallery] {
+    position: relative;
+    height: 280vh;
+    padding: 0 3.2vw;
+    view-timeline-name: --vx-gallery;
+    view-timeline-axis: block;
+  }
+
+  .vertexa .vx-projects-stage {
+    position: sticky;
+    top: 0;
+    display: flex;
+    height: 100vh;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+    padding: 74px 0 38px;
+  }
+
+  .vertexa .vx-projects-stage .vx-projects-heading {
+    flex: 0 0 auto;
+  }
+
+  .vertexa .vx-project-grid {
+    display: flex;
+    width: max-content;
+    flex: 0 0 auto;
+    gap: 18px;
+    animation: vx-gallery-track linear both;
+    animation-timeline: --vx-gallery;
+    animation-range: entry 100% exit 0%;
+  }
+
+  .vertexa .vx-project {
+    width: min(72vw, 1100px);
+    flex: 0 0 auto;
+  }
+
+  .vertexa .vx-project-feature {
+    grid-column: auto;
+  }
+
+  .vertexa .vx-project-image,
+  .vertexa .vx-project:not(.vx-project-feature) .vx-project-image {
+    height: clamp(320px, 55vh, 620px);
+  }
+
+  .vertexa .vx-project:nth-child(2) .vx-project-image,
+  .vertexa .vx-project:nth-child(2) .vx-project-caption,
+  .vertexa .vx-project:nth-child(3) .vx-project-image,
+  .vertexa .vx-project:nth-child(3) .vx-project-caption {
+    animation-delay: 0ms;
+  }
+
+  .vertexa [data-word-reveal] {
+    view-timeline-name: --vx-word-reveal;
+    view-timeline-axis: block;
+  }
+
+  .vertexa .vx-word-reveal__word {
+    display: inline-block;
+    animation: vx-word-rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-timeline: --vx-word-reveal;
+    animation-range-start: cover var(--vx-word-start);
+    animation-range-end: cover var(--vx-word-end);
+  }
+
+  .vertexa .vx-word-reveal__clip {
+    display: inline-block;
+    overflow: clip;
+    margin-inline-end: 0.24em;
+    vertical-align: bottom;
+  }
+
+  .vertexa .vx-project {
+    animation: vx-project-arrive linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 62%;
   }
 
   .vertexa [data-reveal="image"] {
@@ -1122,7 +1281,13 @@
 
   .vertexa .vx-project-image[data-reveal="image"] {
     animation-name: vx-project-image-reveal;
-    animation-range: entry 0% entry 60%;
+    animation-range: entry 0% entry 85%;
+  }
+
+  .vx-project-photo {
+    animation: vx-project-photo-parallax linear both;
+    animation-timeline: view();
+    animation-range: entry 0% exit 100%;
   }
 
   .vx-project-caption > div {
@@ -1137,9 +1302,25 @@
     animation-range: entry 0% exit 100%;
   }
 
+  .vx-project:nth-child(2) .vx-project-image,
+  .vx-project:nth-child(2) .vx-project-caption {
+    animation-delay: 80ms;
+  }
+
+  .vx-project:nth-child(3) .vx-project-image,
+  .vx-project:nth-child(3) .vx-project-caption {
+    animation-delay: 160ms;
+  }
+
   .vertexa .vx-approach-image[data-reveal="image"] {
     animation-name: vx-approach-image-reveal;
-    animation-range: entry 0% entry 60%;
+    animation-range: entry 0% entry 85%;
+  }
+
+  .vertexa .vx-footer-giant[data-reveal="brand"] {
+    animation: vx-footer-brand-reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 75%;
   }
 
   .vx-values > div:nth-child(2) {
@@ -1153,7 +1334,7 @@
 
 @media (min-width: 1600px) {
   .vx-hero h1 {
-    font-size: min(21vw, 340px);
+    font-size: min(28.2vw, 560px);
   }
 }
 
@@ -1192,13 +1373,13 @@
   }
 
   .vx-menu {
-    position: relative;
-    top: auto;
-    left: auto;
-    flex: 1;
+    position: fixed;
+    top: 41px;
+    left: 50%;
+    width: clamp(110px, 34vw, 156px);
     min-width: 0;
-    margin: 0 10px;
-    transform: none;
+    margin: 0;
+    transform: translate(-50%, -50%);
   }
 
   .vx-menu-toggle {
@@ -1288,26 +1469,66 @@
   }
 
   .vx-hero-title-wrap {
-    padding: 238px 22px 0;
+    padding: 130px 22px 20px;
   }
 
-  .vx-hero .vx-eyebrow {
-    max-width: 260px;
+  .vx-hero-description {
+    max-width: 300px;
+    padding-left: 17px;
+    font-size: 14px;
+  }
+
+  .vx-hero-description::before {
+    width: 7px;
+    height: 7px;
   }
 
   .vx-hero h1 {
-    margin-top: 22px;
-    font-size: clamp(102px, 22vw, 170px);
-    letter-spacing: -0.1em;
+    width: calc(100% + 44px);
+    margin: 22px 0 0 -22px;
+    font-size: 27vw;
+  }
+
+  .vertexa .vx-projects[data-scroll-gallery] {
+    height: auto;
+    padding: 78px 14px 90px;
+    view-timeline-name: none;
+  }
+
+  .vertexa .vx-projects-stage {
+    position: static;
+    height: auto;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .vertexa .vx-project-grid {
+    display: grid;
+    width: auto;
+    column-gap: 0;
+    row-gap: 33px;
+    animation: none;
+  }
+
+  .vertexa .vx-project {
+    width: auto;
+  }
+
+  .vertexa .vx-project-feature {
+    grid-column: auto;
   }
 
   .vx-hero-baseline {
     margin: 24px 0;
   }
 
+  .vx-hero-image-section {
+    padding: 68px 12px 12px;
+  }
+
   .vx-hero-image {
-    min-height: 100vw;
-    margin: 0 12px;
+    height: calc(100svh - 80px);
+    min-height: 0;
   }
 
   .vx-hero-image::before {
@@ -1418,7 +1639,7 @@
   }
 
   .vx-contact {
-    min-height: 400px;
+    min-height: 100svh;
   }
 
   .vx-contact h2 {
@@ -1426,7 +1647,7 @@
   }
 
   .vx-footer {
-    min-height: 0;
+    min-height: 100svh;
     padding: 52px 22px 20px;
   }
 
@@ -1487,10 +1708,6 @@
 }
 
 @media (max-width: 380px) {
-  .vx-hero h1 {
-    font-size: 21vw;
-  }
-
   .vx-hero-baseline p {
     font-size: 16px;
   }
@@ -1510,6 +1727,50 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .vertexa .vx-projects[data-scroll-gallery] {
+    height: auto;
+    padding: 100px 3.2vw 145px;
+    view-timeline-name: none;
+  }
+
+  .vertexa .vx-projects-stage {
+    position: static;
+    height: auto;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .vertexa .vx-project-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: auto;
+    gap: 60px 18px;
+    animation: none;
+  }
+
+  .vertexa .vx-project {
+    width: auto;
+  }
+
+  .vertexa .vx-project-feature {
+    grid-column: 1 / -1;
+  }
+
+  @media (max-width: 760px) {
+    .vertexa .vx-projects[data-scroll-gallery] {
+      padding: 78px 14px 90px;
+    }
+
+    .vertexa .vx-project-grid {
+      grid-template-columns: 1fr;
+      gap: 33px 0;
+    }
+
+    .vertexa .vx-project-feature {
+      grid-column: auto;
+    }
+  }
+
   .vertexa *,
   .vertexa *::before,
   .vertexa *::after {
