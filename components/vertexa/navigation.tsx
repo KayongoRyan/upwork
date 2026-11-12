@@ -86,9 +86,9 @@ export function VertexaNavigation({ workspaceUrl }: VertexaNavigationProps) {
               }
             }}
           >
-            <a href="#philosophy">Our philosophy</a>
-            <a href="#projects">What we build</a>
-            <a href="#approach">Our approach</a>
+            <a href="#philosophy">Bespoke homes</a>
+            <a href="#values">Our values</a>
+            <a href="#projects">Featured projects</a>
             <a href="#contact">Contact</a>
             <a href={workspaceUrl}>
               Project workspace <span aria-hidden="true">↗</span>
