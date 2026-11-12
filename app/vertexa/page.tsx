@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { VertexaNavigation } from "@/components/vertexa/navigation";
 import { VertexaStoryGallery } from "@/components/vertexa/story-gallery";
+import { VertexaTestimonials } from "@/components/vertexa/testimonials";
 import { portalUrl } from "@/lib/portals";
 
 export const metadata: Metadata = {
@@ -8,6 +10,14 @@ export const metadata: Metadata = {
   description:
     "Custom homes, renovations, and extensions shaped around the people who live in them.",
 };
+
+const collaborators = [
+  { name: "Cumulus Studio", role: "Award winning architecture" },
+  { name: "Sussex", role: "Australian leading tapware" },
+  { name: "Sketch Design & Interiors", role: "Architects" },
+  { name: "Miele", role: "Premium appliances" },
+  { name: "Bespoke", role: "Windows and doors" },
+];
 
 export default function VertexaPage() {
   const workspaceUrl = portalUrl("administrator");
@@ -141,6 +151,47 @@ export default function VertexaPage() {
         </div>
       </section>
 
+      <section
+        className="vx-collaborators-section"
+        id="collaborators"
+        aria-labelledby="vx-collaborators-title"
+      >
+        <div className="vx-collaborators-content">
+          <div className="vx-collaborators-info" data-reveal="up">
+            <p className="vx-collaborators-label" id="vx-collaborators-title">
+              <span className="vx-collaborators-dot" aria-hidden="true" />
+              Our collaborators
+            </p>
+            <div className="vx-collaborators-divider" />
+            <p className="vx-collaborators-copy">
+              Vertexa partners with leading architects and designers to realise ideas with integrity and precision. Our relationships are built on trust, detail, and shared respect for design.
+            </p>
+            <div className="vx-collaborators-list">
+              {collaborators.map((collaborator) => (
+                <div key={collaborator.name} className="vx-collaborators-item">
+                  <span className="vx-collaborators-name">{collaborator.name}</span>
+                  <span className="vx-collaborators-role">{collaborator.role}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="vx-collaborators-media" data-reveal="image">
+            <Image
+              src="/collaborators.jpg"
+              alt="Architectural wood joinery and craftsmanship detail"
+              width={926}
+              height={728}
+              className="vx-collaborators-image"
+              sizes="(max-width: 760px) 100vw, 55vw"
+            />
+          </div>
+        </div>
+      </section>
+
+      <div className="vx-testimonials-wrapper">
+        <VertexaTestimonials />
+      </div>
+
       <footer className="vx-footer" id="contact">
         <div className="vx-footer-top">
           <div className="vx-footer-nav-column">
@@ -168,6 +219,7 @@ export default function VertexaPage() {
               <a href="#philosophy">Bespoke homes</a>
               <a href="#values">Our values</a>
               <a href="#projects">Featured projects</a>
+              <a href="#collaborators">Our collaborators</a>
               <a href="#contact">Contact</a>
             </nav>
           </div>
