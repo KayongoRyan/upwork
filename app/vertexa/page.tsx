@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { VertexaNavigation } from "@/components/vertexa/navigation";
+import { VertexaSiteFooter } from "@/components/vertexa/site-footer";
 import { VertexaStoryGallery } from "@/components/vertexa/story-gallery";
+import { HoverRevealWords } from "@/components/vertexa/hover-reveal-words";
 import { VertexaTestimonials } from "@/components/vertexa/testimonials";
-import { portalUrl } from "@/lib/portals";
 
 export const metadata: Metadata = {
   title: { absolute: "Vertexa Group | Homes shaped around you" },
@@ -20,19 +22,28 @@ const collaborators = [
 ];
 
 export default function VertexaPage() {
-  const workspaceUrl = portalUrl("administrator");
-
   return (
     <main className="vertexa">
       <a className="vx-skip-link" href="#main-content">
         Skip to content
       </a>
 
-      <VertexaNavigation workspaceUrl={workspaceUrl} />
+      <div className="vx-intro" aria-hidden="true">
+        <span className="vx-intro-mark">
+          <span className="vx-symbol">
+            <span />
+            <span />
+            <span />
+            <span />
+          </span>
+        </span>
+      </div>
+
+      <VertexaNavigation />
 
       <section className="vx-hero" id="main-content" aria-labelledby="vx-hero-title">
         <div className="vx-hero-title-wrap">
-          <p className="vx-hero-description" data-reveal="up">
+          <p className="vx-hero-description">
             Thoughtful homes, built with care and shaped around the way you live.
           </p>
           <h1 id="vx-hero-title">Vertexa</h1>
@@ -89,7 +100,9 @@ export default function VertexaPage() {
       </section>
 
       <section className="vx-featured-projects" id="projects" aria-labelledby="vx-featured-projects-title">
-        <h2 id="vx-featured-projects-title">Featured Projects</h2>
+        <h2 id="vx-featured-projects-title">
+          <HoverRevealWords text="Featured Projects" />
+        </h2>
         <div className="vx-featured-projects-content">
           <p className="vx-featured-projects-label">Go beyond bricks and mortar</p>
           <div className="vx-featured-projects-story">
@@ -106,47 +119,50 @@ export default function VertexaPage() {
                 Each home is made with precision, purpose, and a lasting sense
                 of belonging.
               </p>
-              <a className="vx-featured-projects-link" href="#contact">
+              <Link className="vx-featured-projects-link" href="/vertexa/projects">
                 See all projects <span aria-hidden="true">↗</span>
-              </a>
+              </Link>
             </div>
           </div>
         </div>
         <div className="vx-featured-projects-gallery">
-          <a
+          <Link
             className="vx-featured-project vx-featured-project-main"
-            href="#contact"
+            href="/vertexa/projects?service=custom-homes"
             style={{
               backgroundImage:
                 "url('https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1800&q=88')",
             }}
-            aria-label="Discuss a custom home project"
+            id="custom-homes"
+            aria-label="View custom home projects"
           >
             <span>Custom homes <span aria-hidden="true">↗</span></span>
-          </a>
+          </Link>
           <div className="vx-featured-projects-secondary">
-            <a
+            <Link
               className="vx-featured-project vx-featured-project-left"
-              href="#contact"
+              href="/vertexa/projects?service=renovations"
               style={{
                 backgroundImage:
                   "url('https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=88')",
               }}
-              aria-label="Discuss a renovation project"
+              id="renovations"
+              aria-label="View renovation projects"
             >
               <span>Renovations <span aria-hidden="true">↗</span></span>
-            </a>
-            <a
+            </Link>
+            <Link
               className="vx-featured-project vx-featured-project-right"
-              href="#contact"
+              href="/vertexa/projects?service=extensions"
               style={{
                 backgroundImage:
                   "url('https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1400&q=88')",
               }}
-              aria-label="Discuss a home extension project"
+              id="extensions"
+              aria-label="View home extension projects"
             >
               <span>Extensions <span aria-hidden="true">↗</span></span>
-            </a>
+            </Link>
           </div>
         </div>
       </section>
@@ -177,12 +193,13 @@ export default function VertexaPage() {
           </div>
           <div className="vx-collaborators-media" data-reveal="image">
             <Image
-              src="/collaborators.jpg"
+              src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=86"
               alt="Architectural wood joinery and craftsmanship detail"
               width={926}
               height={728}
               className="vx-collaborators-image"
               sizes="(max-width: 760px) 100vw, 55vw"
+              unoptimized
             />
           </div>
         </div>
@@ -192,90 +209,7 @@ export default function VertexaPage() {
         <VertexaTestimonials />
       </div>
 
-      <footer className="vx-footer" id="contact">
-        <div className="vx-footer-top">
-          <div className="vx-footer-nav-column">
-            <p className="vx-footer-kicker" data-reveal="up">
-              <span className="vx-footer-dot" />
-              Homes shaped around you
-            </p>
-            <a
-              className="vx-wordmark vx-footer-wordmark"
-              href="/vertexa"
-              aria-label="Vertexa Group home"
-              data-reveal="up"
-            >
-              <span className="vx-symbol" aria-hidden="true">
-                <span />
-                <span />
-                <span />
-                <span />
-              </span>
-              <span className="vx-wordmark-name">
-                VERTEXA <span>GROUP</span>
-              </span>
-            </a>
-            <nav className="vx-footer-nav" aria-label="Footer navigation" data-reveal="up">
-              <a href="#philosophy">Bespoke homes</a>
-              <a href="#values">Our values</a>
-              <a href="#projects">Featured projects</a>
-              <a href="#collaborators">Our collaborators</a>
-              <a href="#contact">Contact</a>
-            </nav>
-          </div>
-
-          <div className="vx-footer-side">
-            <nav
-              className="vx-footer-quicklinks"
-              aria-label="Contact links"
-              data-reveal="up"
-            >
-              <a href="mailto:hello@vertexagroup.com">
-                Email <span aria-hidden="true">↗</span>
-              </a>
-              <a href={workspaceUrl}>
-                Project workspace <span aria-hidden="true">↗</span>
-              </a>
-            </nav>
-
-            <a
-              className="vx-footer-feature"
-              href="mailto:hello@vertexagroup.com"
-              data-reveal="up"
-            >
-              <span className="vx-footer-feature-label">
-                <span className="vx-footer-dot" />
-                Have a project in mind?
-              </span>
-              <span
-                className="vx-footer-feature-image"
-                role="img"
-                aria-label="A warm, contemporary home and garden"
-                data-reveal="image"
-              />
-              <span className="vx-footer-feature-link">
-                Start a conversation <span aria-hidden="true">↗</span>
-              </span>
-            </a>
-          </div>
-        </div>
-
-        <a
-          className="vx-footer-giant"
-          href="/vertexa"
-          aria-label="Vertexa Group home"
-          data-reveal="brand"
-        >
-          Vertexa
-        </a>
-
-        <div className="vx-footer-bottom" data-reveal="up">
-          <span>© {new Date().getFullYear()} Vertexa Group</span>
-          <span>Thoughtful homes. Built for living.</span>
-          <a href={workspaceUrl}>Project workspace <span aria-hidden="true">↗</span></a>
-          <a href="#main-content">Back to top <span aria-hidden="true">↑</span></a>
-        </div>
-      </footer>
+      <VertexaSiteFooter />
     </main>
   );
 }
