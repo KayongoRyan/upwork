@@ -152,30 +152,39 @@ export function VertexaNavigation() {
               <div className="vx-menu-services-panel">
                 <ul>
                   <li>
-                    <Link href="/vertexa/projects?service=custom-homes">
+                    <Link
+                      href="/vertexa/services/custom-home"
+                      aria-current={pathname === "/vertexa/services/custom-home" ? "page" : undefined}
+                    >
                       Custom Home Construction
                     </Link>
                   </li>
                   <li>
-                    <Link href="/vertexa/projects?service=renovations">
+                    <Link
+                      href="/vertexa/services/renovation"
+                      aria-current={pathname === "/vertexa/services/renovation" ? "page" : undefined}
+                    >
                       Home Renovations
                     </Link>
                   </li>
                   <li>
-                    <Link href="/vertexa/projects?service=extensions">
+                    <Link
+                      href="/vertexa/services/extension"
+                      aria-current={pathname === "/vertexa/services/extension" ? "page" : undefined}
+                    >
                       Home Extensions
                     </Link>
                   </li>
                 </ul>
               </div>
             </details>
-            <Link href="/vertexa#contact">Contact</Link>
+            <Link href="/vertexa/contact">Contact</Link>
           </nav>
         </div>
 
         <Link
           className="vx-header-contact"
-          href="/vertexa#contact"
+          href="/vertexa/contact"
           onClick={closeMenu}
         >
           Let&apos;s Talk
