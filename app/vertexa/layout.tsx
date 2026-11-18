@@ -8,5 +8,12 @@ const poppins = Poppins({
 });
 
 export default function VertexaLayout({ children }: { children: React.ReactNode }) {
-  return <div className={poppins.variable}>{children}</div>;
+  return (
+    <div className={poppins.variable}>
+      {children}
+      <noscript>
+        <style>{`.vx-reveal-word__inner{transform:none!important;opacity:1!important}`}</style>
+      </noscript>
+    </div>
+  );
 }

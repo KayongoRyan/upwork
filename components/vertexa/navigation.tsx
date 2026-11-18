@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-type VertexaNavigationProps = {
-  workspaceUrl: string;
-};
-
-export function VertexaNavigation({ workspaceUrl }: VertexaNavigationProps) {
+export function VertexaNavigation() {
   const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const isProjectsSection = pathname.startsWith("/vertexa/projects");
+  const isProjectsIndex = pathname === "/vertexa/projects";
+  const isCollaborators = pathname === "/vertexa/collaborators";
+  const isAbout = pathname === "/vertexa/about";
 
   useEffect(() => {
     if (!isOpen) return;
@@ -30,8 +34,40 @@ export function VertexaNavigation({ workspaceUrl }: VertexaNavigationProps) {
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen) return;
+    panelRef.current
+      ?.querySelectorAll<HTMLDetailsElement>(".vx-menu-services[open]")
+      .forEach((details) => details.removeAttribute("open"));
+  }, [isOpen]);
+
+  useEffect(() => {
+    const root = document.querySelector<HTMLElement>(".vertexa");
+    if (root === null) return;
+
+    const markIntroComplete = () => root.classList.add("vx-menu-intro-complete");
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      markIntroComplete();
+      return;
+    }
+
+    const timer = window.setTimeout(markIntroComplete, 2400);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  function markMenuIntroComplete() {
+    document.querySelector<HTMLElement>(".vertexa")?.classList.add("vx-menu-intro-complete");
+  }
+
   function closeMenu() {
+    markMenuIntroComplete();
     setIsOpen(false);
+  }
+
+  function toggleMenu() {
+    markMenuIntroComplete();
+    setIsOpen((open) => !open);
   }
 
   return (
@@ -45,8 +81,12 @@ export function VertexaNavigation({ workspaceUrl }: VertexaNavigationProps) {
         />
       )}
 
-      <header className="vx-header" data-menu-open={isOpen}>
-        <a className="vx-wordmark" href="/vertexa" aria-label="Vertexa Group home">
+      <header
+        className="vx-header"
+        data-menu-open={isOpen}
+        data-page-intro={pathname === "/vertexa"}
+      >
+        <Link className="vx-wordmark" href="/vertexa" aria-label="Vertexa Group home">
           <span className="vx-symbol" aria-hidden="true">
             <span />
             <span />
@@ -56,7 +96,7 @@ export function VertexaNavigation({ workspaceUrl }: VertexaNavigationProps) {
           <span className="vx-wordmark-name">
             VERTEXA <span>GROUP</span>
           </span>
-        </a>
+        </Link>
 
         <div className="vx-menu">
           <button
@@ -66,7 +106,7 @@ export function VertexaNavigation({ workspaceUrl }: VertexaNavigationProps) {
             aria-label={isOpen ? "Close main navigation" : "Open main navigation"}
             aria-expanded={isOpen}
             aria-controls="vx-main-navigation"
-            onClick={() => setIsOpen((open) => !open)}
+            onClick={toggleMenu}
           >
             <span className="vx-menu-label">Menu</span>
             <span className="vx-menu-icon" aria-hidden="true">
@@ -76,6 +116,7 @@ export function VertexaNavigation({ workspaceUrl }: VertexaNavigationProps) {
           </button>
 
           <nav
+            ref={panelRef}
             className="vx-menu-panel"
             id="vx-main-navigation"
             aria-label="Main navigation"
@@ -86,20 +127,59 @@ export function VertexaNavigation({ workspaceUrl }: VertexaNavigationProps) {
               }
             }}
           >
-            <a href="#philosophy">Bespoke homes</a>
-            <a href="#values">Our values</a>
-            <a href="#projects">Featured projects</a>
-            <a href="#collaborators">Our collaborators</a>
-            <a href="#contact">Contact</a>
-            <a href={workspaceUrl}>
-              Project workspace <span aria-hidden="true">↗</span>
-            </a>
+            <Link
+              href="/vertexa/projects"
+              aria-current={
+                isProjectsSection ? (isProjectsIndex ? "page" : "true") : undefined
+              }
+            >
+              Projects
+            </Link>
+            <Link
+              href="/vertexa/collaborators"
+              aria-current={isCollaborators ? "page" : undefined}
+            >
+              Our collaborators
+            </Link>
+            <Link
+              href="/vertexa/about"
+              aria-current={isAbout ? "page" : undefined}
+            >
+              About
+            </Link>
+            <details className="vx-menu-services">
+              <summary>Our Services</summary>
+              <div className="vx-menu-services-panel">
+                <ul>
+                  <li>
+                    <Link href="/vertexa/projects?service=custom-homes">
+                      Custom Home Construction
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/vertexa/projects?service=renovations">
+                      Home Renovations
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href="/vertexa/projects?service=extensions">
+                      Home Extensions
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </details>
+            <Link href="/vertexa#contact">Contact</Link>
           </nav>
         </div>
 
-        <a className="vx-header-contact" href="#contact" onClick={closeMenu}>
+        <Link
+          className="vx-header-contact"
+          href="/vertexa#contact"
+          onClick={closeMenu}
+        >
           Let&apos;s Talk
-        </a>
+        </Link>
       </header>
     </>
   );
