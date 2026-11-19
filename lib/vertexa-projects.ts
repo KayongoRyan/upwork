@@ -30,15 +30,15 @@ export const vertexaProjects: VertexaProject[] = [
     slug: "calibre",
     title: "Calibre",
     year: "2025",
-    location: "Toorak, VIC",
+    location: "Kacyiru, Kigali",
     service: "custom-homes",
     image:
       "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1400&q=88",
     alt: "Light-filled contemporary living room opening onto a garden",
     summary:
-      "A quiet composition of stone, timber and glass on a deep Toorak allotment.",
+      "A quiet composition of stone, timber and glass on a hillside plot in Kacyiru.",
     story: [
-      "Calibre began with a simple brief: a family home that would feel settled the moment the front door closed. Working alongside Cumulus Studio, we shaped the plan around a north-facing courtyard, letting light travel deep into the centre of the house while keeping the street elevation restrained.",
+      "Calibre began with a simple brief: a family home that would feel settled the moment the front door closed. Working alongside Sketch Design Rwanda, we shaped the plan around a courtyard that catches the afternoon light, letting it travel deep into the centre of the house while keeping the street elevation restrained.",
       "The material palette is deliberately narrow — honed limestone, quarter-sawn oak and hand-finished plaster — so that texture, rather than colour, does the talking. Every junction was resolved on site with the architect, which is where the calm of the finished rooms really comes from.",
     ],
     scope: [
@@ -64,15 +64,15 @@ export const vertexaProjects: VertexaProject[] = [
     slug: "aveline-house",
     title: "Aveline House",
     year: "2025",
-    location: "Brighton, VIC",
+    location: "Rebero, Kigali",
     service: "custom-homes",
     image:
       "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=88",
     alt: "Warm timber and stone kitchen in a new custom home",
     summary:
-      "A coastal family home organised around a long kitchen and a garden that runs to the fence line.",
+      "A family home on the Rebero ridge organised around a long kitchen and a garden that runs to the fence line.",
     story: [
-      "Aveline House sits on a wide Brighton block where the garden is as important as the building. We arranged the home around a long kitchen and living spine, opening it to the north with deep eaves that temper the summer sun.",
+      "Aveline House sits on a wide Rebero plot where the garden is as important as the building. We arranged the home around a long kitchen and living spine, opening it to the valley views with deep eaves that temper the midday sun.",
       "Timber, stone and a restrained white palette carry from the entry through to the back garden. The detail work — shadow lines, flush thresholds, concealed storage — was drawn early and protected throughout the build.",
     ],
     scope: [
@@ -98,16 +98,16 @@ export const vertexaProjects: VertexaProject[] = [
     slug: "northcote-terrace",
     title: "Northcote Terrace",
     year: "2024",
-    location: "Northcote, VIC",
+    location: "Kimihurura, Kigali",
     service: "renovations",
     image:
       "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1400&q=88",
     alt: "Renovated terrace interior with original details and modern joinery",
     summary:
-      "A tired Victorian terrace reworked behind its original facade.",
+      "A character home in Kimihurura reworked behind its original street façade.",
     story: [
       "Northcote Terrace had good bones and a difficult plan: dark rooms, a lean-to at the rear, and a garden cut off from the house. Our work began at the back, replacing the addition with a light-filled living wing that steps down to the garden.",
-      "Original cornices, archways and Baltic pine floors were repaired rather than replaced. New joinery picks up the same profiles in a contemporary language, so the old and new parts of the house read as one.",
+      "Original cornices, archways and timber floors were repaired rather than replaced. New joinery picks up the same profiles in a contemporary language, so the old and new parts of the house read as one.",
     ],
     scope: [
       "Heritage renovation",
@@ -132,13 +132,13 @@ export const vertexaProjects: VertexaProject[] = [
     slug: "elm-and-stone",
     title: "Elm & Stone",
     year: "2024",
-    location: "Hawthorn, VIC",
+    location: "Remera, Kigali",
     service: "renovations",
     image:
       "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=88",
     alt: "Considered renovation with stone surfaces and soft natural light",
     summary:
-      "A measured renovation that opens a Hawthorn home to its garden.",
+      "A measured renovation that opens a Remera home to its garden.",
     story: [
       "Elm & Stone was a renovation of restraint. The clients loved the proportions of the existing rooms but wanted the house to breathe — more light, fewer walls, a better connection to the garden.",
       "We removed a central corridor, widened two openings and rebuilt the kitchen in stone and elm veneer. Services were upgraded throughout so the visible work could stay quiet and the house could perform properly for another generation.",
@@ -166,15 +166,15 @@ export const vertexaProjects: VertexaProject[] = [
     slug: "the-courtyard",
     title: "The Courtyard",
     year: "2023",
-    location: "Kew, VIC",
+    location: "Nyarutarama, Kigali",
     service: "extensions",
     image:
       "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1400&q=88",
     alt: "Glass-walled extension opening onto a private courtyard",
     summary:
-      "A glass-walled extension wrapped around a private courtyard in Kew.",
+      "A glass-walled extension wrapped around a private courtyard in Nyarutarama.",
     story: [
-      "The Courtyard adds a new living and dining room to a 1920s Kew residence, arranged around a walled garden rather than out toward the street. Glazing runs the full length of the addition, framed in slim steel so the garden reads as part of the interior.",
+      "The Courtyard adds a new living and dining room to a 1970s Nyarutarama residence, arranged around a walled garden rather than out toward the street. Glazing runs the full length of the addition, framed in slim steel so the garden reads as part of the interior.",
       "A timber-lined ceiling lifts the roofline and softens the acoustics. The junction between old brick and new steel was the most carefully detailed part of the project, and it is the part visitors notice first.",
     ],
     scope: [
@@ -200,13 +200,13 @@ export const vertexaProjects: VertexaProject[] = [
     slug: "garden-pavilion",
     title: "Garden Pavilion",
     year: "2023",
-    location: "Armadale, VIC",
+    location: "Gisozi, Kigali",
     service: "extensions",
     image:
       "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1400&q=88",
     alt: "Garden pavilion extension with timber ceilings and full-height glazing",
     summary:
-      "A pavilion extension that gives an Armadale home a second living room in the garden.",
+      "A pavilion extension that gives a Gisozi home a second living room in the garden.",
     story: [
       "Garden Pavilion was conceived as a room in the garden rather than an addition to the house. Set slightly apart from the original building, it is linked by a glazed passage that frames a view of the lawn on arrival.",
       "The pavilion is built in timber and glass, with a deep timber ceiling and polished concrete floors. It works equally well as a studio, a guest room or a place to sit with the doors open.",

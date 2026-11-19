@@ -153,7 +153,7 @@ export default function CollaboratorsPage() {
 
           <figcaption className="vx-collab-quote-credit">
             <span className="vx-about-dot" aria-hidden="true" />
-            Cumulus Studio
+            Sketch Design Rwanda
           </figcaption>
         </figure>
       </section>

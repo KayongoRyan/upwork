@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { VertexaNavigation } from "@/components/vertexa/navigation";
 import { VertexaSiteFooter } from "@/components/vertexa/site-footer";
 import { RevealText } from "@/components/vertexa/reveal-text";
 import { ContactForm } from "@/components/vertexa/contact-form";
 
 export const metadata: Metadata = {
-  title: { absolute: "Contact | Vertexa Group" },
+  title: { absolute: "Project inquiry | Vertexa Group" },
   description:
-    "Get in touch with Vertexa Group. We build custom homes, renovations and extensions across Western Australia.",
+    "Submit a project inquiry to Vertexa Group — custom homes, renovations, and extensions across Rwanda.",
 };
 
 const detailItems = [
   {
     label: "Studio",
-    value: "Subiaco, Western Australia",
+    value: "Kacyiru, Kigali",
     note: "By appointment",
   },
   {
@@ -48,7 +49,7 @@ export default function ContactPage() {
         </p>
 
         <h1 className="vx-contact-heading" id="vx-contact-title">
-          <RevealText text="Let’s build something together" stagger={40} />
+          <RevealText text="Let’s talk about your project" stagger={40} />
         </h1>
 
         <div className="vx-contact-rule" />
@@ -62,7 +63,7 @@ export default function ContactPage() {
           <div className="vx-contact-copy">
             <p>
               <RevealText
-                text="Have a project in mind? We work closely with homeowners, architects and designers from first sketch to final detail. Send us a message and we’ll get back to you within one business day."
+                text="Tell us about your site, brief, and timeline. We work closely with homeowners, architects, and designers from first sketch to final detail and respond within one business day."
                 stagger={7}
               />
             </p>
@@ -74,7 +75,7 @@ export default function ContactPage() {
         <div className="vx-contact-grid">
           <div className="vx-contact-details">
             <h2 id="vx-contact-details-title" className="vx-contact-details-heading">
-              <RevealText text="Get in touch" stagger={30} />
+              <RevealText text="Studio" stagger={30} />
             </h2>
             <div className="vx-contact-divider" />
             <dl className="vx-contact-list">
@@ -99,7 +100,9 @@ export default function ContactPage() {
           </div>
 
           <div className="vx-contact-form-wrap">
-            <ContactForm />
+            <Suspense fallback={<p className="vx-contact-sending">Loading form…</p>}>
+              <ContactForm />
+            </Suspense>
           </div>
         </div>
       </section>

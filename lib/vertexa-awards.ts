@@ -6,22 +6,22 @@ export type VertexaAward = {
 
 export const vertexaAwards: VertexaAward[] = [
   {
-    organisation: "Master Builders Association",
+    organisation: "Rwanda Institute of Architects",
     award: "Custom Home of the Year",
     year: "25",
   },
   {
-    organisation: "HIA Victoria",
+    organisation: "Kigali Construction Forum",
     award: "Renovation of the Year",
     year: "24",
   },
   {
-    organisation: "Design Matters Awards",
+    organisation: "East Africa Design Awards",
     award: "Residential Extension",
     year: "23",
   },
   {
-    organisation: "Victorian Architecture Awards",
+    organisation: "Rwanda Housing Authority",
     award: "Residential Alterations",
     year: "22",
   },

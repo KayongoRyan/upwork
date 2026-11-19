@@ -12,24 +12,24 @@ const testimonials = [
       "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
   },
   {
-    name: "James Oduya",
-    role: "Property Developer",
+    name: "Patrick Bizimana",
+    role: "Property Developer, Gasabo",
     quote:
       "From the first conversation to handover, Vertexa brought a level of craft and care that exceeded every expectation. We will not build with anyone else.",
     avatar:
       "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
   },
   {
-    name: "Amina Hassan",
-    role: "Architect, Nairobi",
+    name: "Aline Keza",
+    role: "Architect, Kigali",
     quote:
       "Vertexa are exceptional collaborators. They respect the design intent down to the last detail, and their craftsmanship speaks for itself on every project.",
     avatar:
       "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80",
   },
   {
-    name: "Michael Rutherford",
-    role: "Interior Designer",
+    name: "Eric Nshimiyimana",
+    role: "Interior Designer, Kigali",
     quote:
       "The team brought precision and genuine passion to every phase of the build. A rare combination that made our collaboration effortless.",
     avatar:

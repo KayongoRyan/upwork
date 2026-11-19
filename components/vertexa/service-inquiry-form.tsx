@@ -3,20 +3,13 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-
-type ServiceId = "custom-homes" | "renovations" | "extensions";
+import { inquiryErrorMessage } from "@/lib/vertexa-inquiry";
+import type { VertexaServiceId } from "@/lib/vertexa-projects";
 
 type ServiceInquiryFormProps = {
-  service: ServiceId;
+  service: VertexaServiceId;
   className?: string;
 };
-
-function errorMessage(errorParam: string): string {
-  if (errorParam === "invalid-name") return "Please enter a valid name.";
-  if (errorParam === "invalid-email") return "Please enter a valid email address.";
-  if (errorParam === "invalid-message") return "Please tell us a little more about your project.";
-  return "Something went wrong. Please try again.";
-}
 
 export function ServiceInquiryForm({ service, className }: ServiceInquiryFormProps) {
   const params = useSearchParams();
@@ -33,7 +26,7 @@ export function ServiceInquiryForm({ service, className }: ServiceInquiryFormPro
 
   const [error, setError] = useState<string | null>(() => {
     if (!initialErrorParam) return null;
-    return errorMessage(initialErrorParam);
+    return inquiryErrorMessage(initialErrorParam);
   });
 
   useEffect(() => {
@@ -74,7 +67,7 @@ export function ServiceInquiryForm({ service, className }: ServiceInquiryFormPro
 
       if (responseError) {
         setStatus("error");
-        setError(errorMessage(responseError));
+        setError(inquiryErrorMessage(responseError));
         return;
       }
 
@@ -120,7 +113,7 @@ export function ServiceInquiryForm({ service, className }: ServiceInquiryFormPro
               type="text"
               required
               autoComplete="name"
-              placeholder="e.g. Alex Morgan"
+              placeholder="e.g. Jean Pierre Habimana"
               defaultValue={status === "error" ? "" : undefined}
             />
           </div>
@@ -133,7 +126,7 @@ export function ServiceInquiryForm({ service, className }: ServiceInquiryFormPro
               type="email"
               required
               autoComplete="email"
-              placeholder="e.g. alex@example.com"
+              placeholder="e.g. jp.habimana@example.com"
               defaultValue={status === "error" ? "" : undefined}
             />
           </div>
@@ -146,7 +139,7 @@ export function ServiceInquiryForm({ service, className }: ServiceInquiryFormPro
               required
               rows={6}
               autoComplete="off"
-              placeholder="Tell us about your project — timeline, budget range, and any ideas you have so far."
+              placeholder="Tell us about your project — timeline, budget range in RWF, and any ideas you have so far."
               defaultValue={status === "error" ? "" : undefined}
             />
           </div>
