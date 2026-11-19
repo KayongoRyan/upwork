@@ -48,7 +48,13 @@ export function VertexaNavigation() {
       }
     }
 
+    const dismiss = { ready: false };
+    const timeout = window.setTimeout(() => {
+      dismiss.ready = true;
+    }, 0);
+
     function handlePointerDown(event: PointerEvent) {
+      if (!dismiss.ready) return;
       if (headerRef.current?.contains(event.target as Node)) return;
       setIsOpen(false);
     }
@@ -63,6 +69,7 @@ export function VertexaNavigation() {
     window.addEventListener("resize", handleResize);
 
     return () => {
+      window.clearTimeout(timeout);
       document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("resize", handleResize);
@@ -76,32 +83,12 @@ export function VertexaNavigation() {
       .forEach((details) => details.removeAttribute("open"));
   }, [isOpen]);
 
-  useEffect(() => {
-    const root = document.querySelector<HTMLElement>(".vertexa");
-    if (root === null) return;
-
-    const markIntroComplete = () => root.classList.add("vx-menu-intro-complete");
-
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      markIntroComplete();
-      return;
-    }
-
-    const timer = window.setTimeout(markIntroComplete, 2400);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  function markMenuIntroComplete() {
-    document.querySelector<HTMLElement>(".vertexa")?.classList.add("vx-menu-intro-complete");
-  }
-
   function closeMenu() {
-    markMenuIntroComplete();
     setIsOpen(false);
   }
 
-  function toggleMenu() {
-    markMenuIntroComplete();
+  function toggleMenu(event: React.MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
     setIsOpen((open) => !open);
   }
 

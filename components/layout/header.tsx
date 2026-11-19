@@ -22,6 +22,7 @@ export function Header({
   },
   crumbs,
   scope = "all",
+  userId,
   siteCode,
   portfolio,
   search,
@@ -39,7 +40,7 @@ export function Header({
 }) {
   const { settings, notifications: allNotifications, markNotification } = useAdmin();
   const notifications = scope === "field"
-    ? allNotifications.filter((item) => isManagerFieldNotice(item, portfolio ?? []))
+    ? allNotifications.filter((item) => isManagerFieldNotice(item, portfolio ?? [], userId))
     : scope === "site"
       ? allNotifications.filter((item) => Boolean(siteCode) && `${item.title} ${item.message}`.includes(siteCode ?? ""))
       : allNotifications;

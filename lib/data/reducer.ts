@@ -74,6 +74,14 @@ export type AdminAction =
   | { type: "mark-all-notifications" }
   | { type: "update-settings"; patch: Partial<AdminState["settings"]>; stamp?: Stamp }
   | { type: "support-request"; topic: string; message: string; stamp: Stamp }
+  | {
+      type: "vertexa-inquiry";
+      serviceName: string;
+      clientName: string;
+      message: string;
+      recipientId: string;
+      stamp: Stamp;
+    }
   | { type: "delete-support-note"; id: string; stamp: Stamp };
 
 export function adminReducer(state: AdminState, action: AdminAction): AdminState {
@@ -965,6 +973,44 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         action.topic,
         "success",
       );
+    case "vertexa-inquiry": {
+      const title = `New project inquiry — ${action.serviceName}`;
+      const shared = {
+        type: "system" as const,
+        title,
+        message: action.message,
+        senderName: action.clientName,
+        projectId: null,
+        read: false,
+        createdAt: action.stamp.at,
+      };
+      const noteId = action.stamp.notificationId ?? `ntf-${action.stamp.id}`;
+      return audit(
+        {
+          ...state,
+          notifications: [
+            {
+              ...shared,
+              id: `${noteId}-admin`,
+              source: "administrator",
+            },
+            {
+              ...shared,
+              id: `${noteId}-pm`,
+              source: "administrator",
+              recipientId: action.recipientId,
+            },
+            ...state.notifications,
+          ],
+        },
+        action.stamp,
+        "Received a Vertexa project inquiry",
+        "Vertexa",
+        action.serviceName,
+        "success",
+        { id: "vertexa-public", name: action.clientName },
+      );
+    }
     case "delete-support-note":
       return {
         ...state,

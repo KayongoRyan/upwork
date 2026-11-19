@@ -317,7 +317,7 @@ export function usePm() {
     surveyors: data.users.filter((user) => user.role === "quantity_surveyor" && user.status === "active" && user.projectId && ids.has(user.projectId)),
     engineers: data.users.filter((user) => user.role === "site_engineer" && user.status === "active"),
     crew: data.employees.filter((employee) => employee.projectId && ids.has(employee.projectId) && employee.status !== "inactive"),
-    inbox: data.notifications.filter((item) => isManagerFieldNotice(item, projects)),
+    inbox: data.notifications.filter((item) => isManagerFieldNotice(item, projects, actor?.id)),
     users: data.users,
     submitReport: data.submitEngineerReport,
     submitCostReport(projectId: string): ActionResult {
