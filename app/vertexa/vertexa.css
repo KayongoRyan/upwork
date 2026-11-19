@@ -108,8 +108,8 @@
   background: #f2f1ed;
   transition:
     width 700ms cubic-bezier(0.22, 1, 0.36, 1),
-    background-color 450ms ease,
-    border-radius 350ms ease;
+    background-color 200ms ease,
+    border-radius 240ms ease;
 }
 
 .vx-menu:hover,
@@ -133,7 +133,7 @@
   line-height: 1;
   letter-spacing: 0.01em;
   text-align: left;
-  transition: color 400ms ease;
+  transition: color 220ms ease;
 }
 
 .vx-menu:hover .vx-menu-toggle,
@@ -182,7 +182,7 @@
   opacity: 1;
   visibility: visible;
   pointer-events: none;
-  transition: grid-template-rows 500ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: grid-template-rows 340ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .vx-menu-panel-inner {
@@ -260,6 +260,9 @@
   width: min(420px, calc(100vw - 6.4vw));
   border-radius: 8px;
   background: var(--vx-ink);
+  transition:
+    width 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 240ms ease;
 }
 
 .vx-header[data-menu-open="true"] .vx-menu-toggle {
@@ -267,6 +270,7 @@
   justify-content: space-between;
   padding: 0 clamp(20px, 2.2vw, 28px);
   color: var(--vx-paper);
+  transition: none;
 }
 
 .vx-header[data-menu-open="true"] .vx-menu-icon {
@@ -277,24 +281,30 @@
   width: min(320px, calc(100vw - 6.4vw));
 }
 
+.vx-header[data-scrolled="true"]:not([data-menu-open="true"]) .vx-menu:hover,
+.vx-header[data-scrolled="true"]:not([data-menu-open="true"])
+  .vx-menu:has(.vx-menu-toggle:focus-visible) {
+  width: min(420px, calc(100vw - 6.4vw));
+}
+
 .vx-header[data-menu-open="true"] .vx-menu-panel-inner > * {
-  animation: vx-menu-link-reveal 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: vx-menu-link-reveal 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .vx-header[data-menu-open="true"] .vx-menu-panel-inner > :nth-child(2) {
-  animation-delay: 45ms;
+  animation-delay: 25ms;
 }
 
 .vx-header[data-menu-open="true"] .vx-menu-panel-inner > :nth-child(3) {
-  animation-delay: 90ms;
+  animation-delay: 50ms;
 }
 
 .vx-header[data-menu-open="true"] .vx-menu-panel-inner > :nth-child(4) {
-  animation-delay: 135ms;
+  animation-delay: 75ms;
 }
 
 .vx-header[data-menu-open="true"] .vx-menu-panel-inner > :nth-child(5) {
-  animation-delay: 180ms;
+  animation-delay: 100ms;
 }
 
 .vx-menu-services {
@@ -3974,6 +3984,7 @@
     position: static;
     width: 48px;
     min-width: 0;
+    order: 3;
     overflow: visible;
     transform: none;
     border-radius: 0;
@@ -3987,10 +3998,6 @@
 
   .vx-header-contact {
     order: 2;
-  }
-
-  .vx-menu {
-    order: 3;
   }
 
   .vx-menu:hover,
@@ -4433,6 +4440,12 @@
     animation: vx-intro-mark 800ms ease-in-out 900ms both;
   }
 
+  @media (max-width: 1023.98px) {
+    .vx-intro-mark {
+      --vx-mark-top: 21px;
+    }
+  }
+
   .vx-intro .vx-symbol span {
     background: #fff;
     animation: vx-load-square 250ms ease-in-out both;
@@ -4457,8 +4470,11 @@
     animation: vx-load-talk 400ms cubic-bezier(0.075, 0.82, 0.165, 1) 1800ms both;
   }
 
-  .vertexa .vx-header[data-page-intro="true"] .vx-menu {
-    animation: vx-load-menu 400ms cubic-bezier(0.075, 0.82, 0.165, 1) 1800ms both;
+  @media (min-width: 1024px) {
+    .vertexa .vx-header[data-page-intro="true"] .vx-menu {
+      animation: vx-load-menu 400ms cubic-bezier(0.075, 0.82, 0.165, 1) 1800ms
+        both;
+    }
   }
 
   .vertexa.vx-menu-intro-complete .vx-header:not([data-menu-open="true"]) .vx-menu {
@@ -4541,7 +4557,7 @@
 
 @media (max-width: 760px) and (prefers-reduced-motion: no-preference) {
   .vx-intro-mark {
-    --vx-mark-top: 24px;
+    --vx-mark-top: 21px;
     --vx-mark-left: 22px;
     --vx-mark-size: 30px;
   }
