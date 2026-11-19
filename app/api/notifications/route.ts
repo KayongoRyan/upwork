@@ -45,7 +45,7 @@ function visible(state: ReturnType<typeof readState>, back: string, item: AppNot
   if (back === "/admin/notifications") return true;
   if (back === "/pm/notifications") {
     const projects = state.projects.filter((project) => project.managerId === PREVIEW_PM_ID);
-    return isManagerFieldNotice(item, projects);
+    return isManagerFieldNotice(item, projects, PREVIEW_PM_ID);
   }
   const surveyor = state.users.find((user) => user.id === PREVIEW_QS_ID);
   const project = state.projects.find((item) => item.id === surveyor?.projectId);

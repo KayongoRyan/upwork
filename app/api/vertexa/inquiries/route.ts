@@ -2,6 +2,7 @@ import { applyAction } from "@/lib/server/memory";
 import { redirectTo } from "@/lib/server/redirect";
 import { createInquiry } from "@/lib/server/inquiries";
 import { isVertexaInquiryServiceId, type VertexaInquiryServiceId } from "@/lib/vertexa-inquiry";
+import { managerIdForVertexaInquiry } from "@/lib/vertexa-inquiry-routing";
 import { serviceLabel } from "@/lib/vertexa-projects";
 
 export const runtime = "nodejs";
@@ -92,9 +93,11 @@ export async function POST(request: Request) {
 
   const stamp = { id: inquiry.id, at: inquiry.createdAt, notificationId: `ntf-${inquiry.id}` };
   await applyAction({
-    type: "support-request",
-    topic: `Vertexa inquiry — ${serviceName}`,
+    type: "vertexa-inquiry",
+    serviceName,
+    clientName: name,
     message: detailLines,
+    recipientId: managerIdForVertexaInquiry(serviceId),
     stamp,
   });
 

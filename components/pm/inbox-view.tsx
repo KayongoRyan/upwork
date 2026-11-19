@@ -17,7 +17,7 @@ export function PmInbox() {
     <div>
       <PageHeader
         title="Inbox"
-        description="Daily reports and other notices from the site engineers on your projects. Comments the administrator writes on the work land here, and stay on this portal."
+        description="Site engineer notices, Vertexa project inquiries from the public site, and administrator comments on your work."
       />
       {data.comments.length > 0 ? (
         <section className="mb-6">
@@ -34,7 +34,9 @@ export function PmInbox() {
           </ul>
         </section>
       ) : null}
-      {data.inbox.length === 0 ? <EmptyState title="No incoming notices" body="Engineer and surveyor notices will show here." /> : (
+      {data.inbox.length === 0 ? (
+        <EmptyState title="No incoming notices" body="Engineer notices and Vertexa inquiries will show here." />
+      ) : (
         <ul className="space-y-2">
           {data.inbox.map((item) => (
             <li key={item.id} className="rounded-[22px] border border-black/5 bg-card px-4 py-3">
