@@ -6,7 +6,10 @@ import { usePathname } from "next/navigation";
 
 export function VertexaNavigation() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isFooterInView, setIsFooterInView] = useState(false);
   const pathname = usePathname();
+  const headerRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const isProjectsSection = pathname.startsWith("/vertexa/projects");
@@ -15,10 +18,28 @@ export function VertexaNavigation() {
   const isAbout = pathname === "/vertexa/about";
 
   useEffect(() => {
-    if (!isOpen) return;
+    const updateScrollState = () => setIsScrolled(window.scrollY > 24);
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    updateScrollState();
+    window.addEventListener("scroll", updateScrollState, { passive: true });
+    return () => window.removeEventListener("scroll", updateScrollState);
+  }, []);
+
+  useEffect(() => {
+    const footer = document.querySelector(".vx-footer");
+    if (footer === null) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsFooterInView(entry.isIntersecting),
+      { threshold: 0.08 },
+    );
+    observer.observe(footer);
+
+    return () => observer.disconnect();
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!isOpen) return;
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -27,10 +48,24 @@ export function VertexaNavigation() {
       }
     }
 
+    function handlePointerDown(event: PointerEvent) {
+      if (headerRef.current?.contains(event.target as Node)) return;
+      setIsOpen(false);
+    }
+
+    function handleResize() {
+      if (window.innerWidth < 1024) return;
+      setIsOpen(false);
+    }
+
     document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("resize", handleResize);
+
     return () => {
-      document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("resize", handleResize);
     };
   }, [isOpen]);
 
@@ -71,62 +106,56 @@ export function VertexaNavigation() {
   }
 
   return (
-    <>
-      {isOpen && (
+    <header
+      ref={headerRef}
+      className="vx-header"
+      data-menu-open={isOpen}
+      data-scrolled={isScrolled}
+      data-footer-in-view={isFooterInView}
+      data-page-intro={pathname === "/vertexa"}
+    >
+      <Link className="vx-wordmark" href="/vertexa" aria-label="Vertexa Group home">
+        <span className="vx-symbol" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+          <span />
+        </span>
+        <span className="vx-wordmark-name">
+          VERTEXA <span>GROUP</span>
+        </span>
+      </Link>
+
+      <div className="vx-menu">
         <button
-          className="vx-menu-backdrop"
+          ref={menuButtonRef}
+          className="vx-menu-toggle"
           type="button"
-          aria-label="Close navigation menu"
-          onClick={closeMenu}
-        />
-      )}
-
-      <header
-        className="vx-header"
-        data-menu-open={isOpen}
-        data-page-intro={pathname === "/vertexa"}
-      >
-        <Link className="vx-wordmark" href="/vertexa" aria-label="Vertexa Group home">
-          <span className="vx-symbol" aria-hidden="true">
-            <span />
-            <span />
+          aria-label={isOpen ? "Close main navigation" : "Open main navigation"}
+          aria-expanded={isOpen}
+          aria-controls="vx-main-navigation"
+          onClick={toggleMenu}
+        >
+          <span className="vx-menu-label">Menu</span>
+          <span className="vx-menu-icon" aria-hidden="true">
             <span />
             <span />
           </span>
-          <span className="vx-wordmark-name">
-            VERTEXA <span>GROUP</span>
-          </span>
-        </Link>
+        </button>
 
-        <div className="vx-menu">
-          <button
-            ref={menuButtonRef}
-            className="vx-menu-toggle"
-            type="button"
-            aria-label={isOpen ? "Close main navigation" : "Open main navigation"}
-            aria-expanded={isOpen}
-            aria-controls="vx-main-navigation"
-            onClick={toggleMenu}
-          >
-            <span className="vx-menu-label">Menu</span>
-            <span className="vx-menu-icon" aria-hidden="true">
-              <span />
-              <span />
-            </span>
-          </button>
-
-          <nav
-            ref={panelRef}
-            className="vx-menu-panel"
-            id="vx-main-navigation"
-            aria-label="Main navigation"
-            inert={!isOpen}
-            onClick={(event) => {
-              if (event.target instanceof Element && event.target.closest("a")) {
-                closeMenu();
-              }
-            }}
-          >
+        <nav
+          ref={panelRef}
+          className="vx-menu-panel"
+          id="vx-main-navigation"
+          aria-label="Main navigation"
+          inert={!isOpen}
+          onClick={(event) => {
+            if (event.target instanceof Element && event.target.closest("a")) {
+              closeMenu();
+            }
+          }}
+        >
+          <div className="vx-menu-panel-inner">
             <Link
               href="/vertexa/projects"
               aria-current={
@@ -179,17 +208,17 @@ export function VertexaNavigation() {
               </div>
             </details>
             <Link href="/vertexa/contact">Contact</Link>
-          </nav>
-        </div>
+          </div>
+        </nav>
+      </div>
 
-        <Link
-          className="vx-header-contact"
-          href="/vertexa/contact"
-          onClick={closeMenu}
-        >
-          Let&apos;s Talk
-        </Link>
-      </header>
-    </>
+      <Link
+        className="vx-header-contact"
+        href="/vertexa/contact"
+        onClick={closeMenu}
+      >
+        Let&apos;s Talk
+      </Link>
+    </header>
   );
 }

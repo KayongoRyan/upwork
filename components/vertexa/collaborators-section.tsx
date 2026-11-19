@@ -4,9 +4,9 @@ import {
 } from "@/components/vertexa/collaborators-carousel";
 
 const collaborators = [
-  { name: "Cumulus Studio", role: "Award winning architecture" },
-  { name: "Sussex", role: "Australian leading tapware" },
-  { name: "Sketch Design & Interiors", role: "Architects" },
+  { name: "Sketch Design Rwanda", role: "Award-winning architecture" },
+  { name: "Fine Ceramics Kigali", role: "Premium surfaces & tapware" },
+  { name: "Umutako Interiors", role: "Interior design" },
   { name: "Miele", role: "Premium appliances" },
   { name: "Bespoke", role: "Windows and doors" },
 ];
@@ -16,19 +16,19 @@ const carouselSlides: VertexaCollaboratorSlide[] = [
     image:
       "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=86",
     alt: "Architectural timber joinery and stone kitchen detail",
-    caption: "In close partnership with Cumulus Studio",
+    caption: "In close partnership with Sketch Design Rwanda",
   },
   {
     image:
       "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=1400&q=86",
     alt: "Refined bathroom detail with brushed tapware",
-    caption: "Beautiful tapware by Sussex Taps",
+    caption: "Beautiful surfaces by Fine Ceramics Kigali",
   },
   {
     image:
       "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1400&q=86",
     alt: "Considered interior with soft furnishings and natural light",
-    caption: "Award-winning interiors by Sketch Design",
+    caption: "Award-winning interiors by Umutako Interiors",
   },
   {
     image:

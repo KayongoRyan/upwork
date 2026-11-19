@@ -14,9 +14,9 @@ export const metadata: Metadata = {
 };
 
 const collaborators = [
-  { name: "Cumulus Studio", role: "Award winning architecture" },
-  { name: "Sussex", role: "Australian leading tapware" },
-  { name: "Sketch Design & Interiors", role: "Architects" },
+  { name: "Sketch Design Rwanda", role: "Award-winning architecture" },
+  { name: "Fine Ceramics Kigali", role: "Premium surfaces & tapware" },
+  { name: "Umutako Interiors", role: "Interior design" },
   { name: "Miele", role: "Premium appliances" },
   { name: "Bespoke", role: "Windows and doors" },
 ];
