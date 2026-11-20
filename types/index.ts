@@ -106,6 +106,36 @@ export interface AppNotification {
   createdAt: string;
 }
 
+export type InquiryStatus = "received" | "assigned" | "closed";
+
+export interface InquiryNote {
+  id: string;
+  author: string;
+  body: string;
+  createdAt: string;
+}
+
+/** A public-site inquiry stored in MongoDB by the Express API. */
+export interface VertexaInquiry {
+  id: string;
+  scope: string;
+  serviceId: string;
+  serviceName: string;
+  name: string;
+  email: string;
+  phone: string;
+  location: string;
+  budget: string | null;
+  startDate: string | null;
+  message: string;
+  recipientId: string;
+  projectId: string | null;
+  status: InquiryStatus;
+  notes: InquiryNote[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TaskItem {
   id: string;
   title: string;

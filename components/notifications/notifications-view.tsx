@@ -88,9 +88,16 @@ export function NotificationsView() {
                   <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{item.message}</p>
                   <p className="mt-2 text-xs text-muted-foreground">{item.senderName} · {formatDateTime(item.createdAt)}</p>
                 </div>
-                <Button type="button" size="sm" variant="outline" onClick={() => data.markNotification(item.id, !item.read)}>
-                  {item.read ? "Mark unread" : "Mark as read"}
-                </Button>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  {item.source === "vertexa" ? (
+                    <Button asChild size="sm" variant="outline">
+                      <a href={`/admin/inquiries/${inquiryIdFromNotice(item.id)}`}>Open inquiry</a>
+                    </Button>
+                  ) : null}
+                  <Button type="button" size="sm" variant="outline" onClick={() => data.markNotification(item.id, !item.read)}>
+                    {item.read ? "Mark unread" : "Mark as read"}
+                  </Button>
+                </div>
               </div>
             </li>
           ))}
@@ -110,4 +117,8 @@ function filterHref(portal: (typeof portalFilters)[number], type: (typeof typeFi
 
 function readFilter<T extends string>(allowed: readonly T[], value: string | null): T {
   return allowed.find((item) => item === value) ?? allowed[0];
+}
+
+function inquiryIdFromNotice(id: string): string {
+  return id.replace(/^ntf-/, "").replace(/-(admin|pm)$/, "");
 }

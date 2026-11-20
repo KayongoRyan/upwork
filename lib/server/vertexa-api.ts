@@ -7,10 +7,11 @@
  * project-manager inbox notifications. This app only translates the result back into
  * the redirect contract the forms already understand (`?saved=1` / `?error=<code>`).
  * It also reads the notifications the API wrote to MongoDB so the CPMIS inboxes can
- * show public-site inquiries alongside the demo workspace's notices.
+ * show public-site inquiries alongside the demo workspace's notices, and exposes the
+ * inquiry record to the administrator's ops screen.
  */
 
-import type { AppNotification, NotificationType } from "@/types";
+import type { AppNotification, InquiryStatus, NotificationType, VertexaInquiry } from "@/types";
 
 const DEFAULT_DEV_API_URL = "http://localhost:4000";
 const REQUEST_TIMEOUT_MS = 8_000;
@@ -226,4 +227,157 @@ export async function markAllVertexaNotificationsRead(): Promise<number> {
       .map((notice) => markVertexaNotificationRead(notice.id, true)),
   );
   return results.filter(Boolean).length;
+}
+
+const INQUIRY_ID = /^inq-[a-z0-9]+$/;
+const INQUIRY_STATUSES = new Set<InquiryStatus>(["received", "assigned", "closed"]);
+
+type ApiInquiry = Record<string, unknown>;
+
+function text(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function parseInquiry(value: unknown): VertexaInquiry | null {
+  if (!value || typeof value !== "object") return null;
+  const item = value as ApiInquiry;
+  if (
+    typeof item.id !== "string" ||
+    typeof item.name !== "string" ||
+    typeof item.email !== "string" ||
+    typeof item.createdAt !== "string" ||
+    Number.isNaN(Date.parse(item.createdAt))
+  ) {
+    return null;
+  }
+
+  const notes = Array.isArray(item.notes)
+    ? item.notes.flatMap((note) => {
+        if (!note || typeof note !== "object") return [];
+        const entry = note as ApiInquiry;
+        if (
+          typeof entry.id !== "string" ||
+          typeof entry.body !== "string" ||
+          typeof entry.createdAt !== "string" ||
+          Number.isNaN(Date.parse(entry.createdAt))
+        ) {
+          return [];
+        }
+        return [{
+          id: entry.id,
+          author: text(entry.author, "Administrator"),
+          body: entry.body,
+          createdAt: new Date(entry.createdAt).toISOString(),
+        }];
+      })
+    : [];
+
+  return {
+    id: item.id,
+    scope: text(item.scope, "service"),
+    serviceId: text(item.serviceId),
+    serviceName: text(item.serviceName, "Inquiry"),
+    name: item.name,
+    email: item.email,
+    phone: text(item.phone),
+    location: text(item.location),
+    budget: typeof item.budget === "string" ? item.budget : null,
+    startDate: typeof item.startDate === "string" ? item.startDate : null,
+    message: text(item.message),
+    recipientId: text(item.recipientId),
+    projectId: typeof item.projectId === "string" ? item.projectId : null,
+    status: INQUIRY_STATUSES.has(item.status as InquiryStatus) ? (item.status as InquiryStatus) : "received",
+    notes,
+    createdAt: new Date(item.createdAt).toISOString(),
+    updatedAt: typeof item.updatedAt === "string" && !Number.isNaN(Date.parse(item.updatedAt))
+      ? new Date(item.updatedAt).toISOString()
+      : item.createdAt,
+  };
+}
+
+/** Returns an empty list when the API is not configured or unreachable. */
+export async function listVertexaInquiries(query?: { status?: string; search?: string }): Promise<VertexaInquiry[]> {
+  const base = vertexaApiBaseUrl();
+  if (!base) return [];
+
+  const params = new URLSearchParams({ limit: "100" });
+  if (query?.status) params.set("status", query.status);
+  if (query?.search) params.set("search", query.search);
+
+  try {
+    const response = await fetch(`${base}/api/v1/inquiries?${params}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) return [];
+    const body = (await response.json().catch(() => null)) as { items?: unknown[] } | null;
+    return Array.isArray(body?.items)
+      ? body.items.flatMap((item) => {
+          const inquiry = parseInquiry(item);
+          return inquiry ? [inquiry] : [];
+        })
+      : [];
+  } catch (error) {
+    console.warn("[vertexa] inquiry list unavailable", error);
+    return [];
+  }
+}
+
+export async function getVertexaInquiry(id: string): Promise<VertexaInquiry | null> {
+  const base = vertexaApiBaseUrl();
+  if (!base || !INQUIRY_ID.test(id)) return null;
+
+  try {
+    const response = await fetch(`${base}/api/v1/inquiries/${encodeURIComponent(id)}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (response.status === 404) return null;
+    if (!response.ok) return null;
+    const body = (await response.json().catch(() => null)) as { inquiry?: unknown } | null;
+    return parseInquiry(body?.inquiry);
+  } catch (error) {
+    console.warn("[vertexa] inquiry detail unavailable", id, error);
+    return null;
+  }
+}
+
+export type InquiryUpdatePatch = {
+  status?: InquiryStatus;
+  recipientId?: string;
+  projectId?: string | null;
+  note?: string;
+  author?: string;
+};
+
+export type InquiryUpdateResult =
+  | { ok: true; inquiry: VertexaInquiry }
+  | { ok: false; error: string; status: number };
+
+export async function updateVertexaInquiry(id: string, patch: InquiryUpdatePatch): Promise<InquiryUpdateResult> {
+  const base = vertexaApiBaseUrl();
+  if (!base || !INQUIRY_ID.test(id)) return { ok: false, error: "invalid-request", status: 400 };
+
+  try {
+    const response = await fetch(`${base}/api/v1/inquiries/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    const body = (await response.json().catch(() => null)) as
+      | { ok?: unknown; inquiry?: unknown; error?: unknown }
+      | null;
+
+    if (response.ok && body?.ok === true) {
+      const inquiry = parseInquiry(body.inquiry);
+      return inquiry ? { ok: true, inquiry } : { ok: false, error: "invalid-response", status: 502 };
+    }
+
+    const error = typeof body?.error === "string" ? body.error : "unavailable";
+    return { ok: false, error, status: response.status >= 400 && response.status < 500 ? response.status : 502 };
+  } catch (error) {
+    console.warn("[vertexa] inquiry update failed", id, error);
+    return { ok: false, error: "unavailable", status: 502 };
+  }
 }

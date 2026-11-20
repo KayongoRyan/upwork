@@ -37,7 +37,9 @@ Default API: **http://localhost:4000**
 |--------|------|-------------|
 | GET | `/api/v1/health` | API + Mongo ping |
 | POST | `/api/v1/inquiries` | Create inquiry + notifications |
-| GET | `/api/v1/inquiries` | List inquiries |
+| GET | `/api/v1/inquiries` | List inquiries (`status`, `search`, `limit`) |
+| GET | `/api/v1/inquiries/:id` | Get one inquiry |
+| PATCH | `/api/v1/inquiries/:id` | Update status/recipient/project and append note |
 | GET | `/api/v1/notifications?recipientId=u-pm-2` | PM inbox |
 | GET | `/api/v1/notifications?audience=admin` | Admin inbox |
 | PATCH | `/api/v1/notifications/:id/read` | Mark read |

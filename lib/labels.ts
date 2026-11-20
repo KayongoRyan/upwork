@@ -2,6 +2,7 @@ import type {
   AccountStatus,
   ActivityStatus,
   EmploymentStatus,
+  InquiryStatus,
   NotificationSource,
   NotificationType,
   ProjectStatus,
@@ -58,6 +59,14 @@ export const notificationTypeLabel: Record<NotificationType, string> = {
   status: "Status",
   delay: "Delay",
   system: "System",
+};
+
+export const inquiryStatuses: InquiryStatus[] = ["received", "assigned", "closed"];
+
+export const inquiryStatusLabel: Record<InquiryStatus, string> = {
+  received: "Received",
+  assigned: "Assigned",
+  closed: "Closed",
 };
 
 export const taskStatusLabel: Record<TaskStatus, string> = {
