@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import { config } from "./config.js";
 import { closeDb, connectDb, mongoStartupHelp } from "./db.js";
+import { requestContext } from "./middleware/requestContext.js";
 import { requireDb } from "./middleware/requireDb.js";
 import { healthRouter } from "./routes/health.js";
 import { inquiriesRouter } from "./routes/inquiries.js";
@@ -9,12 +10,21 @@ import { notificationsRouter } from "./routes/notifications.js";
 
 const app = express();
 
-app.use(cors({ origin: config.corsOrigins, credentials: true }));
+app.disable("x-powered-by");
+app.use(requestContext);
+app.use(
+  cors({
+    origin: config.corsOrigins,
+    credentials: true,
+    exposedHeaders: ["X-Request-Id", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After"],
+  }),
+);
 app.use(express.json({ limit: "32kb" }));
 app.use(express.urlencoded({ extended: true, limit: "32kb" }));
 
 app.get("/", (_req, res) => {
   res.json({
+    ok: true,
     name: "Vertexa CPMIS API",
     version: "0.1.0",
     docs: "See backend/README.md",
@@ -24,6 +34,32 @@ app.get("/", (_req, res) => {
 app.use("/api/v1/health", healthRouter);
 app.use("/api/v1/inquiries", requireDb, inquiriesRouter);
 app.use("/api/v1/notifications", requireDb, notificationsRouter);
+
+app.use((req, res) => {
+  res.status(404).json({
+    ok: false,
+    error: "not_found",
+    requestId: req.requestId,
+  });
+});
+
+app.use((error, req, res, next) => {
+  void next;
+  console.error(`[${req.requestId ?? "no-request-id"}]`, error);
+  if (res.headersSent) return;
+  if (error?.type === "entity.parse.failed" || error instanceof SyntaxError) {
+    return res.status(400).json({
+      ok: false,
+      error: "invalid-json",
+      requestId: req.requestId,
+    });
+  }
+  res.status(500).json({
+    ok: false,
+    error: "server_error",
+    requestId: req.requestId,
+  });
+});
 
 const server = app.listen(config.port, () => {
   console.log(`Vertexa API  http://localhost:${config.port}`);

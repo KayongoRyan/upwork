@@ -14,6 +14,7 @@
 import type { AppNotification, InquiryStatus, NotificationType, VertexaInquiry } from "@/types";
 
 const DEFAULT_DEV_API_URL = "http://localhost:4000";
+const DEV_API_KEY = "dev-vertexa-api-key";
 const REQUEST_TIMEOUT_MS = 8_000;
 
 /** Connection-level failures mean nothing reached the API, so a retry elsewhere is safe. */
@@ -63,6 +64,31 @@ export function vertexaApiBaseUrl(): string | null {
 /** Development may fall back to the in-memory store when the API is not running. */
 export function canUseInMemoryFallback(): boolean {
   return process.env.NODE_ENV !== "production";
+}
+
+function adminApiKey(): string {
+  const configured = process.env.VERTEXA_API_KEY?.trim() || process.env.API_KEY?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV !== "production") return DEV_API_KEY;
+  return "";
+}
+
+function adminHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const headers: Record<string, string> = { accept: "application/json", ...extra };
+  const key = adminApiKey();
+  if (key) headers["x-api-key"] = key;
+  return headers;
+}
+
+function readError(body: unknown, fallback = "unavailable"): string {
+  if (!body || typeof body !== "object") return fallback;
+  const value = (body as { error?: unknown }).error;
+  return typeof value === "string" && value ? value : fallback;
+}
+
+function failureStatus(response: Response): number {
+  if (response.status === 401 || response.status === 403 || response.status === 429) return response.status;
+  return response.status >= 400 && response.status < 500 ? response.status : 502;
 }
 
 export async function forwardVertexaInquiry(
@@ -141,30 +167,40 @@ export function isVertexaNotificationId(id: string): boolean {
  * Returns an empty list (rather than throwing) when the API is not configured or
  * not reachable: the CPMIS demo workspace must keep working on its own store.
  */
-export async function listVertexaNotifications(): Promise<AppNotification[]> {
+export type VertexaNotificationsResult = {
+  items: AppNotification[];
+  error?: string;
+  status?: number;
+};
+
+export async function listVertexaNotifications(): Promise<VertexaNotificationsResult> {
   const base = vertexaApiBaseUrl();
-  if (!base) return [];
+  if (!base) return { items: [], error: "not_configured", status: 503 };
 
   let response: Response;
   try {
     response = await fetch(`${base}/api/v1/notifications?limit=100`, {
       cache: "no-store",
+      headers: adminHeaders(),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
     console.warn("[vertexa] inbox notifications unavailable", error);
-    return [];
+    return { items: [], error: "unavailable", status: 502 };
   }
+
+  const body = (await response.json().catch(() => null)) as
+    | { items?: ApiNotification[]; error?: string }
+    | null;
 
   if (!response.ok) {
-    console.warn(`[vertexa] inbox notifications returned ${response.status}`);
-    return [];
+    console.warn(`[vertexa] inbox notifications returned ${response.status}`, body ?? "");
+    return { items: [], error: readError(body), status: failureStatus(response) };
   }
 
-  const body = (await response.json().catch(() => null)) as { items?: ApiNotification[] } | null;
-  if (!Array.isArray(body?.items)) return [];
+  if (!Array.isArray(body?.items)) return { items: [] };
 
-  return body.items.flatMap((item) => {
+  const items = body.items.flatMap((item) => {
     if (
       item.source !== "vertexa" ||
       typeof item.id !== "string" ||
@@ -192,26 +228,36 @@ export async function listVertexaNotifications(): Promise<AppNotification[]> {
     };
     return [notice];
   });
+
+  return { items };
 }
 
-export async function markVertexaNotificationRead(id: string, read: boolean): Promise<boolean> {
+export type VertexaNotificationWriteResult = { ok: boolean; error?: string; status?: number };
+
+export async function markVertexaNotificationRead(
+  id: string,
+  read: boolean,
+): Promise<VertexaNotificationWriteResult> {
   const base = vertexaApiBaseUrl();
-  if (!base || !isVertexaNotificationId(id)) return false;
+  if (!base || !isVertexaNotificationId(id)) {
+    return { ok: false, error: "invalid-request", status: 400 };
+  }
 
   try {
-    const response = await fetch(
-      `${base}/api/v1/notifications/${encodeURIComponent(id)}/read`,
-      {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ read }),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      },
-    );
-    return response.ok;
+    const response = await fetch(`${base}/api/v1/notifications/${encodeURIComponent(id)}/read`, {
+      method: "PATCH",
+      headers: adminHeaders({ "content-type": "application/json" }),
+      body: JSON.stringify({ read }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (!response.ok) {
+      return { ok: false, error: readError(body), status: failureStatus(response) };
+    }
+    return { ok: true };
   } catch (error) {
     console.warn("[vertexa] could not update notification", id, error);
-    return false;
+    return { ok: false, error: "unavailable", status: 502 };
   }
 }
 
@@ -219,14 +265,27 @@ export async function markVertexaNotificationRead(id: string, read: boolean): Pr
  * Used by the administrator's "mark all as read": the backend has no bulk endpoint.
  * Only admin-audience notices are changed; PM notices belong to the manager's inbox.
  */
-export async function markAllVertexaNotificationsRead(): Promise<number> {
-  const notices = await listVertexaNotifications();
-  const results = await Promise.all(
-    notices
-      .filter((notice) => notice.audience === "admin" && !notice.read)
-      .map((notice) => markVertexaNotificationRead(notice.id, true)),
-  );
-  return results.filter(Boolean).length;
+export async function markAllVertexaNotificationsRead(): Promise<{
+  updated: number;
+  error?: string;
+  status?: number;
+}> {
+  const listed = await listVertexaNotifications();
+  if (listed.error) {
+    return { updated: 0, error: listed.error, status: listed.status ?? 502 };
+  }
+
+  const targets = listed.items.filter((notice) => notice.audience === "admin" && !notice.read);
+  let updated = 0;
+  let firstError: { error?: string; status?: number } | null = null;
+
+  for (const notice of targets) {
+    const result = await markVertexaNotificationRead(notice.id, true);
+    if (result.ok) updated += 1;
+    else if (!firstError) firstError = { error: result.error, status: result.status };
+  }
+
+  return firstError ? { updated, ...firstError } : { updated };
 }
 
 const INQUIRY_ID = /^inq-[a-z0-9]+$/;
@@ -295,10 +354,18 @@ function parseInquiry(value: unknown): VertexaInquiry | null {
   };
 }
 
-/** Returns an empty list when the API is not configured or unreachable. */
-export async function listVertexaInquiries(query?: { status?: string; search?: string }): Promise<VertexaInquiry[]> {
+export type VertexaInquiriesResult = {
+  items: VertexaInquiry[];
+  error?: string;
+  status?: number;
+};
+
+export async function listVertexaInquiries(query?: {
+  status?: string;
+  search?: string;
+}): Promise<VertexaInquiriesResult> {
   const base = vertexaApiBaseUrl();
-  if (!base) return [];
+  if (!base) return { items: [], error: "not_configured", status: 503 };
 
   const params = new URLSearchParams({ limit: "100" });
   if (query?.status) params.set("status", query.status);
@@ -307,38 +374,63 @@ export async function listVertexaInquiries(query?: { status?: string; search?: s
   try {
     const response = await fetch(`${base}/api/v1/inquiries?${params}`, {
       cache: "no-store",
+      headers: adminHeaders(),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (!response.ok) return [];
-    const body = (await response.json().catch(() => null)) as { items?: unknown[] } | null;
-    return Array.isArray(body?.items)
+    const body = (await response.json().catch(() => null)) as
+      | { items?: unknown[]; error?: string }
+      | null;
+
+    if (!response.ok) {
+      return { items: [], error: readError(body), status: failureStatus(response) };
+    }
+
+    const items = Array.isArray(body?.items)
       ? body.items.flatMap((item) => {
           const inquiry = parseInquiry(item);
           return inquiry ? [inquiry] : [];
         })
       : [];
+    return { items };
   } catch (error) {
     console.warn("[vertexa] inquiry list unavailable", error);
-    return [];
+    return { items: [], error: "unavailable", status: 502 };
   }
 }
 
-export async function getVertexaInquiry(id: string): Promise<VertexaInquiry | null> {
+export type VertexaInquiryResult = {
+  inquiry: VertexaInquiry | null;
+  error?: string;
+  status?: number;
+};
+
+export async function getVertexaInquiry(id: string): Promise<VertexaInquiryResult> {
   const base = vertexaApiBaseUrl();
-  if (!base || !INQUIRY_ID.test(id)) return null;
+  if (!base || !INQUIRY_ID.test(id)) {
+    return { inquiry: null, error: "invalid-request", status: 400 };
+  }
 
   try {
     const response = await fetch(`${base}/api/v1/inquiries/${encodeURIComponent(id)}`, {
       cache: "no-store",
+      headers: adminHeaders(),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (response.status === 404) return null;
-    if (!response.ok) return null;
-    const body = (await response.json().catch(() => null)) as { inquiry?: unknown } | null;
-    return parseInquiry(body?.inquiry);
+    const body = (await response.json().catch(() => null)) as
+      | { inquiry?: unknown; error?: string }
+      | null;
+
+    if (response.status === 404) {
+      return { inquiry: null, error: "not_found", status: 404 };
+    }
+    if (!response.ok) {
+      return { inquiry: null, error: readError(body), status: failureStatus(response) };
+    }
+
+    return { inquiry: parseInquiry(body?.inquiry) };
   } catch (error) {
     console.warn("[vertexa] inquiry detail unavailable", id, error);
-    return null;
+    return { inquiry: null, error: "unavailable", status: 502 };
   }
 }
 
@@ -361,7 +453,7 @@ export async function updateVertexaInquiry(id: string, patch: InquiryUpdatePatch
   try {
     const response = await fetch(`${base}/api/v1/inquiries/${encodeURIComponent(id)}`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: adminHeaders({ "content-type": "application/json" }),
       body: JSON.stringify(patch),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -375,7 +467,7 @@ export async function updateVertexaInquiry(id: string, patch: InquiryUpdatePatch
     }
 
     const error = typeof body?.error === "string" ? body.error : "unavailable";
-    return { ok: false, error, status: response.status >= 400 && response.status < 500 ? response.status : 502 };
+    return { ok: false, error, status: failureStatus(response) };
   } catch (error) {
     console.warn("[vertexa] inquiry update failed", id, error);
     return { ok: false, error: "unavailable", status: 502 };

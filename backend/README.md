@@ -24,50 +24,59 @@ Default API: **http://localhost:4000**
 
 ## Environment (`backend/.env`)
 
-| Variable | Default |
-|----------|---------|
-| `PORT` | `4000` |
-| `MONGODB_URI` | `mongodb://127.0.0.1:27017` |
-| `MONGODB_DB` | `vertexa_cpmis` |
-| `CORS_ORIGINS` | `http://localhost:3030`, `http://localhost:3000`, … |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `4000` | HTTP port |
+| `MONGODB_URI` | `mongodb://127.0.0.1:27017` | MongoDB connection string |
+| `MONGODB_DB` | `vertexa_cpmis` | Database name |
+| `CORS_ORIGINS` | `http://localhost:3030`, `http://localhost:3000`, … | Allowed browser origins |
+| `VERTEXA_API_KEY` | `dev-vertexa-api-key` (non-production) | Shared secret for admin routes; **required in production** |
+| `INQUIRY_RATE_LIMIT_WINDOW_MS` | `600000` | Rate-limit window for public inquiry creation |
+| `INQUIRY_RATE_LIMIT_MAX` | `20` | Max public inquiry creates per IP per window |
+
+## Security and observability
+
+- **Request ID**: every request gets an `X-Request-Id` response header (echoes `X-Request-Id` when provided) and an access log line `[requestId] METHOD path status durationMs`. JSON error responses include `requestId`.
+- **Admin auth**: `GET /api/v1/inquiries`, `GET /api/v1/inquiries/:id`, `PATCH /api/v1/inquiries/:id`, and all `/api/v1/notifications*` routes require `X-API-Key: <VERTEXA_API_KEY>` or `Authorization: Bearer <VERTEXA_API_KEY>`. Missing/invalid key → `401 { ok:false, error:"unauthorized" }`. Unconfigured key → `503 { ok:false, error:"admin_auth_not_configured" }`.
+- **Public create**: `POST /api/v1/inquiries` remains accessible without admin auth but is rate-limited per client IP. Limit exceeded → `429 { ok:false, error:"rate_limited", retryAfter }` with `Retry-After`/`RateLimit-*` headers.
+- **Error shape**: JSON errors are consistent: `{ ok:false, error:"<code>", requestId, ... }`. Structured validation/workflow codes are preserved (`invalid-*`, `invalid-transition`, `not_found`, etc.). DB outages return `503 { ok:false, error:"mongodb_unavailable", ... }`.
 
 ## Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/health` | API + Mongo ping |
-| POST | `/api/v1/inquiries` | Create inquiry + notifications |
-| GET | `/api/v1/inquiries` | List inquiries (`status`, `search`, `limit`) |
-| GET | `/api/v1/inquiries/:id` | Get one inquiry |
-| PATCH | `/api/v1/inquiries/:id` | Update status/recipient/project and append note |
-| GET | `/api/v1/notifications?recipientId=u-pm-2` | PM inbox |
-| GET | `/api/v1/notifications?audience=admin` | Admin inbox |
-| PATCH | `/api/v1/notifications/:id/read` | Mark read |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v1/health` | public | API + Mongo ping |
+| POST | `/api/v1/inquiries` | public (rate-limited) | Create inquiry + notifications |
+| GET | `/api/v1/inquiries` | admin key | List inquiries (`status`, `search`, `limit`) |
+| GET | `/api/v1/inquiries/:id` | admin key | Get one inquiry |
+| PATCH | `/api/v1/inquiries/:id` | admin key | Update status/recipient/project and append note |
+| GET | `/api/v1/notifications?recipientId=u-pm-2` | admin key | PM inbox |
+| GET | `/api/v1/notifications?audience=admin` | admin key | Admin inbox |
+| PATCH | `/api/v1/notifications/:id/read` | admin key | Mark read |
 
-### Example
+Successful inquiry/notification responses include `ok: true` with `items` or `inquiry`/record payloads.
+
+### Examples
 
 ```bash
-curl -s -X POST http://localhost:4000/api/v1/inquiries -H "Content-Type: application/json" -d "{\"scope\":\"project-inquiry\",\"service\":\"custom-homes\",\"name\":\"Claudine Uwase\",\"email\":\"c@example.com\",\"phone\":\"0788123456\",\"location\":\"Kigali\",\"message\":\"Project description at least ten chars.\"}"
+# Public inquiry create (no admin key)
+curl -i -s -X POST http://localhost:4000/api/v1/inquiries \
+  -H "Content-Type: application/json" \
+  -d "{\"scope\":\"project-inquiry\",\"service\":\"custom-homes\",\"name\":\"Claudine Uwase\",\"email\":\"c@example.com\",\"phone\":\"0788123456\",\"location\":\"Kigali\",\"message\":\"Project description at least ten chars.\"}"
+
+# Admin list (requires key)
+curl -i -s http://localhost:4000/api/v1/inquiries \
+  -H "X-API-Key: dev-vertexa-api-key"
 ```
 
 MongoDB must be running locally (or use Atlas in `MONGODB_URI`).
 
-## Frontend
+## Frontend BFF
 
-The Vertexa site posts both inquiry forms to its own Next route, `/api/vertexa/inquiries`, which acts as a backend-for-frontend:
+The Next.js app talks to this API server-side and forwards the admin key from `VERTEXA_API_KEY` (development defaults to `dev-vertexa-api-key` when unset; must match the backend).
 
-1. The route validates the multipart form (same rules as `backend/src/lib/validateInquiry.js`).
-2. It forwards JSON to `POST {VERTEXA_API_URL}/api/v1/inquiries` — development defaults to `http://localhost:4000`.
-3. `201 { ok: true, inquiry }` becomes a `303` back to the form with `?saved=1`; a `400 { ok: false, error }` becomes `?error=<code>`.
-4. This API is the single source of truth: MongoDB holds the inquiry and the administrator/PM notifications. Next does not create a second copy.
+- **Public inquiry create**: `/api/vertexa/inquiries` validates browser form submissions, forwards JSON to `POST {VERTEXA_API_URL}/api/v1/inquiries`, and redirects with `?saved=1` or `?error=<code>` (`rate_limited`, `unavailable`, structured `invalid-*`, etc.). When called with a JSON request/accept, it returns JSON `{ ok, error|inquiry }` with the same structured codes.
+- **Admin inquiry ops**: `GET/PATCH /api/vertexa/inquiries` and `GET/PATCH /api/vertexa/inquiries/:id` proxy the authenticated admin inquiry routes.
+- **Notifications**: `GET/PATCH /api/vertexa/notifications` proxies the authenticated notification routes (read-through + mark-read/mark-all for admin-audience notices). The root layout seeds initial notices server-side and the provider polls every 10 seconds; the demo workspace still renders if the API is unavailable.
 
-If the API is not running in development (`ECONNREFUSED`), the route falls back to the in-memory store so the site keeps working, and logs a warning. Timeouts and 5xx responses are reported to the user as `?error=unavailable` rather than retried, because the API may already have stored the inquiry.
-
-### CPMIS inboxes
-
-The administrator and project-manager portals read the same MongoDB notices through two more Next BFF routes:
-
-- `GET /api/vertexa/notifications` → `GET {VERTEXA_API_URL}/api/v1/notifications?limit=100`. It keeps only notices with `source: "vertexa"`, maps them to CPMIS notification records (`projectId: null`, label “Vertexa site”), and returns `{ items: [] }` when the API is not configured or cannot be reached.
-- `PATCH /api/vertexa/notifications` with `{ id, read }` (or `{ all: true }`) → `PATCH {VERTEXA_API_URL}/api/v1/notifications/:id/read`. The bulk form issues one PATCH per unread admin-audience notice because the backend has no bulk endpoint; PM notices stay owned by the manager's inbox.
-
-The root layout passes the first result to `AdminProvider` so notices are present in server-rendered HTML; the provider polls every 10 seconds and merges updates with the demo store. The PM preview (`u-pm-2`) only receives notices whose backend `recipientId` is `u-pm-2`.
+Development defaults `VERTEXA_API_URL` to `http://localhost:4000`. If the API is not running in development (`ECONNREFUSED`), public inquiry create falls back to the in-memory store so the site keeps working, and logs a warning. Timeouts/5xx are reported as `unavailable` rather than retried, because the API may already have stored the inquiry. The PM preview (`u-pm-2`) only receives notices whose backend `recipientId` is `u-pm-2`.

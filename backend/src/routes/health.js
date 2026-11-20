@@ -4,7 +4,7 @@ import { ensureDb, mongoStartupHelp } from "../db.js";
 
 export const healthRouter = Router();
 
-healthRouter.get("/", async (_req, res) => {
+healthRouter.get("/", async (req, res) => {
   try {
     const database = await ensureDb();
     await database.command({ ping: 1 });
@@ -13,14 +13,17 @@ healthRouter.get("/", async (_req, res) => {
       service: "vertexa-cpmis-api",
       mongodb: "connected",
       database: config.mongoDb,
+      requestId: req.requestId,
     });
   } catch {
     res.status(503).json({
       ok: false,
+      error: "mongodb_unavailable",
       service: "vertexa-cpmis-api",
       mongodb: "disconnected",
       uri: config.mongoUri,
       help: mongoStartupHelp,
+      requestId: req.requestId,
     });
   }
 });

@@ -32,7 +32,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   await connection();
   const initialState = readState();
-  const initialNotifications = await listVertexaNotifications();
+  const { items: initialNotifications } = await listVertexaNotifications();
   const query = (await headers()).get("x-cpmis-q") ?? "";
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
