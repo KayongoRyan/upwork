@@ -32,7 +32,7 @@ npm run dev:backend
 
 Backend packages (`express`, `mongodb`, etc.) are declared in the **root** `package.json` — do not run `npm install` inside `backend/` unless you have plenty of disk space.
 
-Default: http://localhost:4000 — the frontend still uses in-memory routes until you point it at this API (see backend README).
+The API runs at http://localhost:4000 and owns Vertexa inquiries: both form types post to this app's `/api/vertexa/inquiries` route, which validates the submission, forwards it as JSON to `POST /api/v1/inquiries`, and redirects back with `?saved=1` or `?error=<code>`. Set `VERTEXA_API_URL` to use another host (see `.env.example`). Development defaults to `http://localhost:4000`; if nothing is listening there the inquiry is kept in memory so the site still works, and production never silently stores a second copy.
 
 - Administrator: http://localhost:3000/admin
 - Project manager: http://localhost:3001/pm

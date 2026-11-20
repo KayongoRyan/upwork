@@ -1,6 +1,10 @@
 import { nextId } from "@/lib/utils";
 import type { VertexaInquiryServiceId } from "@/lib/vertexa-inquiry";
 
+/**
+ * Development-only fallback store. Inquiries normally live in MongoDB through
+ * the Express API; this keeps the site usable when that API is not running.
+ */
 export type VertexaInquiry = {
   id: string;
   service: VertexaInquiryServiceId;
@@ -17,10 +21,6 @@ export type VertexaInquiry = {
 
 const inquiries: VertexaInquiry[] = [];
 
-export function listInquiries(): VertexaInquiry[] {
-  return [...inquiries].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
 export function createInquiry(
   input: Omit<VertexaInquiry, "id" | "createdAt" | "read">
 ): VertexaInquiry {
@@ -32,15 +32,4 @@ export function createInquiry(
   };
   inquiries.push(inquiry);
   return inquiry;
-}
-
-export function getInquiry(id: string): VertexaInquiry | undefined {
-  return inquiries.find((inquiry) => inquiry.id === id);
-}
-
-export function markInquiryRead(id: string): boolean {
-  const inquiry = inquiries.find((i) => i.id === id);
-  if (!inquiry) return false;
-  inquiry.read = true;
-  return true;
 }

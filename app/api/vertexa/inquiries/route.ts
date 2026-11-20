@@ -1,6 +1,12 @@
 import { applyAction } from "@/lib/server/memory";
 import { redirectTo } from "@/lib/server/redirect";
 import { createInquiry } from "@/lib/server/inquiries";
+import {
+  canUseInMemoryFallback,
+  forwardVertexaInquiry,
+  vertexaApiBaseUrl,
+  type VertexaInquiryPayload,
+} from "@/lib/server/vertexa-api";
 import { isVertexaInquiryServiceId, type VertexaInquiryServiceId } from "@/lib/vertexa-inquiry";
 import { managerIdForVertexaInquiry } from "@/lib/vertexa-inquiry-routing";
 import { serviceLabel } from "@/lib/vertexa-projects";
@@ -10,6 +16,19 @@ export const dynamic = "force-dynamic";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^[\d\s()+\-./]{6,30}$/;
+const DEFAULT_RETURN_TO = "/vertexa/contact";
+
+/** Only same-site paths: `//host` and `https://host` would leave the site. */
+function safeReturnTo(value: string): string {
+  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) {
+    return DEFAULT_RETURN_TO;
+  }
+  return value;
+}
+
+function inquiryHash(id: string): string {
+  return id.startsWith("inq-") ? id : `inq-${id}`;
+}
 
 export async function POST(request: Request) {
   const form = await request.formData();
@@ -22,7 +41,7 @@ export async function POST(request: Request) {
   const budgetRaw = String(form.get("budget") ?? "").trim();
   const startDateRaw = String(form.get("startDate") ?? "").trim();
   const message = String(form.get("message") ?? "").trim();
-  const returnTo = String(form.get("returnTo") ?? "/vertexa/contact");
+  const returnTo = safeReturnTo(String(form.get("returnTo") ?? ""));
 
   if (!isVertexaInquiryServiceId(service)) {
     return redirectTo(request, returnTo, { error: "invalid-service" });
@@ -64,6 +83,42 @@ export async function POST(request: Request) {
   }
 
   const serviceId = service as VertexaInquiryServiceId;
+  const payload: VertexaInquiryPayload = {
+    scope,
+    service: serviceId,
+    name,
+    email,
+    phone,
+    location,
+    budget,
+    startDate,
+    message,
+  };
+
+  const apiBase = vertexaApiBaseUrl();
+
+  if (apiBase) {
+    const result = await forwardVertexaInquiry(apiBase, payload);
+
+    if (result.status === "created") {
+      return redirectTo(request, returnTo, { saved: "1" }, inquiryHash(result.id));
+    }
+
+    if (result.status === "rejected") {
+      return redirectTo(request, returnTo, { error: result.error });
+    }
+
+    // Offline only means "nothing was listening", so a local copy cannot duplicate
+    // a stored inquiry. Anything ambiguous (timeout, 5xx) is reported as unavailable.
+    if (result.status !== "offline" || !canUseInMemoryFallback()) {
+      return redirectTo(request, returnTo, { error: "unavailable" });
+    }
+
+    console.warn(
+      "[vertexa] API unreachable — storing this inquiry in memory. Run `npm run dev:backend` to persist inquiries.",
+    );
+  }
+
   const inquiry = createInquiry({
     service: serviceId,
     name,
@@ -101,5 +156,5 @@ export async function POST(request: Request) {
     stamp,
   });
 
-  return redirectTo(request, returnTo, { saved: "1" }, `inq-${inquiry.id}`);
+  return redirectTo(request, returnTo, { saved: "1" }, inquiryHash(inquiry.id));
 }

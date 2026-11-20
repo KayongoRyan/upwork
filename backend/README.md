@@ -52,4 +52,11 @@ MongoDB must be running locally (or use Atlas in `MONGODB_URI`).
 
 ## Frontend
 
-Next.js still uses in-memory `/api/vertexa/inquiries` until you proxy to this service (`VERTEXA_API_URL`).
+The Vertexa site posts both inquiry forms to its own Next route, `/api/vertexa/inquiries`, which acts as a backend-for-frontend:
+
+1. The route validates the multipart form (same rules as `backend/src/lib/validateInquiry.js`).
+2. It forwards JSON to `POST {VERTEXA_API_URL}/api/v1/inquiries` — development defaults to `http://localhost:4000`.
+3. `201 { ok: true, inquiry }` becomes a `303` back to the form with `?saved=1`; a `400 { ok: false, error }` becomes `?error=<code>`.
+4. This API is the single source of truth: MongoDB holds the inquiry and the administrator/PM notifications. Next does not create a second copy.
+
+If the API is not running in development (`ECONNREFUSED`), the route falls back to the in-memory store so the site keeps working, and logs a warning. Timeouts and 5xx responses are reported to the user as `?error=unavailable` rather than retried, because the API may already have stored the inquiry.

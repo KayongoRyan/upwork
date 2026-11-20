@@ -25,6 +25,8 @@ export function inquiryErrorMessage(code: string): string {
     "invalid-budget": "Budget looks too long — use a short RWF range or note (e.g. RWF 250M – 350M).",
     "invalid-start-date": "Please choose a valid expected start date.",
     "invalid-message": "Please add a project description (at least 10 characters).",
+    unavailable:
+      "We couldn't reach the project inbox just now. Please try again in a moment, or call us and we'll take the details down.",
   };
   return messages[code] ?? "Something went wrong. Please try again.";
 }
