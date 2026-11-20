@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 const testimonials = [
@@ -74,9 +75,9 @@ export function VertexaTestimonials() {
           <p className="vx-testimonials-subtitle">
             Real feedback from clients who trusted us to deliver their home.
           </p>
-          <a className="vx-testimonials-cta" href="#contact">
+          <Link className="vx-testimonials-cta" href="/vertexa/contact">
             Work With Us <span aria-hidden="true">→</span>
-          </a>
+          </Link>
         </div>
       </div>
 
