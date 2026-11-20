@@ -6,11 +6,18 @@ export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  const inquiry = await getVertexaInquiry(id);
-  if (!inquiry) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const result = await getVertexaInquiry(id);
+  if (result.error || !result.inquiry) {
+    const status = result.status ?? (result.error === "not_found" ? 404 : 502);
+    return NextResponse.json(
+      { ok: false, error: result.error ?? "not_found" },
+      { status, headers: { "cache-control": "no-store" } },
+    );
   }
-  return NextResponse.json({ inquiry }, { headers: { "cache-control": "no-store" } });
+  return NextResponse.json(
+    { ok: true, inquiry: result.inquiry },
+    { headers: { "cache-control": "no-store" } },
+  );
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {

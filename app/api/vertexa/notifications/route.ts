@@ -10,8 +10,17 @@ export const dynamic = "force-dynamic";
 
 /** Notification notices stored by the Express API, in the CPMIS shape. */
 export async function GET() {
+  const result = await listVertexaNotifications();
+  if (result.error) {
+    // The inboxes treat the BFF as best-effort; surface an empty list rather
+    // than breaking the demo workspace when auth/config is unavailable.
+    return NextResponse.json(
+      { ok: false, items: [], error: result.error },
+      { status: 200, headers: { "cache-control": "no-store" } },
+    );
+  }
   return NextResponse.json(
-    { items: await listVertexaNotifications() },
+    { ok: true, items: result.items },
     { headers: { "cache-control": "no-store" } },
   );
 }
@@ -22,14 +31,30 @@ export async function PATCH(request: Request) {
     | null;
 
   if (body?.all === true) {
-    const updated = await markAllVertexaNotificationsRead();
-    return NextResponse.json({ ok: true, updated });
+    const result = await markAllVertexaNotificationsRead();
+    if (result.error && result.updated === 0) {
+      return NextResponse.json(
+        { ok: false, updated: 0, error: result.error },
+        { status: result.status ?? 502 },
+      );
+    }
+    return NextResponse.json({
+      ok: !result.error,
+      updated: result.updated,
+      ...(result.error ? { error: result.error } : {}),
+    });
   }
 
   if (typeof body?.id !== "string" || typeof body.read !== "boolean") {
     return NextResponse.json({ ok: false, error: "invalid-request" }, { status: 400 });
   }
 
-  const ok = await markVertexaNotificationRead(body.id, body.read);
-  return NextResponse.json({ ok }, { status: ok ? 200 : 502 });
+  const result = await markVertexaNotificationRead(body.id, body.read);
+  if (!result.ok) {
+    return NextResponse.json(
+      { ok: false, error: result.error ?? "unavailable" },
+      { status: result.status ?? 502 },
+    );
+  }
+  return NextResponse.json({ ok: true });
 }
