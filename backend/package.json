@@ -1,0 +1,15 @@
+{
+  "name": "vertexa-cpmis-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Express API — dependencies are installed at the repo root (see backend/README.md).",
+  "scripts": {
+    "predev": "node scripts/check-deps.mjs",
+    "predev:backend": "node scripts/check-deps.mjs",
+    "prestart": "node scripts/check-deps.mjs",
+    "dev": "node --watch src/index.js",
+    "dev:backend": "node --watch src/index.js",
+    "start": "node src/index.js"
+  }
+}
