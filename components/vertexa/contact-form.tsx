@@ -19,6 +19,9 @@ export function ContactForm() {
     const saved = params.get("saved") === "1";
     const errorParam = params.get("error");
     if (saved) {
+      // Applying the redirect result after hydration keeps the server markup
+      // and the first client render identical.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus("sent");
       setError(null);
     } else if (errorParam) {

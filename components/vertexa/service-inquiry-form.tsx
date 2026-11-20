@@ -11,23 +11,31 @@ type ServiceInquiryFormProps = {
   className?: string;
 };
 
+type FormStatus = "idle" | "submitting" | "sent" | "error";
+
 export function ServiceInquiryForm({ service, className }: ServiceInquiryFormProps) {
   const params = useSearchParams();
   const pathname = usePathname();
 
-  const initialSaved = params.get("saved") === "1";
-  const initialErrorParam = params.get("error");
+  const [status, setStatus] = useState<FormStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
 
-  const [status, setStatus] = useState<"idle" | "submitting" | "sent" | "error">(() => {
-    if (initialSaved) return "sent";
-    if (initialErrorParam) return "error";
-    return "idle";
-  });
-
-  const [error, setError] = useState<string | null>(() => {
-    if (!initialErrorParam) return null;
-    return inquiryErrorMessage(initialErrorParam);
-  });
+  // Same contract as the contact form: the route redirects with ?saved=1 or
+  // ?error=<code>, and the message can also arrive via a full page load.
+  useEffect(() => {
+    const saved = params.get("saved") === "1";
+    const errorParam = params.get("error");
+    if (saved) {
+      // Applying the redirect result after hydration keeps the server markup
+      // and the first client render identical.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStatus("sent");
+      setError(null);
+    } else if (errorParam) {
+      setStatus("error");
+      setError(inquiryErrorMessage(errorParam));
+    }
+  }, [params]);
 
   useEffect(() => {
     if (status === "sent" || status === "error") {
@@ -48,6 +56,7 @@ export function ServiceInquiryForm({ service, className }: ServiceInquiryFormPro
 
     const formData = new FormData(event.currentTarget as HTMLFormElement);
     formData.set("service", service);
+    formData.set("returnTo", pathname);
 
     try {
       const response = await fetch("/api/vertexa/inquiries", {
