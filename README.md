@@ -20,6 +20,20 @@ npm install
 npm run dev
 ```
 
+### Backend API (Express + MongoDB)
+
+The API lives in [`backend/`](backend/README.md). It is separate from the Next.js app and stores Vertexa inquiries in MongoDB.
+
+```bash
+npm install
+copy backend\env.example backend\.env
+npm run dev:backend
+```
+
+Backend packages (`express`, `mongodb`, etc.) are declared in the **root** `package.json` — do not run `npm install` inside `backend/` unless you have plenty of disk space.
+
+Default: http://localhost:4000 — the frontend still uses in-memory routes until you point it at this API (see backend README).
+
 - Administrator: http://localhost:3000/admin
 - Project manager: http://localhost:3001/pm
 - Site engineer: http://localhost:3002/se

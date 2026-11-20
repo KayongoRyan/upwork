@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "node server.js --dev",
+    "dev:backend": "node --watch backend/src/index.js",
+    "mongo:local": "node backend/scripts/mongo-local.mjs",
     "build": "next build",
     "start": "node server.js",
     "lint": "eslint"
@@ -20,8 +22,12 @@
     "@radix-ui/react-tooltip": "^1.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.3",
     "framer-motion": "^14.9.1",
     "lucide-react": "^1.69.0",
+    "mongodb": "^6.22.0",
     "next": "16.4.5",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -38,6 +44,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "mongodb-memory-server": "^11.3.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
