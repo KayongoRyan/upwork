@@ -8,6 +8,7 @@ import { nextId, PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID } from "@/lib/utils
 import type {
   ActionResult,
   AdminState,
+  AppNotification,
   BoqInput,
   DocumentRevision,
   ProjectDocument,
@@ -29,14 +30,55 @@ import type {
 interface AdminContextValue {
   state: AdminState;
   dispatch: (action: AdminAction) => void;
+  /** Demo-store notices merged with the ones MongoDB holds for the public site. */
+  notifications: AppNotification[];
+  markNotification: (id: string, read: boolean) => void;
+  markAllNotifications: () => void;
 }
 
 const AdminContext = createContext<AdminContextValue | null>(null);
 
-export function AdminProvider({ initialState, children }: { initialState: AdminState; children: React.ReactNode }) {
+export function AdminProvider({
+  initialState,
+  initialNotifications = [],
+  children,
+}: {
+  initialState: AdminState;
+  initialNotifications?: AppNotification[];
+  children: React.ReactNode;
+}) {
   const [state, setState] = useState(initialState);
+  const [remoteNotices, setRemoteNotices] = useState<AppNotification[]>(initialNotifications);
+  const remoteIds = useRef<Set<string>>(new Set(initialNotifications.map((item) => item.id)));
   const pending = useRef(0);
   const chain = useRef(Promise.resolve());
+
+  // CPMIS keeps its demo state in memory; the public site writes to MongoDB.
+  // Poll the API through the Next route so both inboxes show the same notices.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const response = await fetch("/api/vertexa/notifications", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as { items?: AppNotification[] };
+        const items = Array.isArray(data.items) ? data.items : [];
+        if (cancelled) return;
+        remoteIds.current = new Set(items.map((item) => item.id));
+        setRemoteNotices((current) =>
+          JSON.stringify(current) === JSON.stringify(items) ? current : items,
+        );
+      } catch {
+        /* the demo workspace still works without the API */
+      }
+    }
+    void load();
+    const timer = window.setInterval(load, 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const dispatch = useCallback((action: AdminAction) => {
     setState((current) => adminReducer(current, action));
@@ -69,7 +111,45 @@ export function AdminProvider({ initialState, children }: { initialState: AdminS
     return () => window.clearInterval(timer);
   }, []);
 
-  const value = useMemo(() => ({ state, dispatch }), [state, dispatch]);
+  const notifications = useMemo(() => {
+    const demoIds = new Set(state.notifications.map((item) => item.id));
+    return [...remoteNotices.filter((item) => !demoIds.has(item.id)), ...state.notifications];
+  }, [state.notifications, remoteNotices]);
+
+  const patchRemoteNotice = useCallback((body: Record<string, unknown>) => {
+    void fetch("/api/vertexa/notifications", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => undefined);
+  }, []);
+
+  const markNotification = useCallback(
+    (id: string, read: boolean) => {
+      if (remoteIds.current.has(id)) {
+        setRemoteNotices((current) =>
+          current.map((item) => (item.id === id ? { ...item, read } : item)),
+        );
+        patchRemoteNotice({ id, read });
+        return;
+      }
+      dispatch({ type: "mark-notification", id, read });
+    },
+    [dispatch, patchRemoteNotice],
+  );
+
+  const markAllNotifications = useCallback(() => {
+    dispatch({ type: "mark-all-notifications" });
+    setRemoteNotices((current) =>
+      current.map((item) => (item.audience === "admin" ? { ...item, read: true } : item)),
+    );
+    patchRemoteNotice({ all: true });
+  }, [dispatch, patchRemoteNotice]);
+
+  const value = useMemo(
+    () => ({ state, dispatch, notifications, markNotification, markAllNotifications }),
+    [state, dispatch, notifications, markNotification, markAllNotifications],
+  );
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }
 
@@ -85,10 +165,13 @@ function stamp() {
 }
 
 export function useAdmin() {
-  const { state, dispatch } = useAdminContext();
+  const { state, dispatch, notifications, markNotification, markAllNotifications } = useAdminContext();
 
   return {
     ...state,
+    notifications,
+    markNotification,
+    markAllNotifications,
     createProject(input: ProjectInput): ActionResult {
       const code = input.code.trim().toUpperCase();
       if (state.projects.some((project) => project.code.toUpperCase() === code)) {
@@ -273,12 +356,6 @@ export function useAdmin() {
       if (!(state.documents ?? []).some((item) => item.id === documentId)) return { ok: false, error: "That document is not on the register." };
       dispatch({ type: "set-document-access", documentId, access, stamp: stamp() });
       return { ok: true };
-    },
-    markNotification(id: string, read: boolean) {
-      dispatch({ type: "mark-notification", id, read });
-    },
-    markAllNotifications() {
-      dispatch({ type: "mark-all-notifications" });
     },
     updateSettings(patch: Partial<OrgSettings>) {
       dispatch({ type: "update-settings", patch, stamp: stamp() });

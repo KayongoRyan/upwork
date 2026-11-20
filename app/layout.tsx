@@ -8,6 +8,7 @@ import { SearchQueryProvider } from "@/components/search/search-query";
 import { AdminProvider } from "@/lib/data/admin-store";
 import { readBoundPorts } from "@/lib/portals";
 import { readState } from "@/lib/server/memory";
+import { listVertexaNotifications } from "@/lib/server/vertexa-api";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,6 +32,7 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   await connection();
   const initialState = readState();
+  const initialNotifications = await listVertexaNotifications();
   const query = (await headers()).get("x-cpmis-q") ?? "";
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
@@ -38,7 +40,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <DocumentListeners />
         <SearchQueryProvider query={query}>
           <PortalPortsProvider ports={readBoundPorts()}>
-            <AdminProvider initialState={initialState}>{children}</AdminProvider>
+            <AdminProvider initialState={initialState} initialNotifications={initialNotifications}>
+              {children}
+            </AdminProvider>
           </PortalPortsProvider>
         </SearchQueryProvider>
       </body>

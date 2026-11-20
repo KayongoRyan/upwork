@@ -9,6 +9,7 @@ import {
   FileBarChart,
   Files,
   FolderKanban,
+  Inbox,
   LayoutDashboard,
   LifeBuoy,
   Ruler,
@@ -72,6 +73,13 @@ export const navItems: NavItem[] = [
     icon: BarChart3,
     section: "Main",
     description: "Performance, budget, and workforce summaries.",
+  },
+  {
+    href: "/admin/inquiries",
+    label: "Inquiries",
+    icon: Inbox,
+    section: "Main",
+    description: "Public-site leads from the Vertexa API, with status, notes, and project linking.",
   },
   {
     href: "/admin/overview",

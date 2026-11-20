@@ -1,6 +1,11 @@
 import { isManagerFieldNotice } from "@/lib/notices";
 import { applyAction, readState } from "@/lib/server/memory";
 import { redirectTo } from "@/lib/server/redirect";
+import {
+  isVertexaNotificationId,
+  markAllVertexaNotificationsRead,
+  markVertexaNotificationRead,
+} from "@/lib/server/vertexa-api";
 import { PREVIEW_PM_ID, PREVIEW_QS_ID } from "@/lib/utils";
 import type { AppNotification } from "@/types";
 
@@ -8,7 +13,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const RETURNS = new Set(["/admin/notifications", "/pm/notifications", "/qs/notices"]);
-const PORTALS = new Set(["project_manager", "site_engineer", "quantity_surveyor"]);
+const PORTALS = new Set(["project_manager", "site_engineer", "quantity_surveyor", "vertexa"]);
 const TYPES = new Set(["unread", "project", "user", "status", "delay", "system"]);
 
 export async function POST(request: Request) {
@@ -21,12 +26,18 @@ export async function POST(request: Request) {
   if (form.get("all") === "1") {
     if (back !== "/admin/notifications") return redirectTo(request, back);
     await applyAction({ type: "mark-all-notifications" });
+    await markAllVertexaNotificationsRead();
     return redirectTo(request, back, { ...query, read: "all" });
   }
 
   const id = String(form.get("id") ?? "");
-  const item = state.notifications.find((notice) => notice.id === id);
   const read = form.get("read") !== "0";
+  if (isVertexaNotificationId(id)) {
+    await markVertexaNotificationRead(id, read);
+    return redirectTo(request, back, query, id);
+  }
+
+  const item = state.notifications.find((notice) => notice.id === id);
   if (!item || !visible(state, back, item)) return redirectTo(request, back, query);
   await applyAction({ type: "mark-notification", id, read });
   return redirectTo(request, back, query, id);

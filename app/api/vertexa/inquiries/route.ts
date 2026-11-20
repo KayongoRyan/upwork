@@ -1,9 +1,11 @@
+import { NextResponse } from "next/server";
 import { applyAction } from "@/lib/server/memory";
 import { redirectTo } from "@/lib/server/redirect";
 import { createInquiry } from "@/lib/server/inquiries";
 import {
   canUseInMemoryFallback,
   forwardVertexaInquiry,
+  listVertexaInquiries,
   vertexaApiBaseUrl,
   type VertexaInquiryPayload,
 } from "@/lib/server/vertexa-api";
@@ -28,6 +30,22 @@ function safeReturnTo(value: string): string {
 
 function inquiryHash(id: string): string {
   return id.startsWith("inq-") ? id : `inq-${id}`;
+}
+
+/** Administrator ops list. Reads through to MongoDB; the demo store has no inquiries. */
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const status = url.searchParams.get("status") ?? "all";
+  const search = url.searchParams.get("search") ?? "";
+  return NextResponse.json(
+    {
+      items: await listVertexaInquiries({
+        status: status === "all" ? undefined : status,
+        search,
+      }),
+    },
+    { headers: { "cache-control": "no-store" } },
+  );
 }
 
 export async function POST(request: Request) {

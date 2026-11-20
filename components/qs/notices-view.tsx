@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useQuantitySurveyor } from "@/lib/data/admin-store";
-import { roleLabel } from "@/lib/labels";
+import { noticeSourceLabel } from "@/lib/labels";
 import { formatDateTime } from "@/lib/utils";
 
 export function QsNotices() {
@@ -25,7 +25,7 @@ export function QsNotices() {
                   <div className="flex flex-wrap items-center gap-2">
                     {!item.read ? <span className="size-2 rounded-full bg-accent" /> : null}
                     <h2 className="text-sm font-semibold">{item.title}</h2>
-                    <Badge tone="amber">{roleLabel[item.source]}</Badge>
+                    <Badge tone="amber">{noticeSourceLabel(item.source)}</Badge>
                   </div>
                   <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{item.message}</p>
                   <p className="mt-2 text-xs text-muted-foreground">{item.senderName} · {formatDateTime(item.createdAt)}</p>

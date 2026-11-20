@@ -2,6 +2,8 @@ import type {
   AccountStatus,
   ActivityStatus,
   EmploymentStatus,
+  InquiryStatus,
+  NotificationSource,
   NotificationType,
   ProjectStatus,
   TaskPriority,
@@ -23,6 +25,15 @@ export const roleLabel: Record<UserRole, string> = {
   site_engineer: "Site Engineer",
   quantity_surveyor: "Quantity Surveyor",
 };
+
+export const notificationSourceLabel: Record<NotificationSource, string> = {
+  ...roleLabel,
+  vertexa: "Vertexa site",
+};
+
+export function noticeSourceLabel(source: NotificationSource): string {
+  return notificationSourceLabel[source] ?? source;
+}
 
 export const accountStatusLabel: Record<AccountStatus, string> = {
   active: "Active",
@@ -48,6 +59,14 @@ export const notificationTypeLabel: Record<NotificationType, string> = {
   status: "Status",
   delay: "Delay",
   system: "System",
+};
+
+export const inquiryStatuses: InquiryStatus[] = ["received", "assigned", "closed"];
+
+export const inquiryStatusLabel: Record<InquiryStatus, string> = {
+  received: "Received",
+  assigned: "Assigned",
+  closed: "Closed",
 };
 
 export const taskStatusLabel: Record<TaskStatus, string> = {
