@@ -7,18 +7,24 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAdmin } from "@/lib/data/admin-store";
-import { notificationTypeLabel, roleLabel } from "@/lib/labels";
+import { noticeSourceLabel, notificationTypeLabel } from "@/lib/labels";
 import { formatDateTime } from "@/lib/utils";
-import type { NotificationType, UserRole } from "@/types";
+import type { NotificationType } from "@/types";
 
 const typeFilters = ["all", "unread", "project", "user", "status", "delay", "system"] as const;
-const portalFilters = ["all", "project_manager", "site_engineer", "quantity_surveyor"] as const;
+const portalFilters = ["all", "project_manager", "site_engineer", "quantity_surveyor", "vertexa"] as const;
+const workPortals = new Set<(typeof portalFilters)[number]>([
+  "project_manager",
+  "site_engineer",
+  "quantity_surveyor",
+]);
 
 const portalFilterLabel: Record<(typeof portalFilters)[number], string> = {
   all: "All portals",
   project_manager: "Project Manager",
   site_engineer: "Site Engineer",
   quantity_surveyor: "Quantity Surveyor",
+  vertexa: "Vertexa site",
 };
 
 export function NotificationsView() {
@@ -37,15 +43,14 @@ export function NotificationsView() {
       <PageHeader
         title="Notifications"
         description={portal === "all"
-          ? "The administrator inbox. Notices raised in the Project Manager, Site Engineer, and Quantity Surveyor portals land here."
-          : `${portalFilterLabel[portal]} dashboard and the work on that portal. A comment goes only to the project manager.`}
+          ? "The administrator inbox. Notices from the Project Manager, Site Engineer, and Quantity Surveyor portals and the public Vertexa site land here."
+          : portal === "vertexa"
+            ? "Inquiries submitted on the public site, stored in MongoDB by the Vertexa API."
+            : `${portalFilterLabel[portal]} dashboard and the work on that portal. A comment goes only to the project manager.`}
         actions={
-          <form action="/api/notifications" method="post">
-            <input type="hidden" name="all" value="1" />
-            <input type="hidden" name="return" value="/admin/notifications" />
-            <FilterFields portal={portal} type={filter} />
-            <Button type="submit" variant="outline">Mark all as read</Button>
-          </form>
+          <Button type="button" variant="outline" onClick={() => data.markAllNotifications()}>
+            Mark all as read
+          </Button>
         }
       />
       <div className="mb-3 flex flex-wrap gap-2">
@@ -64,8 +69,10 @@ export function NotificationsView() {
           </Button>
         ))}
       </div>
-      {portal !== "all" ? <PortalWork portal={portal} type={filter} /> : null}
-      {portal !== "all" ? <h2 className="mb-2 text-sm font-semibold">Notices</h2> : null}
+      {workPortals.has(portal) ? (
+        <PortalWork portal={portal as "project_manager" | "site_engineer" | "quantity_surveyor"} type={filter} />
+      ) : null}
+      {workPortals.has(portal) ? <h2 className="mb-2 text-sm font-semibold">Notices</h2> : null}
       {items.length === 0 ? <EmptyState title="No notifications" body="Nothing matches this filter." /> : (
         <ul className="space-y-2">
           {items.map((item) => (
@@ -75,34 +82,21 @@ export function NotificationsView() {
                   <div className="flex flex-wrap items-center gap-2">
                     {!item.read ? <span className="size-2 rounded-full bg-accent" /> : null}
                     <h2 className="text-sm font-semibold">{item.title}</h2>
-                    <Badge tone={item.source === "administrator" ? "slate" : "amber"}>{roleLabel[item.source as UserRole]}</Badge>
+                    <Badge tone={item.source === "administrator" ? "slate" : "amber"}>{noticeSourceLabel(item.source)}</Badge>
                     <Badge tone={item.type === "delay" ? "red" : item.type === "status" ? "amber" : "slate"}>{notificationTypeLabel[item.type]}</Badge>
                   </div>
                   <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{item.message}</p>
                   <p className="mt-2 text-xs text-muted-foreground">{item.senderName} · {formatDateTime(item.createdAt)}</p>
                 </div>
-                <form action="/api/notifications" method="post" className="shrink-0">
-                  <input type="hidden" name="id" value={item.id} />
-                  <input type="hidden" name="read" value={item.read ? "0" : "1"} />
-                  <input type="hidden" name="return" value="/admin/notifications" />
-                  <FilterFields portal={portal} type={filter} />
-                  <Button type="submit" size="sm" variant="outline">{item.read ? "Mark unread" : "Mark as read"}</Button>
-                </form>
+                <Button type="button" size="sm" variant="outline" onClick={() => data.markNotification(item.id, !item.read)}>
+                  {item.read ? "Mark unread" : "Mark as read"}
+                </Button>
               </div>
             </li>
           ))}
         </ul>
       )}
     </div>
-  );
-}
-
-function FilterFields({ portal, type }: { portal: (typeof portalFilters)[number]; type: (typeof typeFilters)[number] }) {
-  return (
-    <>
-      {portal !== "all" ? <input type="hidden" name="portal" value={portal} /> : null}
-      {type !== "all" ? <input type="hidden" name="type" value={type} /> : null}
-    </>
   );
 }
 

@@ -60,3 +60,12 @@ The Vertexa site posts both inquiry forms to its own Next route, `/api/vertexa/i
 4. This API is the single source of truth: MongoDB holds the inquiry and the administrator/PM notifications. Next does not create a second copy.
 
 If the API is not running in development (`ECONNREFUSED`), the route falls back to the in-memory store so the site keeps working, and logs a warning. Timeouts and 5xx responses are reported to the user as `?error=unavailable` rather than retried, because the API may already have stored the inquiry.
+
+### CPMIS inboxes
+
+The administrator and project-manager portals read the same MongoDB notices through two more Next BFF routes:
+
+- `GET /api/vertexa/notifications` → `GET {VERTEXA_API_URL}/api/v1/notifications?limit=100`. It keeps only notices with `source: "vertexa"`, maps them to CPMIS notification records (`projectId: null`, label “Vertexa site”), and returns `{ items: [] }` when the API is not configured or cannot be reached.
+- `PATCH /api/vertexa/notifications` with `{ id, read }` (or `{ all: true }`) → `PATCH {VERTEXA_API_URL}/api/v1/notifications/:id/read`. The bulk form issues one PATCH per unread admin-audience notice because the backend has no bulk endpoint; PM notices stay owned by the manager's inbox.
+
+The root layout passes the first result to `AdminProvider` so notices are present in server-rendered HTML; the provider polls every 10 seconds and merges updates with the demo store. The PM preview (`u-pm-2`) only receives notices whose backend `recipientId` is `u-pm-2`.

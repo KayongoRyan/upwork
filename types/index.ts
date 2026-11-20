@@ -11,6 +11,9 @@ export type UserRole =
   | "site_engineer"
   | "quantity_surveyor";
 
+/** Notices from the public site arrive through the Express API, not a CPMIS portal. */
+export type NotificationSource = UserRole | "vertexa";
+
 export type AccountStatus = "active" | "inactive";
 
 export type EmploymentStatus = "active" | "on_leave" | "contract" | "inactive";
@@ -90,13 +93,15 @@ export interface AppNotification {
   title: string;
   message: string;
   type: NotificationType;
-  /** Portal that sent this notice to the administrator. */
-  source: UserRole;
+  /** Portal that sent this notice to the administrator, or "vertexa" for the public site. */
+  source: NotificationSource;
   senderName: string;
   /** Project this notice belongs to. The managing project manager receives it. */
   projectId: string | null;
   /** Account that should see this notice in its own bell. */
   recipientId?: string | null;
+  /** Backend routing for notices from the public site. Demo notices omit it. */
+  audience?: "admin" | "pm";
   read: boolean;
   createdAt: string;
 }
