@@ -1,4 +1,5 @@
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { fullName, nextId } from "@/lib/utils";
 import type { AdminState, WorkKind } from "@/types";
@@ -25,12 +26,12 @@ export async function POST(request: Request) {
   if (!PORTALS.has(portal) || !KINDS.has(kind)) return fail("That work is not on this portal.");
   if (body.length < 3 || body.length > 500) return fail("Write a comment for the project manager.");
 
-  const state = readState();
+  const state = await readState();
   const projectId = projectFor(state, kind, workId);
   if (projectId == null || !onPortal(state, portal, kind, workId, projectId)) return fail("That work is not on this portal.");
 
   const id = nextId("cmt");
-  await applyAction({
+  await applyPortalAction("administrator", {
     type: "add-work-comment",
     kind,
     workId,

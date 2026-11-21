@@ -1,4 +1,4 @@
-import { applyAction } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     return redirectTo(request, "/admin/help", { error: "Write the note in a sentence or more." });
   }
   const id = nextId("hlp");
-  await applyAction({
+  await applyPortalAction("administrator", {
     type: "support-request",
     topic,
     message,

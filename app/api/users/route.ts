@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { nextId } from "@/lib/utils";
 import { userSchema } from "@/lib/validations/schemas";
 
@@ -24,13 +25,14 @@ export async function POST(request: Request) {
     return NextResponse.redirect(back, 303);
   }
   const email = parsed.data.email.trim().toLowerCase();
-  if (readState().users.some((user) => user.email.toLowerCase() === email)) {
+  const state = await readState();
+  if (state.users.some((user) => user.email.toLowerCase() === email)) {
     back.searchParams.set("add", "1");
     back.searchParams.set("error", "That email is already registered.");
     return NextResponse.redirect(back, 303);
   }
   const id = nextId("act");
-  await applyAction({
+  await applyPortalAction("administrator", {
     type: "create-user",
     input: parsed.data,
     stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -16,14 +17,15 @@ export async function POST(request: Request) {
     back.searchParams.set("error", error);
     return NextResponse.redirect(back, 303);
   };
-  const current = (readState().documents ?? []).find((item) => item.id === documentId);
+  const state = await readState();
+  const current = (state.documents ?? []).find((item) => item.id === documentId);
   if (!current) return fail("That document is not on the register.");
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) return fail("Choose a file.");
   if (file.size > MAX_BYTES) return fail("Keep the preview file under 512 KB.");
   const bytes = Buffer.from(await file.arrayBuffer());
   const id = nextId("act");
-  await applyAction({
+  await applyPortalAction("administrator", {
     type: "revise-document",
     documentId,
     revision: {

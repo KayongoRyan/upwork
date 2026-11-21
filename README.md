@@ -2,7 +2,10 @@
 
 Frontend-only Construction Project Management Information System for Vertexa Group.
 
-There is no database and no authentication. One Node process serves every portal and they share one in-memory store. Changes last until you stop that process. Restarting the server restores the sample records.
+Each portal owns a MongoDB database, so its records survive a restart and are stored
+alongside the work that portal does. The ports share one Node process; the data does
+not live in that process. On first boot each database is seeded from the sample
+workspace, and later changes persist.
 
 The preview clock is 6 Nov 2026. Money is RWF. Each portal opens already signed in as one person:
 
@@ -15,10 +18,40 @@ The preview clock is 6 Nov 2026. Money is RWF. Each portal opens already signed 
 
 ## Run
 
+Start MongoDB first (the repository ships a local database that keeps its files in
+`.mongo-data/`):
+
 ```bash
 npm install
+npm run mongo:local
+```
+
+Then, in another terminal:
+
+```bash
 npm run dev
 ```
+
+The portals use `MONGODB_URI` (default `mongodb://127.0.0.1:27017`). If the database
+is not reachable the preview still runs from in-memory state and logs a warning; start
+MongoDB and restart the app to persist again.
+
+### Per-portal databases
+
+| Portal | Database (default) | Owns |
+| --- | --- | --- |
+| Administrator | `vertexa_admin` | projects, users, employees, documents, activity logs, work comments, settings, monthly activity |
+| Project manager | `vertexa_pm` | tasks, calendar events, progress marks, cost reports |
+| Site engineer | `vertexa_se` | engineer reports |
+| Quantity surveyor | `vertexa_qs` | bill of quantities |
+
+Notifications are split by recipient and stored in the recipient portal's database.
+
+Override the names with `MONGODB_DB_ADMIN`, `MONGODB_DB_PM`, `MONGODB_DB_SE`, and
+`MONGODB_DB_QS` (see `.env.example`). Each portal reads and writes through
+`/api/portal/<portal>/state` and `/api/portal/<portal>/actions`; the action endpoint
+only accepts actions owned by that portal. The databases are seeded once from
+`lib/mock-data/seed.ts`, so deleting a database resets that portal's sample records.
 
 ### Backend API (Express + MongoDB)
 
@@ -48,7 +81,7 @@ Each portal starts at its preferred port and steps up by 10 if that port is take
 
 ## Administrator
 
-Portfolio dashboard, projects, document register, users, employees, reports, tasks, activity logs, notifications, and organization settings. Creating a project, user, employee, or document posts into the shared store, so the other portals see it on their next load.
+Portfolio dashboard, projects, document register, users, employees, reports, tasks, activity logs, notifications, and organization settings. Creating a project, user, employee, or document writes to the administrator database, so the other portals see it on their next load.
 
 ## Project manager
 

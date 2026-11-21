@@ -1,26 +1,15 @@
-import { adminReducer, type AdminAction } from "@/lib/data/reducer";
-import { createSeedState } from "@/lib/mock-data/seed";
+import type { AdminAction } from "@/lib/data/reducer";
 import type { AdminState } from "@/types";
+import { applyAction as applyPortalStoreAction, readState as readPortalStoreState } from "@/lib/server/portal-store";
 
-const globalStore = globalThis as typeof globalThis & {
-  __cpmisState?: AdminState;
-  __cpmisQueue?: Promise<unknown>;
-};
-
-export function readState(): AdminState {
-  globalStore.__cpmisState ??= createSeedState();
-  return globalStore.__cpmisState;
+/**
+ * Compatibility wrapper for the existing form routes. The portal databases are the
+ * source of truth; see `lib/server/portal-store.ts` for the per-portal layout.
+ */
+export function readState(): Promise<AdminState> {
+  return readPortalStoreState();
 }
 
 export function applyAction(action: AdminAction): Promise<AdminState> {
-  const previous = globalStore.__cpmisQueue ?? Promise.resolve();
-  const run = previous.then(() => {
-    globalStore.__cpmisState = adminReducer(readState(), action);
-    return globalStore.__cpmisState;
-  });
-  globalStore.__cpmisQueue = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  return run;
+  return applyPortalStoreAction(action);
 }

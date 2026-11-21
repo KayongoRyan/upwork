@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { applyAction } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { createInquiry } from "@/lib/server/inquiries";
 import {
@@ -198,7 +198,7 @@ export async function POST(request: Request) {
     .join("\n");
 
   const stamp = { id: inquiry.id, at: inquiry.createdAt, notificationId: `ntf-${inquiry.id}` };
-  await applyAction({
+  await applyPortalAction("administrator", {
     type: "vertexa-inquiry",
     serviceName,
     clientName: name,

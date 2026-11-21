@@ -1,4 +1,5 @@
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { nextId, PREVIEW_PM_ID } from "@/lib/utils";
 
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
   const projectId = String(form.get("projectId") ?? "");
   const raw = String(form.get("progress") ?? "").trim();
   const note = String(form.get("note") ?? "").trim();
-  const state = readState();
+  const state = await readState();
   const project = state.projects.find((item) => item.id === projectId && item.managerId === PREVIEW_PM_ID);
   if (!project) return redirectTo(request, "/pm/progress", { error: "That project is not on your portfolio." });
   if (project.status === "completed") return redirectTo(request, "/pm/progress", { error: "A completed project keeps its recorded progress." });
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
   const progress = Number(raw);
   if (progress > 100) return redirectTo(request, "/pm/progress", { error: "Progress must be a whole number from 0 to 100." });
   const id = nextId("act");
-  await applyAction({
+  await applyPortalAction("project_manager", {
     type: "set-progress",
     id: project.id,
     progress,

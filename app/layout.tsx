@@ -6,8 +6,8 @@ import { DocumentListeners } from "@/components/document-listeners";
 import { PortalPortsProvider } from "@/components/portal-ports";
 import { SearchQueryProvider } from "@/components/search/search-query";
 import { AdminProvider } from "@/lib/data/admin-store";
-import { readBoundPorts } from "@/lib/portals";
-import { readState } from "@/lib/server/memory";
+import { portalByPort, readBoundPorts, type CpmisPortalId } from "@/lib/portals";
+import { readState } from "@/lib/server/portal-store";
 import { listVertexaNotifications } from "@/lib/server/vertexa-api";
 import "./globals.css";
 
@@ -29,18 +29,29 @@ export const metadata: Metadata = {
   description: "Construction Project Management Information System — administrator preview.",
 };
 
+function requestPortal(headers: Headers): CpmisPortalId {
+  const host = headers.get("x-forwarded-host") ?? headers.get("host") ?? "";
+  const match = host.match(/:(\d+)$/);
+  const port = match ? Number(match[1]) : headers.get("x-forwarded-proto") === "https" ? 443 : 80;
+  const portal = portalByPort(port);
+  // The public site shares this layout but has no portal workspace of its own.
+  return portal && portal.id !== "vertexa" ? portal.id : "administrator";
+}
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   await connection();
-  const initialState = readState();
+  const requestHeaders = await headers();
+  const portal = requestPortal(requestHeaders);
+  const initialState = await readState();
   const { items: initialNotifications } = await listVertexaNotifications();
-  const query = (await headers()).get("x-cpmis-q") ?? "";
+  const query = requestHeaders.get("x-cpmis-q") ?? "";
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full">
         <DocumentListeners />
         <SearchQueryProvider query={query}>
           <PortalPortsProvider ports={readBoundPorts()}>
-            <AdminProvider initialState={initialState} initialNotifications={initialNotifications}>
+            <AdminProvider portal={portal} initialState={initialState} initialNotifications={initialNotifications}>
               {children}
             </AdminProvider>
           </PortalPortsProvider>

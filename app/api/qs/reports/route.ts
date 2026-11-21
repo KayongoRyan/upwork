@@ -1,5 +1,6 @@
 import { billLines, sameBill } from "@/lib/boq";
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { nextId, PREVIEW_QS_ID } from "@/lib/utils";
 
@@ -7,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const state = readState();
+  const state = await readState();
   const surveyor = state.users.find((user) => user.id === PREVIEW_QS_ID && user.role === "quantity_surveyor" && user.status === "active");
   const project = surveyor?.projectId ? state.projects.find((item) => item.id === surveyor.projectId) : undefined;
   const manager = project ? state.users.find((user) => user.id === project.managerId) : undefined;
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
   if (already) return redirectTo(request, "/qs/reports", { error: "These figures are already with your project manager." });
 
   const id = nextId("cst");
-  await applyAction({
+  await applyPortalAction("quantity_surveyor", {
     type: "send-cost-report",
     surveyorId: surveyor.id,
     stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },

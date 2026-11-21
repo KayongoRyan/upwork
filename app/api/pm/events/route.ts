@@ -1,4 +1,4 @@
-import { applyAction } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     return redirectTo(request, "/pm", { ...back, error: "Click a date on the calendar." }, "calendar");
   }
   const id = nextId("evt");
-  await applyAction({
+  await applyPortalAction("project_manager", {
     type: "add-calendar-event",
     title,
     kind,

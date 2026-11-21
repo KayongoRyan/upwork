@@ -5,6 +5,7 @@ import { adminReducer, type AdminAction } from "@/lib/data/reducer";
 import { billLines, estimateFor, expenditureFor, parseBoq, sameBill } from "@/lib/boq";
 import { isManagerFieldNotice } from "@/lib/notices";
 import { nextId, PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID } from "@/lib/utils";
+import type { CpmisPortalId } from "@/lib/portals";
 import type {
   ActionResult,
   AdminState,
@@ -39,10 +40,12 @@ interface AdminContextValue {
 const AdminContext = createContext<AdminContextValue | null>(null);
 
 export function AdminProvider({
+  portal,
   initialState,
   initialNotifications = [],
   children,
 }: {
+  portal: CpmisPortalId;
   initialState: AdminState;
   initialNotifications?: AppNotification[];
   children: React.ReactNode;
@@ -52,6 +55,8 @@ export function AdminProvider({
   const remoteIds = useRef<Set<string>>(new Set(initialNotifications.map((item) => item.id)));
   const pending = useRef(0);
   const chain = useRef(Promise.resolve());
+  const stateUrl = `/api/portal/${portal}/state`;
+  const actionsUrl = `/api/portal/${portal}/actions`;
 
   // CPMIS keeps its demo state in memory; the public site writes to MongoDB.
   // Poll the API through the Next route so both inboxes show the same notices.
@@ -85,7 +90,7 @@ export function AdminProvider({
     pending.current += 1;
     chain.current = chain.current.then(async () => {
       try {
-        const response = await fetch("/api/state", {
+        const response = await fetch(actionsUrl, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(action),
@@ -98,18 +103,18 @@ export function AdminProvider({
         pending.current -= 1;
       }
     });
-  }, []);
+  }, [actionsUrl]);
 
   useEffect(() => {
     const timer = window.setInterval(async () => {
       if (pending.current > 0) return;
-      const response = await fetch("/api/state", { cache: "no-store" });
+      const response = await fetch(stateUrl, { cache: "no-store" });
       if (!response.ok) return;
       const next = (await response.json()) as AdminState;
       setState((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
     }, 1200);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [stateUrl]);
 
   const notifications = useMemo(() => {
     const demoIds = new Set(state.notifications.map((item) => item.id));

@@ -1,4 +1,5 @@
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { nextId, PREVIEW_SE_ID } from "@/lib/utils";
 import type { ReportPhoto } from "@/types";
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     return redirectTo(request, "/se/report", { error: "Keep the issues note shorter." });
   }
 
-  const state = readState();
+  const state = await readState();
   const engineer = state.users.find((user) => user.id === PREVIEW_SE_ID && user.role === "site_engineer" && user.status === "active");
   const project = engineer ? state.projects.find((item) => item.id === engineer.projectId) : undefined;
   if (!engineer || !project) return redirectTo(request, "/se/report", { error: "No project is assigned to this account." });
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
   if (!photos) return redirectTo(request, "/se/report", { error: "Each photo has to be an image under 1.5 MB. Four is the limit." });
 
   const id = nextId("rpt");
-  await applyAction({
+  await applyPortalAction("site_engineer", {
     type: "submit-report",
     input: {
       projectId: project.id,
