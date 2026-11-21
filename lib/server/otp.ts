@@ -92,7 +92,7 @@ export interface CreateOtpInput {
 }
 
 export type CreateOtpResult =
-  | { ok: true; challengeId: string; expiresAt: string }
+  | { ok: true; challengeId: string; expiresAt: string; demoOtp?: string }
   | { ok: false; error: string; status: number };
 
 export async function createSignupOtp(input: CreateOtpInput): Promise<CreateOtpResult> {
@@ -143,8 +143,9 @@ export async function createSignupOtp(input: CreateOtpInput): Promise<CreateOtpR
 
   const roleLabel = PORTAL_ROLE[input.portal].replaceAll("_", " ");
   const message = `Your CPMIS ${roleLabel} portal verification code is ${otp}. It expires in 10 minutes.`;
+  const demoFallback = process.env.OTP_DEMO_FALLBACK === "true";
   const sms = await sendSms(phone, message);
-  if (!sms.ok) {
+  if (!sms.ok && !demoFallback) {
     return { ok: false, status: sms.status, error: sms.error };
   }
 
@@ -154,7 +155,7 @@ export async function createSignupOtp(input: CreateOtpInput): Promise<CreateOtpR
     memory().challenges.set(challengeId, record);
   }
 
-  return { ok: true, challengeId, expiresAt: record.expiresAt };
+  return { ok: true, challengeId, expiresAt: record.expiresAt, ...(demoFallback ? { demoOtp: otp } : {}) };
 }
 
 export type VerifyOtpResult =

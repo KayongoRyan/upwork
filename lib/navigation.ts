@@ -12,6 +12,7 @@ import {
   Inbox,
   LayoutDashboard,
   LifeBuoy,
+  QrCode,
   Ruler,
   ScrollText,
   Settings,
@@ -59,6 +60,13 @@ export const navItems: NavItem[] = [
     icon: Users,
     section: "Main",
     description: "Application accounts and role assignments.",
+  },
+  {
+    href: "/admin/qr-code",
+    label: "QR Code",
+    icon: QrCode,
+    section: "Main",
+    description: "Portal sign-up QR codes for project managers, site engineers, and quantity surveyors.",
   },
   {
     href: "/admin/employees",

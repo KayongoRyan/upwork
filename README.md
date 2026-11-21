@@ -24,17 +24,17 @@ All seeded users in `lib/mock-data/seed.ts` can sign in with their role password
 
 ### Self-signup (QR + OTP)
 
-The Administrator dashboard includes a **QR Code** section with a QR for each portal (Administrator, Project Manager, Site Engineer, Quantity Surveyor). Scanning a QR opens that portal's sign-up page where the user enters first/last name, phone number, email, and password. A 6-digit OTP is sent by SMS through Twilio; after verification the account is created as active for that portal role and the user is signed in.
+The Administrator portal includes a **QR Code** page in the navigation bar with a QR for each portal (Project Manager, Site Engineer, Quantity Surveyor). Scanning a QR opens that portal's sign-up page where the user enters first/last name, phone number, email, and password. A 6-digit OTP is sent by SMS through Africa's Talking; after verification the account is created as active for that portal role and the user is signed in.
 
-Configure Twilio in `.env`:
+Configure Africa's Talking in `.env`:
 
 ```env
-TWILIO_ACCOUNT_SID=...
-TWILIO_AUTH_TOKEN=...
-TWILIO_FROM_NUMBER=+1...
+AT_USERNAME=sandbox
+AT_API_KEY=...
+AT_FROM=
 ```
 
-If Twilio is not configured, existing email/password sign-in still works, but OTP signup will return a configuration error.
+If SMS is not configured, existing email/password sign-in still works, but OTP signup will return a configuration error.
 
 ## Run
 
