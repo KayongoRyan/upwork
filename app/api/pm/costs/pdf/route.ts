@@ -1,4 +1,5 @@
 import { readCostEdits } from "@/lib/server/cost-lines";
+import { requireApiSession } from "@/lib/server/auth";
 import { costReportPdf } from "@/lib/server/cost-pdf";
 import { readState } from "@/lib/server/memory";
 import { redirectTo } from "@/lib/server/redirect";
@@ -8,6 +9,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const __session = await requireApiSession("project_manager");
+  if (__session instanceof Response) return __session;
   const form = await request.formData();
   const projectId = String(form.get("projectId") ?? "");
   const state = await readState();

@@ -8,20 +8,21 @@ import { useSiteEngineer } from "@/lib/data/admin-store";
 import { seNavItems } from "@/lib/navigation";
 import { portalUrl } from "@/lib/portals";
 import { cn, fullName } from "@/lib/utils";
+import type { SessionUser } from "@/types";
 
-export function SeShell({ children }: { children: React.ReactNode }) {
+export function SeShell({ user, children }: { user: SessionUser; children: React.ReactNode }) {
   return (
     <>
-      <Frame>{children}</Frame>
+      <Frame user={user}>{children}</Frame>
       <Toaster position="top-right" closeButton />
     </>
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ user, children }: { user: SessionUser; children: React.ReactNode }) {
   const data = useSiteEngineer();
   const [collapsed, setCollapsed] = useState(false);
-  const name = data.actor ? fullName(data.actor) : "Site engineer";
+  const name = fullName(user);
   const code = data.project?.code ?? "";
 
   return (
@@ -42,7 +43,8 @@ function Frame({ children }: { children: React.ReactNode }) {
           onToggleCollapse={() => setCollapsed((value) => !value)}
           scope="site"
           siteCode={code}
-          identity={{ name, email: data.actor?.email ?? "", role: "Site engineer" }}
+          identity={{ name, email: user.email, role: "Site engineer" }}
+          portal="site_engineer"
           links={{
             notifications: "/se/history",
             settings: portalUrl("administrator", "/admin/settings"),

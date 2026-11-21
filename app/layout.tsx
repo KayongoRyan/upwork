@@ -6,6 +6,7 @@ import { DocumentListeners } from "@/components/document-listeners";
 import { PortalPortsProvider } from "@/components/portal-ports";
 import { SearchQueryProvider } from "@/components/search/search-query";
 import { AdminProvider } from "@/lib/data/admin-store";
+import { getSessionUser } from "@/lib/server/auth";
 import { portalByPort, readBoundPorts, type CpmisPortalId } from "@/lib/portals";
 import { readState } from "@/lib/server/portal-store";
 import { listVertexaNotifications } from "@/lib/server/vertexa-api";
@@ -42,8 +43,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   await connection();
   const requestHeaders = await headers();
   const portal = requestPortal(requestHeaders);
-  const initialState = await readState();
-  const { items: initialNotifications } = await listVertexaNotifications();
+  const [initialState, notificationsResult, session] = await Promise.all([
+    readState(),
+    listVertexaNotifications(),
+    getSessionUser(portal),
+  ]);
+  const { items: initialNotifications } = notificationsResult;
   const query = requestHeaders.get("x-cpmis-q") ?? "";
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
@@ -51,7 +56,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <DocumentListeners />
         <SearchQueryProvider query={query}>
           <PortalPortsProvider ports={readBoundPorts()}>
-            <AdminProvider portal={portal} initialState={initialState} initialNotifications={initialNotifications}>
+            <AdminProvider portal={portal} initialState={initialState} initialNotifications={initialNotifications} session={session}>
               {children}
             </AdminProvider>
           </PortalPortsProvider>

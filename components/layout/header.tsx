@@ -7,7 +7,7 @@ import { SearchField } from "@/components/layout/search-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { isManagerFieldNotice, useAdmin } from "@/lib/data/admin-store";
 import { navItems, type NavItem } from "@/lib/navigation";
-import { portalUrl } from "@/lib/portals";
+import { portalUrl, type CpmisPortalId } from "@/lib/portals";
 import { formatDateTime, initials } from "@/lib/utils";
 
 export function Header({
@@ -26,6 +26,7 @@ export function Header({
   siteCode,
   portfolio,
   search,
+  portal = "administrator",
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -37,6 +38,7 @@ export function Header({
   siteCode?: string;
   portfolio?: { id: string; code: string; name: string }[];
   search?: { pages: NavItem[]; projectIds: string[]; projectBase?: string };
+  portal?: CpmisPortalId;
 }) {
   const { settings, notifications: allNotifications, markNotification } = useAdmin();
   const notifications = scope === "field"
@@ -101,7 +103,7 @@ export function Header({
             <DropdownMenuLabel>
               <span className="block text-sm font-medium text-foreground">{name}</span>
               <span className="block">{email}</span>
-              <span className="mt-1 block">Preview session. Sign-in is not connected.</span>
+              <span className="mt-1 block">Signed in to this portal.</span>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
@@ -112,6 +114,13 @@ export function Header({
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               {links.switchHref.startsWith("http") ? <a href={links.switchHref}>{links.switchLabel}</a> : <Link href={links.switchHref} prefetch={false}>{links.switchLabel}</Link>}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <form action="/api/auth/sign-out" method="post" className="w-full">
+                <input type="hidden" name="portal" value={portal} />
+                <button type="submit" className="w-full text-left">Sign out</button>
+              </form>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

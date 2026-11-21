@@ -1,4 +1,5 @@
 import { applyPortalAction } from "@/lib/server/portal-store";
+import { requireApiSession } from "@/lib/server/auth";
 import { redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
@@ -13,6 +14,8 @@ const topics = new Map([
 ]);
 
 export async function POST(request: Request) {
+  const __session = await requireApiSession("administrator");
+  if (__session instanceof Response) return __session;
   const form = await request.formData();
   const topic = topics.get(String(form.get("topic") ?? ""));
   const message = String(form.get("message") ?? "").trim();

@@ -3,7 +3,7 @@ import { ChevronDown } from "lucide-react";
 const articles = [
   {
     title: "What this portal is",
-    body: "This is the administrator portal for CPMIS at Vertexa Group. The project manager, site engineer, and quantity surveyor each have their own portal on this machine. There is no sign-in. This one opens as Amina Uwase.",
+    body: "This is the administrator portal for CPMIS at Vertexa Group. The project manager, site engineer, and quantity surveyor each have their own portal on this machine. Sign in with your account email and password. Each portal has its own session.",
   },
   {
     title: "Where records live",

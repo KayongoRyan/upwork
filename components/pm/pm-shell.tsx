@@ -8,20 +8,21 @@ import { usePm } from "@/lib/data/admin-store";
 import { pmNavItems } from "@/lib/navigation";
 import { portalUrl } from "@/lib/portals";
 import { cn, fullName } from "@/lib/utils";
+import type { SessionUser } from "@/types";
 
-export function PmShell({ children }: { children: React.ReactNode }) {
+export function PmShell({ user, children }: { user: SessionUser; children: React.ReactNode }) {
   return (
     <>
-      <Frame>{children}</Frame>
+      <Frame user={user}>{children}</Frame>
       <Toaster position="top-right" closeButton />
     </>
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
-  const { actor, projects } = usePm();
+function Frame({ user, children }: { user: SessionUser; children: React.ReactNode }) {
+  const { projects } = usePm();
   const [collapsed, setCollapsed] = useState(false);
-  const name = actor ? fullName(actor) : "Project manager";
+  const name = fullName(user);
 
   return (
     <div className="shell min-h-screen bg-background">
@@ -40,9 +41,10 @@ function Frame({ children }: { children: React.ReactNode }) {
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((value) => !value)}
           scope="field"
-          userId={actor?.id}
+          userId={user.id}
           portfolio={projects}
-          identity={{ name, email: actor?.email ?? "", role: "Project manager" }}
+          identity={{ name, email: user.email, role: "Project manager" }}
+          portal="project_manager"
           links={{
             notifications: "/pm/notifications",
             settings: portalUrl("administrator", "/admin/settings"),

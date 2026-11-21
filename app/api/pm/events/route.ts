@@ -1,4 +1,5 @@
 import { applyPortalAction } from "@/lib/server/portal-store";
+import { requireApiSession } from "@/lib/server/auth";
 import { redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
@@ -6,6 +7,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const __session = await requireApiSession("project_manager");
+  if (__session instanceof Response) return __session;
   const form = await request.formData();
   const period = String(form.get("period") ?? "monthly");
   const title = String(form.get("title") ?? "").trim();

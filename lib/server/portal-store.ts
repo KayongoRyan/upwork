@@ -22,9 +22,10 @@
  *      preview keeps working before the database is started.
  */
 
-import { MongoClient, type Db, type Document } from "mongodb";
+import type { Db, Document } from "mongodb";
 import { adminReducer, type AdminAction } from "@/lib/data/reducer";
 import { createSeedState } from "@/lib/mock-data/seed";
+import { getMongoRuntime, portalDatabaseName, type MongoRuntime } from "@/lib/server/mongo";
 import { cpmisPortalIds, type CpmisPortalId } from "@/lib/portals";
 import { PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID } from "@/lib/utils";
 import type { AdminState, AppNotification, OrgSettings } from "@/types";
@@ -32,13 +33,6 @@ import type { AdminState, AppNotification, OrgSettings } from "@/types";
 export const PORTAL_KEYS = cpmisPortalIds;
 
 export type PortalKey = CpmisPortalId;
-
-const DATABASES: Record<PortalKey, { env: string; fallback: string }> = {
-  administrator: { env: "MONGODB_DB_ADMIN", fallback: "vertexa_admin" },
-  project_manager: { env: "MONGODB_DB_PM", fallback: "vertexa_pm" },
-  site_engineer: { env: "MONGODB_DB_SE", fallback: "vertexa_se" },
-  quantity_surveyor: { env: "MONGODB_DB_QS", fallback: "vertexa_qs" },
-};
 
 type RecordCollection =
   | "projects"
@@ -75,9 +69,6 @@ const PORTAL_COLLECTIONS: Record<
   },
 };
 
-const DEFAULT_MONGO_URI = "mongodb://127.0.0.1:27017";
-const CONNECT_TIMEOUT_MS = 3_000;
-const RETRY_AFTER_MS = 15_000;
 const SEED_DOC = "seed";
 const SETTINGS_DOC = "org";
 const MONTHLY_DOC = "monthly";
@@ -176,19 +167,10 @@ export function portalCanApply(portal: PortalKey, action: AdminAction): boolean 
 }
 
 /* -------------------------------------------------------------------------- */
-/* Mongo connection                                                            */
+/* Store state                                                                 */
 /* -------------------------------------------------------------------------- */
 
-interface Runtime {
-  client: MongoClient;
-  dbs: Record<PortalKey, Db>;
-}
-
 interface StoreGlobal {
-  __cpmisPortalRuntime?: Runtime | null;
-  __cpmisPortalConnecting?: Promise<Runtime | null>;
-  __cpmisPortalRetryAt?: number;
-  __cpmisPortalWarned?: boolean;
   __cpmisPortalState?: AdminState;
   __cpmisPortalReady?: boolean;
   __cpmisPortalInit?: Promise<AdminState>;
@@ -196,65 +178,6 @@ interface StoreGlobal {
 }
 
 const store = globalThis as typeof globalThis & StoreGlobal;
-
-function mongoUri(): string {
-  return process.env.MONGODB_URI?.trim() || DEFAULT_MONGO_URI;
-}
-
-export function portalDatabaseName(portal: PortalKey): string {
-  const spec = DATABASES[portal];
-  return process.env[spec.env]?.trim() || spec.fallback;
-}
-
-async function openRuntime(): Promise<Runtime | null> {
-  const client = new MongoClient(mongoUri(), {
-    serverSelectionTimeoutMS: CONNECT_TIMEOUT_MS,
-    appName: "cpmis-portal-store",
-  });
-  try {
-    await client.connect();
-    await client.db("admin").command({ ping: 1 });
-    return {
-      client,
-      dbs: {
-        administrator: client.db(portalDatabaseName("administrator")),
-        project_manager: client.db(portalDatabaseName("project_manager")),
-        site_engineer: client.db(portalDatabaseName("site_engineer")),
-        quantity_surveyor: client.db(portalDatabaseName("quantity_surveyor")),
-      },
-    };
-  } catch (error) {
-    await client.close().catch(() => undefined);
-    if (!store.__cpmisPortalWarned) {
-      store.__cpmisPortalWarned = true;
-      console.warn(
-        `[portal-store] MongoDB is not reachable at ${mongoUri()}. ` +
-          "The preview will use in-memory state until a database is available.\n" +
-          `[portal-store] ${(error as Error).message}`,
-      );
-    }
-    return null;
-  }
-}
-
-async function getRuntime(): Promise<Runtime | null> {
-  if (store.__cpmisPortalRuntime) return store.__cpmisPortalRuntime;
-  if (store.__cpmisPortalRetryAt && Date.now() < store.__cpmisPortalRetryAt) return null;
-  if (!store.__cpmisPortalConnecting) {
-    store.__cpmisPortalConnecting = openRuntime().finally(() => {
-      store.__cpmisPortalConnecting = undefined;
-    });
-  }
-  const runtime = await store.__cpmisPortalConnecting;
-  store.__cpmisPortalRuntime = runtime;
-  if (runtime) {
-    store.__cpmisPortalWarned = false;
-    store.__cpmisPortalRetryAt = 0;
-  } else {
-    store.__cpmisPortalRetryAt = Date.now() + RETRY_AFTER_MS;
-  }
-  return runtime;
-}
 
 /* -------------------------------------------------------------------------- */
 /* Document encoding                                                           */
@@ -306,7 +229,14 @@ async function syncMonthlyActivity(db: Db, before: unknown, after: unknown) {
 /* Notification ownership                                                      */
 /* -------------------------------------------------------------------------- */
 
-function notificationPortal(item: AppNotification): PortalKey {
+function notificationPortal(item: AppNotification, usersById?: Map<string, { role: string }>): PortalKey {
+  if (item.recipientId && usersById) {
+    const role = usersById.get(item.recipientId)?.role;
+    if (role === "project_manager") return "project_manager";
+    if (role === "site_engineer") return "site_engineer";
+    if (role === "quantity_surveyor") return "quantity_surveyor";
+    if (role === "administrator") return "administrator";
+  }
   if (item.recipientId) {
     if (item.recipientId === PREVIEW_PM_ID) return "project_manager";
     if (item.recipientId === PREVIEW_SE_ID) return "site_engineer";
@@ -319,8 +249,8 @@ function notificationPortal(item: AppNotification): PortalKey {
   return "administrator";
 }
 
-function notificationsFor(items: AppNotification[], portal: PortalKey): AppNotification[] {
-  return items.filter((item) => notificationPortal(item) === portal);
+function notificationsFor(items: AppNotification[], portal: PortalKey, usersById?: Map<string, { role: string }>): AppNotification[] {
+  return items.filter((item) => notificationPortal(item, usersById) === portal);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -337,7 +267,7 @@ async function markSeeded(db: Db) {
     );
 }
 
-async function loadState(runtime: Runtime): Promise<AdminState | null> {
+async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
   const admin = runtime.dbs.administrator;
   const marker = await admin.collection<StoredDocument>("meta").findOne({ _id: SEED_DOC });
   if (!marker) return null;
@@ -408,7 +338,9 @@ async function loadState(runtime: Runtime): Promise<AdminState | null> {
   };
 }
 
-async function persistState(runtime: Runtime, previous: AdminState | null, next: AdminState) {
+async function persistState(runtime: MongoRuntime, previous: AdminState | null, next: AdminState) {
+  const prevUsers = new Map((previous?.users ?? []).map((u) => [u.id, { role: u.role }]));
+  const nextUsers = new Map(next.users.map((u) => [u.id, { role: u.role }]));
   for (const portal of PORTAL_KEYS) {
     const db = runtime.dbs[portal];
     const spec = PORTAL_COLLECTIONS[portal];
@@ -426,14 +358,14 @@ async function persistState(runtime: Runtime, previous: AdminState | null, next:
       await syncMonthlyActivity(db, previous?.monthlyActivity, next.monthlyActivity);
     }
 
-    const beforeNotices = previous ? notificationsFor(previous.notifications, portal) : [];
-    const afterNotices = notificationsFor(next.notifications, portal);
+    const beforeNotices = previous ? notificationsFor(previous.notifications, portal, prevUsers) : [];
+    const afterNotices = notificationsFor(next.notifications, portal, nextUsers);
     await syncRecords(db, "notifications", beforeNotices, afterNotices);
   }
 }
 
 async function initialize(): Promise<AdminState> {
-  const runtime = await getRuntime();
+  const runtime = await getMongoRuntime();
   if (!runtime) {
     store.__cpmisPortalState ??= createSeedState();
     return store.__cpmisPortalState;
@@ -480,7 +412,7 @@ async function applyNow(action: AdminAction): Promise<AdminState> {
   const state = await ensureState();
   const next = action.type === "reset" ? createSeedState() : adminReducer(state, action);
 
-  const runtime = store.__cpmisPortalRuntime;
+  const runtime = await getMongoRuntime();
   if (runtime) {
     try {
       await persistState(runtime, state, next);

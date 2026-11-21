@@ -7,14 +7,20 @@ alongside the work that portal does. The ports share one Node process; the data 
 not live in that process. On first boot each database is seeded from the sample
 workspace, and later changes persist.
 
-The preview clock is 6 Nov 2026. Money is RWF. Each portal opens already signed in as one person:
+The preview clock is 6 Nov 2026. Money is RWF. Each portal requires email + password sign-in. Sessions are per portal (signing into one portal does not sign into another).
 
-| Portal | Who | Scope |
+### Demo credentials
+
+Seeded accounts use a password based on role (override with `DEMO_PASSWORD_*` in `.env`):
+
+| Role | Demo password | Example account |
 | --- | --- | --- |
-| Administrator | Amina Uwase | Whole company |
-| Project manager | Sarah Mukamana | Projects she manages |
-| Site engineer | Lydia Mukeshimana | KGL-CGT-25 only |
-| Quantity surveyor | David Nshimiyimana | KGL-CGT-25 only |
+| Administrator | `AdminDemo2026!` | amina.uwase@cpmis.demo |
+| Project manager | `PmDemo2026!` | sarah.mukamana@cpmis.demo |
+| Site engineer | `SeDemo2026!` | lydia.mukeshimana@cpmis.demo |
+| Quantity surveyor | `QsDemo2026!` | david.nshimiyimana@cpmis.demo |
+
+All seeded users in `lib/mock-data/seed.ts` can sign in with their role password.
 
 ## Run
 

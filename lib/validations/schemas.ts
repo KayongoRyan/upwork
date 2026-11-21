@@ -38,6 +38,10 @@ export const userSchema = z.object({
   status: z.enum(["active", "inactive"]),
 });
 
+export const createUserSchema = userSchema.extend({
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
 export const employeeSchema = z.object({
   employeeCode: z
     .string()
