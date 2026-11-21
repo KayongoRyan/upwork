@@ -223,12 +223,16 @@ export async function ensureCredentialsSeeded(): Promise<void> {
 }
 
 export async function setUserPassword(userId: string, email: string, password: string): Promise<void> {
+  await setUserPasswordHash(userId, email, await hashPassword(password));
+}
+
+export async function setUserPasswordHash(userId: string, email: string, passwordHash: string): Promise<void> {
   await ensureCredentialsSeeded();
   const record: CredentialRecord = {
     _id: `cred-${userId}`,
     userId,
     email: normalizeEmail(email),
-    passwordHash: await hashPassword(password),
+    passwordHash,
     updatedAt: new Date().toISOString(),
   };
   const collection = await credentialsCollection();
@@ -306,6 +310,11 @@ export async function signInWithPassword(
     return { ok: false, error: "This account does not have access to this portal.", status: 403 };
   }
 
+  const token = await createSessionForUser(portal, user);
+  return { ok: true, user: sessionUser(user), token };
+}
+
+export async function createSessionForUser(portal: PortalKey, user: UserAccount): Promise<string> {
   const token = crypto.randomBytes(32).toString("hex");
   const now = new Date();
   const record: SessionRecord = {
@@ -317,15 +326,13 @@ export async function signInWithPassword(
     lastSeenAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
   };
-
   const collection = await sessionsCollection(portal);
   if (collection) {
     await collection.insertOne(record);
   } else {
     memory().sessions[portal].set(record.tokenHash, record);
   }
-
-  return { ok: true, user: sessionUser(user), token };
+  return token;
 }
 
 export async function getSessionUser(portal: PortalKey): Promise<SessionUser | null> {
