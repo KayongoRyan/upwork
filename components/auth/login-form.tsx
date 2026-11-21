@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
@@ -18,6 +19,13 @@ const PORTAL_LABEL: Record<CpmisPortalId, string> = {
   project_manager: "Project manager portal",
   site_engineer: "Site engineer portal",
   quantity_surveyor: "Quantity surveyor portal",
+};
+
+const PORTAL_BASE: Record<CpmisPortalId, string> = {
+  administrator: "/admin",
+  project_manager: "/pm",
+  site_engineer: "/se",
+  quantity_surveyor: "/qs",
 };
 
 export function LoginForm({ portal }: { portal: CpmisPortalId }) {
@@ -66,7 +74,14 @@ export function LoginForm({ portal }: { portal: CpmisPortalId }) {
         <Button type="submit" disabled={pending}>{pending ? "Signing in..." : "Sign in"}</Button>
       </form>
 
-      <div className="mt-5 rounded-2xl bg-[#fff7f3] px-4 py-3 text-xs text-black/60">
+      <p className="mt-5 text-center text-sm text-black/55">
+        New here?{" "}
+        <Link href={`${PORTAL_BASE[portal]}/signup`} className="font-medium text-[#d97757] hover:underline">
+          Create an account
+        </Link>
+      </p>
+
+      <div className="mt-4 rounded-2xl bg-[#fff7f3] px-4 py-3 text-xs text-black/60">
         <p className="font-medium text-black/75">Demo password ({PORTAL_LABEL[portal].replace(" portal", "")})</p>
         <p className="mt-1 font-mono">{DEMO_PASSWORDS[portal]}</p>
       </div>

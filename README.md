@@ -7,7 +7,7 @@ alongside the work that portal does. The ports share one Node process; the data 
 not live in that process. On first boot each database is seeded from the sample
 workspace, and later changes persist.
 
-The preview clock is 6 Nov 2026. Money is RWF. Each portal requires email + password sign-in. Sessions are per portal (signing into one portal does not sign into another).
+The preview clock is 6 Nov 2026. Money is RWF. Each portal requires email + password sign-in. Sessions are per portal (signing into one portal does not sign into another). Each portal also has a sign-up flow: users scan the portal QR code from the admin dashboard, submit their name, phone, email, and password, verify their phone with an SMS OTP, and are signed into that portal.
 
 ### Demo credentials
 
@@ -21,6 +21,20 @@ Seeded accounts use a password based on role (override with `DEMO_PASSWORD_*` in
 | Quantity surveyor | `QsDemo2026!` | david.nshimiyimana@cpmis.demo |
 
 All seeded users in `lib/mock-data/seed.ts` can sign in with their role password.
+
+### Self-signup (QR + OTP)
+
+The Administrator dashboard includes a **QR Code** section with a QR for each portal (Administrator, Project Manager, Site Engineer, Quantity Surveyor). Scanning a QR opens that portal's sign-up page where the user enters first/last name, phone number, email, and password. A 6-digit OTP is sent by SMS through Twilio; after verification the account is created as active for that portal role and the user is signed in.
+
+Configure Twilio in `.env`:
+
+```env
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_FROM_NUMBER=+1...
+```
+
+If Twilio is not configured, existing email/password sign-in still works, but OTP signup will return a configuration error.
 
 ## Run
 
