@@ -1,12 +1,15 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { accountStatusLabel, accountStatuses, roleLabel, userRoles } from "@/lib/labels";
-import { userSchema, type UserFormValues } from "@/lib/validations/schemas";
+import { createUserSchema, userSchema, type UserFormValues } from "@/lib/validations/schemas";
 import type { Project, UserAccount } from "@/types";
+
+type FormValues = UserFormValues & { password?: string };
 
 export function UserForm({
   user,
@@ -19,10 +22,11 @@ export function UserForm({
   projects: Project[];
   serverError?: string | null;
   onCancel: () => void;
-  onSubmit: (values: UserFormValues) => void;
+  onSubmit: (values: UserFormValues & { password?: string }) => void | Promise<void>;
 }) {
-  const form = useForm<UserFormValues>({
-    resolver: zodResolver(userSchema),
+  const schema = user ? userSchema : createUserSchema;
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
     defaultValues: user
       ? {
           firstName: user.firstName,
@@ -41,6 +45,7 @@ export function UserForm({
           role: "site_engineer",
           projectId: "unassigned",
           status: "active",
+          password: "",
         },
   });
   const errors = form.formState.errors;
@@ -50,7 +55,9 @@ export function UserForm({
       className="grid gap-4 sm:grid-cols-2"
       action={user ? undefined : "/api/users"}
       method={user ? undefined : "post"}
-      onSubmit={form.handleSubmit(onSubmit)}
+      onSubmit={form.handleSubmit((values) => {
+        onSubmit(values);
+      })}
       noValidate
     >
       <Field label="First name" htmlFor="firstName" error={errors.firstName?.message}>
@@ -81,9 +88,14 @@ export function UserForm({
           {accountStatuses.map((status) => <option key={status} value={status}>{accountStatusLabel[status]}</option>)}
         </select>
       </Field>
+      {!user ? (
+        <Field label="Initial password" htmlFor="password" error={errors.password?.message}>
+          <Input id="password" type="password" autoComplete="new-password" {...form.register("password")} />
+        </Field>
+      ) : null}
       {serverError ? <p className="text-sm text-destructive sm:col-span-2">{serverError}</p> : null}
       <div className="flex justify-end gap-2 sm:col-span-2">
-        {user ? <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button> : <Button asChild variant="outline"><a href="/admin/users">Cancel</a></Button>}
+        {user ? <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button> : <Button asChild variant="outline"><Link href="/admin/users">Cancel</Link></Button>}
         <Button type="submit">{user ? "Save user" : "Add user"}</Button>
       </div>
     </form>

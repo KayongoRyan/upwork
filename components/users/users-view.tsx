@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, Pencil, Plus, Power, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -24,17 +25,17 @@ import type { UserAccount } from "@/types";
 
 export function UsersView() {
   const data = useAdmin();
+  const router = useRouter();
   const params = useSearchParams();
   const focus = params.get("focus");
   const add = params.get("add") === "1";
   const [seenFocus, setSeenFocus] = useState(focus);
   const [viewId, setViewId] = useState<string | null>(focus);
-  const [editor, setEditor] = useState<UserAccount | "new" | null>(null);
+  const [editor, setEditor] = useState<UserAccount | null>(null);
   const [pendingDelete, setPendingDelete] = useState<UserAccount | null>(null);
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("all");
   const [formError, setFormError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
     setViewId(focus);
@@ -60,12 +61,13 @@ export function UsersView() {
   const viewing = data.users.find((user) => user.id === viewId) ?? null;
 
   function save(values: UserFormValues) {
-    const result = editor === "new" ? data.createUser(values) : editor ? data.updateUser(editor.id, values) : { ok: false as const, error: "Nothing to save." };
+    if (!editor) return;
+    const result = data.updateUser(editor.id, values);
     if (!result.ok) {
       setFormError(result.error);
       return;
     }
-    toast.success(editor === "new" ? "User added in this preview." : "User updated in this preview.");
+    toast.success("User updated.");
     setEditor(null);
     setFormError(null);
   }
@@ -85,26 +87,24 @@ export function UsersView() {
       <PageHeader
         title="User management"
         description="Application accounts only. Workforce records that do not sign in live under Employees."
-        actions={<Button asChild><a href="/admin/users?add=1"><Plus />Add user</a></Button>}
+        actions={<Button asChild><Link href="/admin/users?add=1"><Plus />Add user</Link></Button>}
       />
-      {add && !saved ? (
+      {add ? (
         <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
           <h2 className="text-base font-semibold">Add user</h2>
-          <p className="mt-1 mb-4 text-sm text-black/55">Preview account only. This does not send an invitation or set a password.</p>
+          <p className="mt-1 mb-4 text-sm text-black/55">Create an account with an initial password. The person can sign in with their email and that password.</p>
           <UserForm
             projects={data.projects}
             serverError={formError ?? params.get("error")}
-            onCancel={() => { window.location.assign("/admin/users"); }}
-            onSubmit={(values) => {
-              const result = data.createUser(values);
-              if (!result.ok) {
-                setFormError(result.error);
-                return;
-              }
-              toast.success("User added in this preview.");
-              setFormError(null);
-              setSaved(true);
-              window.history.replaceState(null, "", "/admin/users");
+            onCancel={() => { router.push("/admin/users"); }}
+            onSubmit={async (values) => {
+              const body = new FormData();
+              Object.entries(values).forEach(([key, value]) => body.append(key, String(value ?? "")));
+              const res = await fetch("/api/users", { method: "POST", body });
+              if (res.redirected) { router.push(res.url); router.refresh(); return; }
+              if (!res.ok) { setFormError("Could not add the user."); return; }
+              router.push("/admin/users");
+              router.refresh();
             }}
           />
         </section>
@@ -113,7 +113,7 @@ export function UsersView() {
         <Mini label="Total users" value={counts.total} />
         <Mini label="Active" value={counts.active} />
         <Mini label="Inactive" value={counts.inactive} />
-        <Mini label="By role" value={`${counts.project_manager} PM · ${counts.site_engineer} SE · ${counts.quantity_surveyor} QS`} />
+        <Mini label="By role" value={`${counts.project_manager} PM Ã‚Â· ${counts.site_engineer} SE Ã‚Â· ${counts.quantity_surveyor} QS`} />
       </div>
       <div className="mb-4 flex flex-col gap-3 lg:flex-row">
         <Input value={table.query} onChange={(event) => table.setQuery(event.target.value)} placeholder="Search name, email, or phone" className="lg:max-w-sm" />
@@ -148,7 +148,7 @@ export function UsersView() {
                   <td className="px-3 py-3">{user.email}</td>
                   <td className="px-3 py-3 whitespace-nowrap">{user.phone}</td>
                   <td className="px-3 py-3">{roleLabel[user.role]}</td>
-                  <td className="px-3 py-3">{data.projectById(user.projectId)?.code ?? "—"}</td>
+                  <td className="px-3 py-3">{data.projectById(user.projectId)?.code ?? "Ã¢â‚¬â€"}</td>
                   <td className="px-3 py-3"><AccountBadge status={user.status} /></td>
                   <td className="px-3 py-3 whitespace-nowrap">{formatDate(user.registeredAt)}</td>
                   <td className="px-3 py-3">
@@ -167,9 +167,9 @@ export function UsersView() {
         {table.total === 0 ? <EmptyState title="No users match" body="Adjust the search or filters." /> : <Pagination page={table.page} pageCount={table.pageCount} total={table.total} pageSize={6} onPage={table.setPage} />}
       </div>
 
-      <Dialog open={editor !== null && editor !== "new"} onOpenChange={(open) => { if (!open) setEditor(null); }}>
-        {editor !== null && editor !== "new" ? (
-          <DialogContent className="sm:max-w-2xl" title="Edit user" description="This updates the preview account. It does not send an invitation or set a password.">
+      <Dialog open={editor !== null} onOpenChange={(open) => { if (!open) setEditor(null); }}>
+        {editor ? (
+          <DialogContent className="sm:max-w-2xl" title="Edit user" description="This updates the account details. It does not change the password.">
             <UserForm user={editor} projects={data.projects} serverError={formError} onCancel={() => setEditor(null)} onSubmit={save} />
           </DialogContent>
         ) : null}

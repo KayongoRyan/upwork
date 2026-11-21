@@ -1,10 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { adminReducer, type AdminAction } from "@/lib/data/reducer";
+import { adminReducer, type AdminAction, type Stamp } from "@/lib/data/reducer";
 import { billLines, estimateFor, expenditureFor, parseBoq, sameBill } from "@/lib/boq";
 import { isManagerFieldNotice } from "@/lib/notices";
-import { nextId, PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID } from "@/lib/utils";
+import { nextId } from "@/lib/utils";
 import type { CpmisPortalId } from "@/lib/portals";
 import type {
   ActionResult,
@@ -21,6 +21,7 @@ import type {
   ReportPhoto,
   Project,
   ProjectInput,
+  SessionUser,
   TaskInput,
   TaskPriority,
   TaskStatus,
@@ -30,6 +31,7 @@ import type {
 
 interface AdminContextValue {
   state: AdminState;
+  viewer: SessionUser | null;
   dispatch: (action: AdminAction) => void;
   /** Demo-store notices merged with the ones MongoDB holds for the public site. */
   notifications: AppNotification[];
@@ -43,11 +45,13 @@ export function AdminProvider({
   portal,
   initialState,
   initialNotifications = [],
+  session = null,
   children,
 }: {
   portal: CpmisPortalId;
   initialState: AdminState;
   initialNotifications?: AppNotification[];
+  session?: SessionUser | null;
   children: React.ReactNode;
 }) {
   const [state, setState] = useState(initialState);
@@ -61,6 +65,7 @@ export function AdminProvider({
   // CPMIS keeps its demo state in memory; the public site writes to MongoDB.
   // Poll the API through the Next route so both inboxes show the same notices.
   useEffect(() => {
+    if (!session) return;
     let cancelled = false;
     async function load() {
       try {
@@ -83,10 +88,11 @@ export function AdminProvider({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [session]);
 
   const dispatch = useCallback((action: AdminAction) => {
     setState((current) => adminReducer(current, action));
+    if (!session) return;
     pending.current += 1;
     chain.current = chain.current.then(async () => {
       try {
@@ -103,9 +109,10 @@ export function AdminProvider({
         pending.current -= 1;
       }
     });
-  }, [actionsUrl]);
+  }, [actionsUrl, session]);
 
   useEffect(() => {
+    if (!session) return;
     const timer = window.setInterval(async () => {
       if (pending.current > 0) return;
       const response = await fetch(stateUrl, { cache: "no-store" });
@@ -114,7 +121,7 @@ export function AdminProvider({
       setState((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
     }, 1200);
     return () => window.clearInterval(timer);
-  }, [stateUrl]);
+  }, [stateUrl, session]);
 
   const notifications = useMemo(() => {
     const demoIds = new Set(state.notifications.map((item) => item.id));
@@ -152,8 +159,8 @@ export function AdminProvider({
   }, [dispatch, patchRemoteNotice]);
 
   const value = useMemo(
-    () => ({ state, dispatch, notifications, markNotification, markAllNotifications }),
-    [state, dispatch, notifications, markNotification, markAllNotifications],
+    () => ({ state, viewer: session, dispatch, notifications, markNotification, markAllNotifications }),
+    [state, session, dispatch, notifications, markNotification, markAllNotifications],
   );
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
 }
@@ -164,16 +171,24 @@ function useAdminContext() {
   return context;
 }
 
-function stamp() {
+function stamp(viewer: SessionUser | null): Stamp {
   const id = nextId("act");
-  return { id, at: new Date().toISOString(), notificationId: `ntf-${id}` };
+  return {
+    id,
+    at: new Date().toISOString(),
+    notificationId: `ntf-${id}`,
+    actorId: viewer?.id,
+    actorName: viewer ? `${viewer.firstName} ${viewer.lastName}` : undefined,
+    actorRole: viewer?.role,
+  };
 }
 
 export function useAdmin() {
-  const { state, dispatch, notifications, markNotification, markAllNotifications } = useAdminContext();
+  const { state, viewer, dispatch, notifications, markNotification, markAllNotifications } = useAdminContext();
 
   return {
     ...state,
+    viewer,
     notifications,
     markNotification,
     markAllNotifications,
@@ -182,7 +197,7 @@ export function useAdmin() {
       if (state.projects.some((project) => project.code.toUpperCase() === code)) {
         return { ok: false, error: "That project code is already in use." };
       }
-      dispatch({ type: "create-project", input, stamp: stamp() });
+      dispatch({ type: "create-project", input, stamp: stamp(viewer) });
       return { ok: true };
     },
     updateProject(id: string, input: ProjectInput): ActionResult {
@@ -190,31 +205,31 @@ export function useAdmin() {
       if (state.projects.some((project) => project.id !== id && project.code.toUpperCase() === code)) {
         return { ok: false, error: "That project code is already in use." };
       }
-      dispatch({ type: "update-project", id, input, stamp: stamp() });
+      dispatch({ type: "update-project", id, input, stamp: stamp(viewer) });
       return { ok: true };
     },
     deleteProject(id: string) {
-      dispatch({ type: "delete-project", id, stamp: stamp() });
+      dispatch({ type: "delete-project", id, stamp: stamp(viewer) });
     },
-    createUser(input: UserInput): ActionResult {
+    createUser(input: UserInput, password?: string): ActionResult {
       if (emailTaken(state.users, input.email)) return { ok: false, error: "That email is already registered." };
-      dispatch({ type: "create-user", input, stamp: stamp() });
+      dispatch({ type: "create-user", input, password, stamp: stamp(viewer) } as AdminAction);
       return { ok: true };
     },
     updateUser(id: string, input: UserInput): ActionResult {
       if (emailTaken(state.users, input.email, id)) return { ok: false, error: "That email is already registered." };
-      dispatch({ type: "update-user", id, input, stamp: stamp() });
+      dispatch({ type: "update-user", id, input, stamp: stamp(viewer) });
       return { ok: true };
     },
     setUserStatus(id: string, status: UserInput["status"]): ActionResult {
-      if (id === "u-admin" && status === "inactive") {
-        return { ok: false, error: "The preview administrator account stays active." };
+      if (id === viewer?.id && status === "inactive") {
+        return { ok: false, error: "You cannot deactivate your own account." };
       }
-      dispatch({ type: "set-user-status", id, status, stamp: stamp() });
+      dispatch({ type: "set-user-status", id, status, stamp: stamp(viewer) });
       return { ok: true };
     },
     deleteUser(id: string): ActionResult {
-      if (id === "u-admin") return { ok: false, error: "The preview administrator account cannot be deleted." };
+      if (id === viewer?.id) return { ok: false, error: "You cannot delete your own account." };
       const managed = state.projects.filter((project) => project.managerId === id);
       if (managed.length) {
         return {
@@ -222,14 +237,14 @@ export function useAdmin() {
           error: `Reassign ${managed.map((project) => project.code).join(", ")} before deleting this manager.`,
         };
       }
-      dispatch({ type: "delete-user", id, stamp: stamp() });
+      dispatch({ type: "delete-user", id, stamp: stamp(viewer) });
       return { ok: true };
     },
     createEmployee(input: EmployeeInput): ActionResult {
       if (state.employees.some((employee) => employee.employeeCode.toLowerCase() === input.employeeCode.trim().toLowerCase())) {
         return { ok: false, error: "That employee ID is already in use." };
       }
-      dispatch({ type: "create-employee", input, stamp: stamp() });
+      dispatch({ type: "create-employee", input, stamp: stamp(viewer) });
       return { ok: true };
     },
     updateEmployee(id: string, input: EmployeeInput): ActionResult {
@@ -240,89 +255,94 @@ export function useAdmin() {
       ) {
         return { ok: false, error: "That employee ID is already in use." };
       }
-      dispatch({ type: "update-employee", id, input, stamp: stamp() });
+      dispatch({ type: "update-employee", id, input, stamp: stamp(viewer) });
       return { ok: true };
     },
     deleteEmployee(id: string) {
-      dispatch({ type: "delete-employee", id, stamp: stamp() });
+      dispatch({ type: "delete-employee", id, stamp: stamp(viewer) });
     },
     createTask(input: TaskInput): ActionResult {
-      dispatch({ type: "create-task", input, stamp: stamp() });
+      dispatch({ type: "create-task", input, stamp: stamp(viewer) });
       return { ok: true };
     },
     setTaskStatus(id: string, status: TaskInput["status"]) {
-      dispatch({ type: "set-task-status", id, status, stamp: stamp() });
+      dispatch({ type: "set-task-status", id, status, stamp: stamp(viewer) });
     },
     assignTask(id: string, projectId: string) {
-      dispatch({ type: "assign-task", id, projectId, stamp: stamp() });
+      dispatch({ type: "assign-task", id, projectId, stamp: stamp(viewer) });
     },
     scheduleTask(id: string, input: { projectId: string; assignee: string; dueDate: string; priority: TaskPriority }): ActionResult {
       const task = state.tasks.find((item) => item.id === id);
       const project = state.projects.find((item) => item.id === input.projectId);
       const current = task ? state.projects.find((item) => item.id === task.projectId) : undefined;
       if (!task || !project || !current) return { ok: false, error: "That task is no longer on the portfolio." };
-      if (project.managerId !== PREVIEW_PM_ID || current.managerId !== PREVIEW_PM_ID) {
+      if (viewer?.role === "project_manager" && (project.managerId !== viewer.id || current.managerId !== viewer.id)) {
         return { ok: false, error: "You can only schedule tasks on your own projects." };
       }
-      dispatch({ type: "schedule-task", id, ...input, stamp: stamp() });
+      dispatch({ type: "schedule-task", id, ...input, stamp: stamp(viewer) });
       return { ok: true };
     },
     setProjectProgress(id: string, progress: number, note: string): ActionResult {
       const project = state.projects.find((item) => item.id === id);
-      if (!project || project.managerId !== PREVIEW_PM_ID) return { ok: false, error: "That project is not on your portfolio." };
+      if (!project) return { ok: false, error: "That project is not on your portfolio." };
+      if (viewer?.role === "project_manager" && project.managerId !== viewer.id) return { ok: false, error: "That project is not on your portfolio." };
       if (project.status === "completed") return { ok: false, error: "A completed project keeps its recorded progress." };
-      dispatch({ type: "set-progress", id, progress, note: note.trim(), stamp: stamp() });
+      dispatch({ type: "set-progress", id, progress, note: note.trim(), stamp: stamp(viewer) });
       return { ok: true };
     },
     submitEngineerReport(input: EngineerReportInput): ActionResult {
-      const project = state.projects.find((item) => item.id === input.projectId && item.managerId === PREVIEW_PM_ID);
+      const project = state.projects.find((item) =>
+        item.id === input.projectId && (viewer?.role !== "project_manager" || item.managerId === viewer.id),
+      );
       const engineer = state.users.find((user) => user.id === input.engineerId && user.role === "site_engineer" && user.status === "active");
       if (!project) return { ok: false, error: "Choose one of your projects." };
       if (!engineer) return { ok: false, error: "Choose an active site engineer." };
       if (input.periodEnd < input.periodStart) return { ok: false, error: "Period end must be on or after the start." };
-      dispatch({ type: "submit-report", input, stamp: stamp(), toAdmin: true });
+      dispatch({ type: "submit-report", input, stamp: stamp(viewer), toAdmin: true });
       return { ok: true };
     },
     openReportReview(id: string): ActionResult {
       const report = state.reports.find((item) => item.id === id);
       const project = report ? state.projects.find((item) => item.id === report.projectId) : undefined;
-      if (!report || !project || project.managerId !== PREVIEW_PM_ID) return { ok: false, error: "That report is not on your portfolio." };
+      if (!report || !project) return { ok: false, error: "That report is not on your portfolio." };
+      if (viewer?.role === "project_manager" && project.managerId !== viewer.id) return { ok: false, error: "That report is not on your portfolio." };
       if (report.status !== "submitted") return { ok: false, error: "Only a submitted report can be opened for review." };
-      dispatch({ type: "open-report-review", id, stamp: stamp() });
+      dispatch({ type: "open-report-review", id, stamp: stamp(viewer) });
       return { ok: true };
     },
     decideReport(id: string, decision: Extract<EngineerReportStatus, "approved" | "rejected">, note: string): ActionResult {
       const report = state.reports.find((item) => item.id === id);
       const project = report ? state.projects.find((item) => item.id === report.projectId) : undefined;
-      if (!report || !project || project.managerId !== PREVIEW_PM_ID) return { ok: false, error: "That report is not on your portfolio." };
+      if (!report || !project) return { ok: false, error: "That report is not on your portfolio." };
+      if (viewer?.role === "project_manager" && project.managerId !== viewer.id) return { ok: false, error: "That report is not on your portfolio." };
       if (report.status !== "in_review") return { ok: false, error: "Open the report for review before you approve or reject it." };
       if (decision === "rejected" && note.trim().length < 3) return { ok: false, error: "A rejection needs a note the engineer can act on." };
-      dispatch({ type: "decide-report", id, decision, note, stamp: stamp() });
+      dispatch({ type: "decide-report", id, decision, note, stamp: stamp(viewer) });
       return { ok: true };
     },
     deleteTask(id: string) {
-      dispatch({ type: "delete-task", id, stamp: stamp() });
+      dispatch({ type: "delete-task", id, stamp: stamp(viewer) });
     },
     setAssignedTaskProgress(engineerId: string, id: string, progress: number, status: TaskStatus) {
-      dispatch({ type: "set-task-progress", id, engineerId, progress, status, stamp: stamp() });
+      dispatch({ type: "set-task-progress", id, engineerId, progress, status, stamp: stamp(viewer) });
     },
     submitSiteReport(input: EngineerReportInput) {
-      dispatch({ type: "submit-report", input, stamp: stamp() });
+      dispatch({ type: "submit-report", input, stamp: stamp(viewer) });
     },
     resubmitSiteReport(id: string, input: { progress: number; summary: string; issues: string; photos: ReportPhoto[] }) {
-      dispatch({ type: "resubmit-report", id, ...input, stamp: stamp() });
+      dispatch({ type: "resubmit-report", id, ...input, stamp: stamp(viewer) });
     },
     createBoqLine(surveyorId: string, input: BoqInput) {
-      dispatch({ type: "create-boq", surveyorId, input, stamp: stamp() });
+      dispatch({ type: "create-boq", surveyorId, input, stamp: stamp(viewer) });
     },
     updateBoqLine(surveyorId: string, id: string, input: BoqInput) {
-      dispatch({ type: "update-boq", surveyorId, id, input, stamp: stamp() });
+      dispatch({ type: "update-boq", surveyorId, id, input, stamp: stamp(viewer) });
     },
     deleteBoqLine(surveyorId: string, id: string) {
-      dispatch({ type: "delete-boq", surveyorId, id, stamp: stamp() });
+      dispatch({ type: "delete-boq", surveyorId, id, stamp: stamp(viewer) });
     },
     submitCostReport(projectId: string, surveyorId: string) {
-      dispatch({ type: "submit-cost-report", projectId, surveyorId, stamp: stamp() });
+      dispatch({ type: "submit-cost-report", projectId, surveyorId, stamp: stamp(viewer) });
     },
     registerDocument(
       document: Omit<ProjectDocument, "id" | "revisions">,
@@ -338,7 +358,7 @@ export function useAdmin() {
         type: "register-document",
         document: { ...document, number, title: document.title.trim() },
         revision: { ...revision, status: revision.status },
-        stamp: stamp(),
+        stamp: stamp(viewer),
       });
       return { ok: true };
     },
@@ -346,7 +366,7 @@ export function useAdmin() {
       const current = (state.documents ?? []).find((item) => item.id === documentId);
       if (!current) return { ok: false, error: "That document is not on the register." };
       if (!revision.fileName) return { ok: false, error: "Choose a file." };
-      dispatch({ type: "revise-document", documentId, revision, stamp: stamp() });
+      dispatch({ type: "revise-document", documentId, revision, stamp: stamp(viewer) });
       return { ok: true };
     },
     issueRevision(documentId: string): ActionResult {
@@ -354,19 +374,19 @@ export function useAdmin() {
       const latest = current?.revisions[current.revisions.length - 1];
       if (!current || !latest) return { ok: false, error: "That document is not on the register." };
       if (latest.status === "approved") return { ok: false, error: "The latest revision is already issued." };
-      dispatch({ type: "issue-revision", documentId, stamp: stamp() });
+      dispatch({ type: "issue-revision", documentId, stamp: stamp(viewer) });
       return { ok: true };
     },
     setDocumentAccess(documentId: string, access: UserRole[]): ActionResult {
       if (!(state.documents ?? []).some((item) => item.id === documentId)) return { ok: false, error: "That document is not on the register." };
-      dispatch({ type: "set-document-access", documentId, access, stamp: stamp() });
+      dispatch({ type: "set-document-access", documentId, access, stamp: stamp(viewer) });
       return { ok: true };
     },
     updateSettings(patch: Partial<OrgSettings>) {
-      dispatch({ type: "update-settings", patch, stamp: stamp() });
+      dispatch({ type: "update-settings", patch, stamp: stamp(viewer) });
     },
     saveSupportRequest(topic: string, message: string) {
-      dispatch({ type: "support-request", topic, message, stamp: stamp() });
+      dispatch({ type: "support-request", topic, message, stamp: stamp(viewer) });
     },
     resetDemo() {
       dispatch({ type: "reset" });
@@ -383,9 +403,9 @@ export function useAdmin() {
 
 export function usePm() {
   const data = useAdmin();
-  const projects = data.projects.filter((project) => project.managerId === PREVIEW_PM_ID);
+  const actor = data.viewer?.role === "project_manager" ? data.viewer : data.users.find((user) => user.id === data.viewer?.id) ?? null;
+  const projects = data.projects.filter((project) => project.managerId === actor?.id);
   const ids = new Set(projects.map((project) => project.id));
-  const actor = data.users.find((user) => user.id === PREVIEW_PM_ID) ?? null;
   return {
     actor,
     projects,
@@ -434,7 +454,7 @@ export function usePm() {
 
 export function useSiteEngineer() {
   const data = useAdmin();
-  const actor = data.users.find((user) => user.id === PREVIEW_SE_ID) ?? null;
+  const actor = data.viewer?.role === "site_engineer" ? data.viewer : data.users.find((user) => user.id === data.viewer?.id) ?? null;
   const name = actor ? `${actor.firstName} ${actor.lastName}` : "";
   const projects = data.projects.filter((project) => actor?.projectId === project.id);
   const ids = new Set(projects.map((project) => project.id));
@@ -480,10 +500,10 @@ export function useSiteEngineer() {
 
 export function useQuantitySurveyor() {
   const data = useAdmin();
-  const actor = data.users.find((user) => user.id === PREVIEW_QS_ID) ?? null;
+  const actor = data.viewer?.role === "quantity_surveyor" ? data.viewer : data.users.find((user) => user.id === data.viewer?.id) ?? null;
   const project = data.projects.find((item) => item.id === actor?.projectId) ?? null;
   const lines = data.boq.filter((item) => item.projectId === project?.id).sort((a, b) => a.code.localeCompare(b.code));
-  const notices = project ? data.notifications.filter((item) => isManagerFieldNotice(item, [project])) : [];
+  const notices = project ? data.notifications.filter((item) => isManagerFieldNotice(item, [project], actor?.id)) : [];
 
   function checked(input: BoqInput): ActionResult | BoqInput {
     if (!actor?.projectId || !project) return { ok: false, error: "No project is assigned to this account." };

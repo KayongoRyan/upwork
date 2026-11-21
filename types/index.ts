@@ -11,6 +11,15 @@ export type UserRole =
   | "site_engineer"
   | "quantity_surveyor";
 
+export interface SessionUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: UserRole;
+  projectId: string | null;
+}
+
 /** Notices from the public site arrive through the Express API, not a CPMIS portal. */
 export type NotificationSource = UserRole | "vertexa";
 

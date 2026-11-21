@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/server/auth";
 import { isPortalKey, readState } from "@/lib/server/portal-store";
 
 export const runtime = "nodejs";
@@ -13,6 +14,10 @@ export async function GET(_request: Request, context: { params: Promise<{ portal
   const { portal } = await context.params;
   if (!isPortalKey(portal)) {
     return NextResponse.json({ ok: false, error: "unknown-portal" }, { status: 404 });
+  }
+  const session = await getSessionUser(portal);
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const state = await readState();
   return NextResponse.json(state, { headers: { "cache-control": "no-store" } });

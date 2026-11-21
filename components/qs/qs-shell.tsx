@@ -8,20 +8,21 @@ import { useQuantitySurveyor } from "@/lib/data/admin-store";
 import { qsNavItems } from "@/lib/navigation";
 import { portalUrl } from "@/lib/portals";
 import { cn, fullName } from "@/lib/utils";
+import type { SessionUser } from "@/types";
 
-export function QsShell({ children }: { children: React.ReactNode }) {
+export function QsShell({ user, children }: { user: SessionUser; children: React.ReactNode }) {
   return (
     <>
-      <Frame>{children}</Frame>
+      <Frame user={user}>{children}</Frame>
       <Toaster position="top-right" closeButton />
     </>
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ user, children }: { user: SessionUser; children: React.ReactNode }) {
   const data = useQuantitySurveyor();
   const [collapsed, setCollapsed] = useState(false);
-  const name = data.actor ? fullName(data.actor) : "Quantity surveyor";
+  const name = fullName(user);
   const code = data.project?.code ?? "";
 
   return (
@@ -42,7 +43,8 @@ function Frame({ children }: { children: React.ReactNode }) {
           onToggleCollapse={() => setCollapsed((value) => !value)}
           scope="field"
           portfolio={data.project ? [data.project] : []}
-          identity={{ name, email: data.actor?.email ?? "", role: "Quantity surveyor" }}
+          identity={{ name, email: user.email, role: "Quantity surveyor" }}
+          portal="quantity_surveyor"
           links={{
             notifications: "/qs/notices",
             settings: portalUrl("administrator", "/admin/settings"),

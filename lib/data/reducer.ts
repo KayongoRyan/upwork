@@ -25,10 +25,13 @@ import type {
   WorkKind,
 } from "@/types";
 
-interface Stamp {
+export interface Stamp {
   id: string;
   at: string;
   notificationId?: string;
+  actorId?: string;
+  actorName?: string;
+  actorRole?: UserRole;
 }
 
 export type AdminAction =
@@ -36,7 +39,7 @@ export type AdminAction =
   | { type: "create-project"; input: ProjectInput; stamp: Stamp }
   | { type: "update-project"; id: string; input: ProjectInput; stamp: Stamp }
   | { type: "delete-project"; id: string; stamp: Stamp }
-  | { type: "create-user"; input: UserInput; stamp: Stamp }
+  | { type: "create-user"; input: UserInput; stamp: Stamp; password?: string }
   | { type: "update-user"; id: string; input: UserInput; stamp: Stamp }
   | { type: "set-user-status"; id: string; status: UserInput["status"]; stamp: Stamp }
   | { type: "delete-user"; id: string; stamp: Stamp }
@@ -268,7 +271,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
     case "add-calendar-event": {
       const title = action.title.trim();
       if (title.length < 3 || !/^\d{4}-\d{2}-\d{2}$/.test(action.date)) return state;
-      const actor = pmActor(state);
+      const actor = pmActor(state, action.stamp);
       return audit(
         {
           ...state,
@@ -348,8 +351,8 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
     }
     case "schedule-task": {
       const item = state.tasks.find((task) => task.id === action.id);
-      const project = managedProject(state, action.projectId);
-      const current = item ? managedProject(state, item.projectId) : undefined;
+      const project = managedProject(state, action.projectId, action.stamp.actorId);
+      const current = item ? managedProject(state, item.projectId, action.stamp.actorId) : undefined;
       if (!item || !project || !current) return state;
       return audit(
         {
@@ -365,14 +368,14 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         "Tasks",
         item.title,
         "success",
-        pmActor(state),
+        pmActor(state, action.stamp),
       );
     }
     case "set-progress": {
-      const project = managedProject(state, action.id);
+      const project = managedProject(state, action.id, action.stamp.actorId);
       if (!project || project.status === "completed") return state;
       const progress = Math.min(100, Math.max(0, Math.round(action.progress)));
-      const actor = pmActor(state);
+      const actor = pmActor(state, action.stamp);
       const note = action.note.trim();
       return audit(
         {
@@ -446,7 +449,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       };
     }
     case "submit-report": {
-      const project = managedProject(state, action.input.projectId);
+      const project = managedProject(state, action.input.projectId, action.stamp.actorId);
       const engineer = state.users.find((user) => user.id === action.input.engineerId && user.role === "site_engineer" && user.status === "active");
       if (!project || !engineer) return state;
       const report: EngineerReport = {
@@ -465,7 +468,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       };
       const sender = `${engineer.firstName} ${engineer.lastName}`;
       const adminName = state.settings.profileName;
-      const manager = pmActor(state);
+      const manager = pmActor(state, action.stamp);
       const filed = maybeNotify(state, action.stamp, {
         type: "project",
         title: `${project.code} daily report submitted`,
@@ -507,9 +510,9 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
     }
     case "open-report-review": {
       const report = state.reports.find((item) => item.id === action.id);
-      const project = report ? managedProject(state, report.projectId) : undefined;
+      const project = report ? managedProject(state, report.projectId, action.stamp.actorId) : undefined;
       if (!report || !project || report.status !== "submitted") return state;
-      const actor = pmActor(state);
+      const actor = pmActor(state, action.stamp);
       return audit(
         {
           ...state,
@@ -525,9 +528,9 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
     }
     case "decide-report": {
       const report = state.reports.find((item) => item.id === action.id);
-      const project = report ? managedProject(state, report.projectId) : undefined;
+      const project = report ? managedProject(state, report.projectId, action.stamp.actorId) : undefined;
       if (!report || !project || report.status !== "in_review") return state;
-      const actor = pmActor(state);
+      const actor = pmActor(state, action.stamp);
       const approved = action.decision === "approved";
       const progress = approved ? Math.max(project.progress, report.progress) : project.progress;
       const engineer = state.users.find((user) => user.id === report.engineerId);
@@ -658,7 +661,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       );
     }
     case "revise-cost-bill": {
-      const project = managedProject(state, action.projectId);
+      const project = managedProject(state, action.projectId, action.stamp.actorId);
       if (!project || action.lines.length === 0) return state;
       const edits = new Map(action.lines.map((line) => [line.id, line]));
       let changed = false;
@@ -673,7 +676,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         return { ...item, estimatedQty: parsed.estimatedQty, actualQty: parsed.actualQty, unitRate: parsed.unitRate };
       });
       if (!changed) return state;
-      const actor = pmActor(state);
+      const actor = pmActor(state, action.stamp);
       const spent = expenditureFor(boq, project.id);
       return audit(
         {
@@ -749,11 +752,11 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       };
     }
     case "submit-cost-report": {
-      const project = managedProject(state, action.projectId);
+      const project = managedProject(state, action.projectId, action.stamp.actorId);
       const surveyor = state.users.find((user) => user.id === action.surveyorId && user.role === "quantity_surveyor" && user.status === "active" && user.projectId === action.projectId);
       const lines = billLines(state.boq, action.projectId);
       if (!project || !surveyor || lines.length === 0) return state;
-      const actor = pmActor(state);
+      const actor = pmActor(state, action.stamp);
       const report: CostReport = {
         id: action.stamp.id,
         projectId: project.id,
@@ -1090,8 +1093,9 @@ function measure(
   );
 }
 
-function managedProject(state: AdminState, projectId: string) {
-  return state.projects.find((project) => project.id === projectId && project.managerId === PREVIEW_PM_ID);
+function managedProject(state: AdminState, projectId: string, managerId?: string) {
+  const owner = managerId || PREVIEW_PM_ID;
+  return state.projects.find((project) => project.id === projectId && project.managerId === owner);
 }
 
 function withAdmin(access: ProjectDocument["access"]): ProjectDocument["access"] {
@@ -1104,9 +1108,25 @@ function nextRevision(document: ProjectDocument) {
   return String((Number.isFinite(current) ? current : document.revisions.length) + 1).padStart(2, "0");
 }
 
-function pmActor(state: AdminState) {
+function actorFromStamp(state: AdminState, stamp: Stamp) {
+  if (stamp.actorId) {
+    const user = state.users.find((item) => item.id === stamp.actorId);
+    return {
+      id: stamp.actorId,
+      name: stamp.actorName ?? (user ? `${user.firstName} ${user.lastName}` : "User"),
+      role: stamp.actorRole ?? user?.role,
+    };
+  }
   const user = state.users.find((item) => item.id === PREVIEW_PM_ID);
-  return { id: PREVIEW_PM_ID, name: user ? `${user.firstName} ${user.lastName}` : "Project manager" };
+  return { id: PREVIEW_PM_ID, name: user ? `${user.firstName} ${user.lastName}` : "Project manager", role: "project_manager" as const };
+}
+
+function pmActor(state: AdminState, stamp?: Stamp) {
+  const actor = stamp ? actorFromStamp(state, stamp) : null;
+  if (actor && actor.role === "project_manager") return { id: actor.id, name: actor.name };
+  const user = state.users.find((item) => item.id === (stamp?.actorId ?? PREVIEW_PM_ID));
+  const id = stamp?.actorId ?? PREVIEW_PM_ID;
+  return { id, name: user ? `${user.firstName} ${user.lastName}` : stamp?.actorName ?? "Project manager" };
 }
 
 function audit(
@@ -1118,10 +1138,11 @@ function audit(
   status: ActivityStatus,
   actor?: { id: string; name: string },
 ): AdminState {
+  const resolved = actor ?? (stamp.actorId ? { id: stamp.actorId, name: stamp.actorName ?? state.settings.profileName } : undefined);
   const entry: ActivityLog = {
     id: stamp.id.startsWith("log") ? stamp.id : `log-${stamp.id}`,
-    userId: actor?.id ?? PREVIEW_ACTOR_ID,
-    userName: actor?.name ?? state.settings.profileName,
+    userId: resolved?.id ?? PREVIEW_ACTOR_ID,
+    userName: resolved?.name ?? state.settings.profileName,
     action,
     module,
     record,
@@ -1132,6 +1153,7 @@ function audit(
 }
 
 function receipt(state: AdminState, stamp: Stamp, projectId: string, title: string, message: string): AppNotification {
+  const actor = actorFromStamp(state, stamp);
   return {
     id: `${stamp.notificationId ?? `ntf-${stamp.id}`}-ack`,
     type: "project",
@@ -1140,7 +1162,7 @@ function receipt(state: AdminState, stamp: Stamp, projectId: string, title: stri
     source: "administrator",
     senderName: state.settings.profileName,
     projectId,
-    recipientId: PREVIEW_PM_ID,
+    recipientId: actor.role === "project_manager" ? actor.id : PREVIEW_PM_ID,
     read: false,
     createdAt: stamp.at,
   };

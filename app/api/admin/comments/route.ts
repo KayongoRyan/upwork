@@ -1,4 +1,5 @@
 import { readState } from "@/lib/server/memory";
+import { requireApiSession } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { fullName, nextId } from "@/lib/utils";
@@ -12,6 +13,8 @@ const TYPES = new Set(["unread", "project", "user", "status", "delay", "system"]
 const KINDS = new Set<WorkKind>(["project", "task", "report", "cost", "progress", "boq", "event"]);
 
 export async function POST(request: Request) {
+  const __session = await requireApiSession("administrator");
+  if (__session instanceof Response) return __session;
   const form = await request.formData();
   const portal = String(form.get("portal") ?? "");
   const type = String(form.get("type") ?? "");

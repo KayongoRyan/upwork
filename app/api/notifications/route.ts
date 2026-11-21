@@ -1,4 +1,5 @@
 import { isManagerFieldNotice } from "@/lib/notices";
+import { requireApiSession } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction, type PortalKey } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
@@ -18,6 +19,8 @@ const PORTALS = new Set(["project_manager", "site_engineer", "quantity_surveyor"
 const TYPES = new Set(["unread", "project", "user", "status", "delay", "system"]);
 
 export async function POST(request: Request) {
+  const __session = await requireApiSession("administrator");
+  if (__session instanceof Response) return __session;
   const form = await request.formData();
   const back = String(form.get("return") ?? "");
   if (!RETURNS.has(back)) return redirectTo(request, "/admin/notifications");

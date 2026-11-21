@@ -1,4 +1,5 @@
 import { readState } from "@/lib/server/memory";
+import { requireApiSession } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,5 +10,7 @@ export const dynamic = "force-dynamic";
  * for the actions it owns.
  */
 export async function GET() {
+  const __session = await requireApiSession("administrator");
+  if (__session instanceof Response) return __session;
   return Response.json(await readState());
 }
