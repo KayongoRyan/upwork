@@ -22,6 +22,11 @@ npm run dev:backend
 
 Default API: **http://localhost:4000**
 
+The Express service owns the public site's inquiries and notifications in
+`MONGODB_DB` (default `vertexa_cpmis`). The CPMIS portals keep their workspace in
+separate databases (`vertexa_admin`, `vertexa_pm`, `vertexa_se`, `vertexa_qs`), which
+the Next.js app manages directly — see the root [`README.md`](../README.md#per-portal-databases).
+
 ## Environment (`backend/.env`)
 
 | Variable | Default | Description |

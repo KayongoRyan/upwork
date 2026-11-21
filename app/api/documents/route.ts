@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { nextId } from "@/lib/utils";
 import type { DocumentCategory, RevisionStatus, UserRole } from "@/types";
 
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
   if (!number || !title) return fail("Number and title are required.");
   if (!categories.has(category as DocumentCategory)) return fail("Choose a category.");
   if (!statuses.has(status as RevisionStatus)) return fail("Choose a standing.");
-  const state = readState();
+  const state = await readState();
   if (!state.projects.some((project) => project.id === projectId)) return fail("Choose a project.");
   if (!state.users.some((user) => user.id === ownerId)) return fail("Choose an owner.");
   if (!(file instanceof File) || file.size === 0) return fail("Choose a file.");
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
     .filter((value): value is string => typeof value === "string" && roles.has(value as UserRole)) as UserRole[];
   const bytes = Buffer.from(await file.arrayBuffer());
   const id = nextId("act");
-  await applyAction({
+  await applyPortalAction("administrator", {
     type: "register-document",
     document: {
       projectId,

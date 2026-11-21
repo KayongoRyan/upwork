@@ -1,4 +1,5 @@
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { nextId, PREVIEW_PM_ID } from "@/lib/utils";
 
@@ -10,7 +11,7 @@ export async function POST(request: Request) {
   const id = String(form.get("id") ?? "");
   const note = String(form.get("note") ?? "");
   const decision = String(form.get("decision") ?? "");
-  const state = readState();
+  const state = await readState();
   const report = state.reports.find((item) => item.id === id);
   const project = report ? state.projects.find((item) => item.id === report.projectId) : undefined;
   const engineer = report ? state.users.find((user) => user.id === report.engineerId) : undefined;
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
     return redirectTo(request, "/pm/reports", { error: "Write a comment for the person who sent this report." }, id);
   }
   const stampId = nextId("act");
-  await applyAction({
+  await applyPortalAction("project_manager", {
     type: "decide-report",
     id,
     decision,

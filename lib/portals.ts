@@ -7,6 +7,16 @@ export const portals = [
 ] as const;
 
 export type PortalId = (typeof portals)[number]["id"];
+
+/** Portals that own a CPMIS workspace database (everything except the public site). */
+export const cpmisPortalIds = [
+  "administrator",
+  "project_manager",
+  "site_engineer",
+  "quantity_surveyor",
+] as const;
+export type CpmisPortalId = (typeof cpmisPortalIds)[number];
+
 export type BoundPorts = Record<PortalId, number>;
 
 declare global {

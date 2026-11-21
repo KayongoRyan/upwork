@@ -1,5 +1,6 @@
 import { isManagerFieldNotice } from "@/lib/notices";
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction, type PortalKey } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import {
   isVertexaNotificationId,
@@ -7,7 +8,7 @@ import {
   markVertexaNotificationRead,
 } from "@/lib/server/vertexa-api";
 import { PREVIEW_PM_ID, PREVIEW_QS_ID } from "@/lib/utils";
-import type { AppNotification } from "@/types";
+import type { AdminState, AppNotification } from "@/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,10 +23,10 @@ export async function POST(request: Request) {
   if (!RETURNS.has(back)) return redirectTo(request, "/admin/notifications");
   const query = back === "/admin/notifications" ? keptFilters(form) : {};
 
-  const state = readState();
+  const state = await readState();
   if (form.get("all") === "1") {
     if (back !== "/admin/notifications") return redirectTo(request, back);
-    await applyAction({ type: "mark-all-notifications" });
+    await applyPortalAction("administrator", { type: "mark-all-notifications" });
     await markAllVertexaNotificationsRead();
     return redirectTo(request, back, { ...query, read: "all" });
   }
@@ -39,8 +40,14 @@ export async function POST(request: Request) {
 
   const item = state.notifications.find((notice) => notice.id === id);
   if (!item || !visible(state, back, item)) return redirectTo(request, back, query);
-  await applyAction({ type: "mark-notification", id, read });
+  await applyPortalAction(portalForReturn(back), { type: "mark-notification", id, read });
   return redirectTo(request, back, query, id);
+}
+
+function portalForReturn(back: string): PortalKey {
+  if (back === "/pm/notifications") return "project_manager";
+  if (back === "/qs/notices") return "quantity_surveyor";
+  return "administrator";
 }
 
 function keptFilters(form: FormData) {
@@ -52,7 +59,7 @@ function keptFilters(form: FormData) {
   return query;
 }
 
-function visible(state: ReturnType<typeof readState>, back: string, item: AppNotification) {
+function visible(state: AdminState, back: string, item: AppNotification) {
   if (back === "/admin/notifications") return true;
   if (back === "/pm/notifications") {
     const projects = state.projects.filter((project) => project.managerId === PREVIEW_PM_ID);

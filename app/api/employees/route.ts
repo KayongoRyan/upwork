@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { nextId } from "@/lib/utils";
 import { employeeSchema } from "@/lib/validations/schemas";
 
@@ -27,13 +28,14 @@ export async function POST(request: Request) {
     return NextResponse.redirect(back, 303);
   }
   const code = parsed.data.employeeCode.trim().toLowerCase();
-  if (readState().employees.some((employee) => employee.employeeCode.toLowerCase() === code)) {
+  const state = await readState();
+  if (state.employees.some((employee) => employee.employeeCode.toLowerCase() === code)) {
     back.searchParams.set("register", "1");
     back.searchParams.set("error", "That employee ID is already in use.");
     return NextResponse.redirect(back, 303);
   }
   const id = nextId("act");
-  await applyAction({
+  await applyPortalAction("administrator", {
     type: "create-employee",
     input: parsed.data,
     stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },

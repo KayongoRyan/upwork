@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { applyAction, readState } from "@/lib/server/memory";
+import { readState } from "@/lib/server/memory";
+import { applyPortalAction } from "@/lib/server/portal-store";
 import { nextId } from "@/lib/utils";
 import { projectSchema } from "@/lib/validations/schemas";
 
@@ -29,13 +30,14 @@ export async function POST(request: Request) {
     return NextResponse.redirect(back, 303);
   }
   const code = parsed.data.code.trim().toUpperCase();
-  if (readState().projects.some((project) => project.code.toUpperCase() === code)) {
+  const state = await readState();
+  if (state.projects.some((project) => project.code.toUpperCase() === code)) {
     back.searchParams.set("create", "1");
     back.searchParams.set("error", "That project code is already in use.");
     return NextResponse.redirect(back, 303);
   }
   const id = nextId("act");
-  await applyAction({
+  await applyPortalAction("administrator", {
     type: "create-project",
     input: parsed.data,
     stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },

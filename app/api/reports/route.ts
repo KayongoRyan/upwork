@@ -5,12 +5,12 @@ import { buildCsv } from "@/lib/utils";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export function GET(request: Request) {
+export async function GET(request: Request) {
   const url = new URL(request.url);
   const from = url.searchParams.get("from") ?? "2025-01-01";
   const to = url.searchParams.get("to") ?? "2027-12-31";
   const projectId = url.searchParams.get("project") ?? "all";
-  const state = readState();
+  const state = await readState();
   const invalid = from > to;
   const projects = state.projects.filter((project) => {
     if (projectId !== "all" && project.id !== projectId) return false;
