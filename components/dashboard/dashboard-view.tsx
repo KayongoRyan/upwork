@@ -3,7 +3,6 @@
 import { Building2, CheckCircle2, Clock3, HardHat, Ruler, TimerReset, Users, UserRound } from "lucide-react";
 import { AttentionProjects } from "@/components/dashboard/attention-projects";
 import { MonthlyActivityChart } from "@/components/dashboard/monthly-activity-chart";
-import { PortalQrCodes } from "@/components/dashboard/portal-qr-codes";
 import { ProjectProgressChart } from "@/components/dashboard/project-progress-chart";
 import { ProjectStatusChart } from "@/components/dashboard/project-status-chart";
 import { RecentActivities } from "@/components/dashboard/recent-activities";
@@ -42,9 +41,6 @@ export function DashboardView() {
         {cards.map((item, index) => (
           <StatCard key={item.label} index={index} {...item} />
         ))}
-      </div>
-      <div className="mt-4">
-        <PortalQrCodes />
       </div>
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <ProjectStatusChart projects={data.projects} />

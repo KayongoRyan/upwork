@@ -33,6 +33,7 @@ export function SignupForm({ portal }: { portal: CpmisPortalId }) {
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [demoOtp, setDemoOtp] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -49,15 +50,16 @@ export function SignupForm({ portal }: { portal: CpmisPortalId }) {
         body: JSON.stringify({ portal, firstName, lastName, phone, email, password }),
       });
       const data = (await res.json().catch(() => null)) as
-        | { ok?: boolean; error?: string; challengeId?: string }
+        | { ok?: boolean; error?: string; challengeId?: string; demoOtp?: string }
         | null;
       if (!res.ok || !data?.ok || !data.challengeId) {
         setError(data?.error ?? "Could not send verification code.");
         return;
       }
       setChallengeId(data.challengeId);
+      setDemoOtp(data.demoOtp ?? null);
       setStep("otp");
-      setMessage("Verification code sent to your phone number.");
+      setMessage(data.demoOtp ? "Demo mode: use the code shown below." : "Verification code sent to your phone number.");
     } catch {
       setError("Could not reach the server. Please try again.");
     } finally {
@@ -97,6 +99,7 @@ export function SignupForm({ portal }: { portal: CpmisPortalId }) {
     if (pending) return;
     setOtp("");
     setChallengeId(null);
+    setDemoOtp(null);
     setStep("details");
     setMessage(null);
     setError(null);
@@ -151,6 +154,13 @@ export function SignupForm({ portal }: { portal: CpmisPortalId }) {
               required
             />
           </Field>
+          {demoOtp ? (
+            <div className="rounded-2xl bg-[#fff7f3] px-4 py-3 text-sm text-black/70">
+              <p className="font-medium text-black/80">Demo verification code</p>
+              <p className="mt-1 font-mono text-base tracking-[0.2em] text-black">{demoOtp}</p>
+              <p className="mt-1 text-xs text-black/50">Temporary demo fallback while SMS sender setup is pending.</p>
+            </div>
+          ) : null}
           {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <Button type="submit" disabled={pending || otp.length !== 6}>{pending ? "Verifying..." : "Verify and create account"}</Button>

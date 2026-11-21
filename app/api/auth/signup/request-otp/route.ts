@@ -74,5 +74,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
   }
 
-  return NextResponse.json({ ok: true, challengeId: result.challengeId, expiresAt: result.expiresAt });
+  return NextResponse.json({
+    ok: true,
+    challengeId: result.challengeId,
+    expiresAt: result.expiresAt,
+    ...(result.demoOtp ? { demoOtp: result.demoOtp } : {}),
+  });
 }
