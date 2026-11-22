@@ -42,9 +42,17 @@ the Next.js app manages directly — see the root [`README.md`](../README.md#per
 ## Security and observability
 
 - **Request ID**: every request gets an `X-Request-Id` response header (echoes `X-Request-Id` when provided) and an access log line `[requestId] METHOD path status durationMs`. JSON error responses include `requestId`.
+- **API version**: versioned under `/api/v1`; responses include `X-API-Version` and JSON errors include `apiVersion`. `GET /api/v1` returns resource discovery.
 - **Admin auth**: `GET /api/v1/inquiries`, `GET /api/v1/inquiries/:id`, `PATCH /api/v1/inquiries/:id`, and all `/api/v1/notifications*` routes require `X-API-Key: <VERTEXA_API_KEY>` or `Authorization: Bearer <VERTEXA_API_KEY>`. Missing/invalid key → `401 { ok:false, error:"unauthorized" }`. Unconfigured key → `503 { ok:false, error:"admin_auth_not_configured" }`.
 - **Public create**: `POST /api/v1/inquiries` remains accessible without admin auth but is rate-limited per client IP. Limit exceeded → `429 { ok:false, error:"rate_limited", retryAfter }` with `Retry-After`/`RateLimit-*` headers.
-- **Error shape**: JSON errors are consistent: `{ ok:false, error:"<code>", requestId, ... }`. Structured validation/workflow codes are preserved (`invalid-*`, `invalid-transition`, `not_found`, etc.). DB outages return `503 { ok:false, error:"mongodb_unavailable", ... }`.
+
+## API contracts
+
+- **JSON error envelope**: `{ ok: false, error: string, message?: string, details?: unknown, requestId?: string, apiVersion: "v1" }`. `error` is a stable machine code; `message` is human-readable when present. Compatibility fields may be included where needed (e.g. `hint`, `action`, `portal`).
+- **JSON success envelope**: JSON success responses include `ok: true`. Action/session endpoints may add fields such as `redirectTo`, `user`, `items`, or `challengeId`.
+- **Resource responses**: for backward compatibility, some endpoints return a raw resource body (e.g. CPMIS portal state/actions return scoped `AdminState`).
+- **Non-JSON responses**: form workflows may return `303` redirects; file/report endpoints may return binary/CSV/PDF with appropriate content headers.
+- **Request validation**: invalid requests return `4xx` with the JSON error envelope; unexpected failures return `500 server_error` with `requestId` and `apiVersion`.
 
 ## Endpoints
 

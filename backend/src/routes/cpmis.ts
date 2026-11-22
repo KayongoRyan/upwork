@@ -27,6 +27,7 @@ import {
   readState,
   scopeStateForSession,
 } from "@/lib/server/portal-store";
+import { apiError } from "../lib/api-response";
 
 export const cpmisRouter = Router();
 
@@ -42,13 +43,13 @@ function readCookie(req: Request, name: string): string | undefined {
 
 async function requireSession(req: Request, res: Response, portal: string) {
   if (!isPortalKey(portal)) {
-    res.status(404).json({ ok: false, error: "unknown-portal" });
+    apiError(res, 404, "unknown-portal", { requestId: req.requestId });
     return null;
   }
   const token = readCookie(req, sessionCookieName(portal));
   const session = token ? await getSessionUserByToken(portal, token) : null;
   if (!session) {
-    res.status(401).json({ ok: false, error: "unauthorized" });
+    apiError(res, 401, "unauthorized", { requestId: req.requestId });
     return null;
   }
   return { portal, session, token: token! };
@@ -63,7 +64,7 @@ cpmisRouter.get("/portal/:portal/state", async (req: Request, res: Response) => 
     res.json(scopeStateForSession(state, auth.session));
   } catch (error) {
     console.error("[cpmis] state failed", error);
-    res.status(500).json({ ok: false, error: "state-failed" });
+    apiError(res, 500, "state-failed", { requestId: req.requestId });
   }
 });
 
@@ -75,7 +76,7 @@ cpmisRouter.post("/portal/:portal/actions", async (req: Request, res: Response) 
 
   const action = req.body as AdminAction | null;
   if (!action || typeof action !== "object" || typeof (action as any).type !== "string") {
-    return res.status(400).json({ ok: false, error: "unknown-action" });
+    return apiError(res, 400, "unknown-action", { requestId: req.requestId });
   }
 
   try {
@@ -83,7 +84,7 @@ cpmisRouter.post("/portal/:portal/actions", async (req: Request, res: Response) 
     if (secured.type === "create-user") {
       const pwd = "password" in secured ? (secured as any).password : undefined;
       if (typeof pwd !== "string" || pwd.length < 8) {
-        return res.status(400).json({ ok: false, error: "password-required" });
+        return apiError(res, 400, "password-required", { requestId: req.requestId });
       }
     }
     const state = await applyPortalAction(auth.portal, secured);
@@ -106,13 +107,13 @@ cpmisRouter.post("/portal/:portal/actions", async (req: Request, res: Response) 
     res.json(scopeStateForSession(state, auth.session));
   } catch (error) {
     if (error instanceof PortalActionError) {
-      return res.status(403).json({ ok: false, error: "action-not-allowed", action: error.action, portal: error.portal });
+      return apiError(res, 403, "action-not-allowed", { requestId: req.requestId, extra: { action: error.action, portal: error.portal } });
     }
     if (error instanceof PersistenceError) {
-      return res.status(503).json({ ok: false, error: "persistence-failed" });
+      return apiError(res, 503, "persistence-failed", { requestId: req.requestId });
     }
     console.error("[cpmis] action failed", error);
-    return res.status(500).json({ ok: false, error: "action-failed" });
+    return apiError(res, 500, "action-failed", { requestId: req.requestId });
   }
 });
 
@@ -144,35 +145,35 @@ cpmisRouter.post("/auth/sign-in", async (req: Request, res: Response) => {
   const portal = String(body.portal ?? "");
   const email = String(body.email ?? "").trim();
   const password = String(body.password ?? "");
-  if (!isPortalKey(portal)) return res.status(400).json({ ok: false, error: "Unknown portal." });
-  if (!email || !password) return res.status(400).json({ ok: false, error: "Enter a valid email and password." });
+  if (!isPortalKey(portal)) return apiError(res, 400, "Unknown portal.", { requestId: req.requestId });
+  if (!email || !password) return apiError(res, 400, "Enter a valid email and password.", { requestId: req.requestId });
 
   const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "local";
   const { checkLoginRateLimit, resetLoginRateLimit } = await import("../lib/auth-bridge");
   const limit = checkLoginRateLimit(`${portal}:${ip}:${email.toLowerCase()}`);
   if (!limit.ok) {
-    return res.status(429).json({ ok: false, error: `Too many sign-in attempts. Try again in ${limit.retryAfterSeconds}s.` });
+    return apiError(res, 429, "rate-limited", { message: `Too many sign-in attempts. Try again in ${limit.retryAfterSeconds}s.`, requestId: req.requestId });
   }
 
   try {
     const result = await signInWithPassword(portal, email, password);
-    if (!result.ok) return res.status(result.status).json({ ok: false, error: result.error });
+    if (!result.ok) return apiError(res, result.status, result.error, { requestId: req.requestId });
     resetLoginRateLimit(`${portal}:${ip}:${email.toLowerCase()}`);
     applySessionCookieToExpress(res, portal, result.token);
     return res.json({ ok: true, redirectTo: portalHome(portal) });
   } catch (error) {
     if (error instanceof PersistenceError) {
-      return res.status(503).json({ ok: false, error: "The server could not start your session. Try again." });
+      return apiError(res, 503, "The server could not start your session. Try again.", { requestId: req.requestId });
     }
     console.error("[cpmis] sign-in failed", error);
-    return res.status(500).json({ ok: false, error: "sign-in-failed" });
+    return apiError(res, 500, "sign-in-failed", { requestId: req.requestId });
   }
 });
 
 cpmisRouter.post("/auth/sign-out", async (req: Request, res: Response) => {
   const body = req.body ?? {};
   const portal = String(body.portal ?? "");
-  if (!isPortalKey(portal)) return res.status(400).json({ ok: false, error: "Unknown portal." });
+  if (!isPortalKey(portal)) return apiError(res, 400, "Unknown portal.", { requestId: req.requestId });
   const token = readCookie(req, sessionCookieName(portal));
   if (token) await signOutByToken(portal, token);
   clearSessionCookieOnExpress(res, portal);
@@ -289,7 +290,7 @@ cpmisRouter.post("/documents/revise", upload.single("file"), async (req: Request
 cpmisRouter.get("/documents/file", async (req: Request, res: Response) => {
   const documentId = String(req.query.documentId ?? "");
   const revisionId = String(req.query.revisionId ?? "");
-  if (!documentId || !revisionId) return res.status(400).json({ ok: false, error: "missing-params" });
+  if (!documentId || !revisionId) return apiError(res, 400, "missing-params", { requestId: req.requestId });
 
   // Find session across portals
   let session: any = null;
@@ -299,30 +300,30 @@ cpmisRouter.get("/documents/file", async (req: Request, res: Response) => {
     session = await getSessionUserByToken(portal, token);
     if (session) break;
   }
-  if (!session) return res.status(401).json({ ok: false, error: "unauthorized" });
+  if (!session) return apiError(res, 401, "unauthorized", { requestId: req.requestId });
 
   const state = await readState();
   const document = (state.documents ?? []).find((item: any) => item.id === documentId);
-  if (!document) return res.status(404).json({ ok: false, error: "not-found" });
+  if (!document) return apiError(res, 404, "not-found", { requestId: req.requestId });
   const isAdmin = session.role === "administrator";
   const hasAccess = isAdmin || document.access.includes(session.role);
-  if (!hasAccess) return res.status(403).json({ ok: false, error: "forbidden" });
+  if (!hasAccess) return apiError(res, 403, "forbidden", { requestId: req.requestId });
   if (!isAdmin) {
     if (session.role === "site_engineer" || session.role === "quantity_surveyor") {
-      if (session.projectId !== document.projectId) return res.status(403).json({ ok: false, error: "forbidden" });
+      if (session.projectId !== document.projectId) return apiError(res, 403, "forbidden", { requestId: req.requestId });
     }
     if (session.role === "project_manager") {
       const manages = state.projects.some((p: any) => p.id === document.projectId && p.managerId === session.id);
-      if (!manages) return res.status(403).json({ ok: false, error: "forbidden" });
+      if (!manages) return apiError(res, 403, "forbidden", { requestId: req.requestId });
     }
   }
   const revision = document.revisions.find((item: any) => item.id === revisionId);
-  if (!revision) return res.status(404).json({ ok: false, error: "not-found" });
+  if (!revision) return apiError(res, 404, "not-found", { requestId: req.requestId });
   if (revision.dataUrl) return res.redirect(302, revision.dataUrl);
-  if (!revision.fileKey) return res.status(404).json({ ok: false, error: "no-file" });
+  if (!revision.fileKey) return apiError(res, 404, "no-file", { requestId: req.requestId });
   const { getObject } = await import("@/lib/server/storage");
   const object = await getObject(revision.fileKey);
-  if (!object) return res.status(404).json({ ok: false, error: "not-found" });
+  if (!object) return apiError(res, 404, "not-found", { requestId: req.requestId });
   res.setHeader("Content-Type", revision.fileType || "application/octet-stream");
   res.setHeader("Content-Length", String(object.size));
   res.setHeader("Cache-Control", "private, no-store");

@@ -11,6 +11,7 @@ import { readCostEdits } from "@/lib/server/cost-lines";
 import { costReportPdf } from "@/lib/server/cost-pdf";
 import { PersistenceError } from "@/lib/server/mongo";
 import { readState } from "@/lib/server/memory";
+import { apiError } from "../lib/api-response";
 import {
   applyPortalAction,
   isPortalKey,
@@ -48,13 +49,13 @@ function readCookie(req: Request, name: string): string | undefined {
 
 async function requireSession(req: Request, res: Response, portal: string) {
   if (!isPortalKey(portal)) {
-    res.status(404).json({ ok: false, error: "unknown-portal" });
+    apiError(res, 404, "unknown-portal", { requestId: req.requestId });
     return null;
   }
   const token = readCookie(req, sessionCookieName(portal));
   const session = token ? await getSessionUserByToken(portal, token) : null;
   if (!session) {
-    res.status(401).json({ ok: false, error: "unauthorized" });
+    apiError(res, 401, "unauthorized", { requestId: req.requestId });
     return null;
   }
   return { portal: portal as PortalKey, session, token: token! };
@@ -699,40 +700,40 @@ function expressOriginError(req: Request, res: Response) {
   const origin = req.get("origin");
   if (!origin) return null;
   let originHost = "";
-  try { originHost = new URL(origin).host; } catch { res.status(403).json({ ok: false, error: "Invalid origin." }); return true; }
+  try { originHost = new URL(origin).host; } catch { apiError(res, 403, "Invalid origin.", { requestId: req.requestId }); return true; }
   const host = req.get("x-forwarded-host") ?? req.get("host") ?? "";
-  if (host && originHost !== host) { res.status(403).json({ ok: false, error: "Invalid origin." }); return true; }
+  if (host && originHost !== host) { apiError(res, 403, "Invalid origin.", { requestId: req.requestId }); return true; }
   return null;
 }
 
 cpmisRemainingRouter.post("/auth/signup/request-otp", async (req: Request, res: Response) => {
   if (expressOriginError(req, res)) return;
   const parsed = signupSchema.safeParse(req.body ?? {});
-  if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.issues[0]?.message ?? "Check the form." });
+  if (!parsed.success) return apiError(res, 400, "validation-failed", { message: parsed.error.issues[0]?.message ?? "Check the form.", requestId: req.requestId });
   const input = parsed.data;
   const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "local";
   const limit = checkLoginRateLimit(`signup:${ip}:${normalizeSignupEmail(input.email)}`);
-  if (!limit.ok) return res.status(429).json({ ok: false, error: `Too many attempts. Try again in ${limit.retryAfterSeconds}s.` });
+  if (!limit.ok) return apiError(res, 429, "rate-limited", { message: `Too many attempts. Try again in ${limit.retryAfterSeconds}s.`, requestId: req.requestId });
 
   const state = await readState();
   const email = normalizeSignupEmail(input.email);
   const phone = normalizeSignupPhone(input.phone);
   if (state.users.some((u) => u.email.toLowerCase() === email)) {
-    return res.status(409).json({ ok: false, error: "An account with this email already exists. Sign in instead." });
+    return apiError(res, 409, "An account with this email already exists. Sign in instead.", { requestId: req.requestId });
   }
   if (state.users.some((u) => (u as any).phone && normalizeSignupPhone(String((u as any).phone)) === phone)) {
-    return res.status(409).json({ ok: false, error: "An account with this phone number already exists." });
+    return apiError(res, 409, "An account with this phone number already exists.", { requestId: req.requestId });
   }
 
   try {
     const passwordHash = await hashPassword(input.password);
     const result = await createSignupOtp({ portal: input.portal as PortalKey, firstName: input.firstName, lastName: input.lastName, phone, email, passwordHash });
-    if (!result.ok) return res.status(result.status).json({ ok: false, error: result.error });
+    if (!result.ok) return apiError(res, result.status, result.error, { requestId: req.requestId });
     return res.json({ ok: true, challengeId: result.challengeId, expiresAt: result.expiresAt, ...(result.demoOtp ? { demoOtp: result.demoOtp } : {}) });
   } catch (error) {
-    if (error instanceof PersistenceError) return res.status(503).json({ ok: false, error: "Sign-up could not be started. Try again." });
+    if (error instanceof PersistenceError) return apiError(res, 503, "Sign-up could not be started. Try again.", { requestId: req.requestId });
     console.error("[cpmis] signup request-otp failed", error);
-    return res.status(500).json({ ok: false, error: "signup-failed" });
+    return apiError(res, 500, "signup-failed", { requestId: req.requestId });
   }
 });
 
@@ -745,20 +746,20 @@ const verifySchema = z.object({
 cpmisRemainingRouter.post("/auth/signup/verify-otp", async (req: Request, res: Response) => {
   if (expressOriginError(req, res)) return;
   const parsed = verifySchema.safeParse(req.body ?? {});
-  if (!parsed.success) return res.status(400).json({ ok: false, error: parsed.error.issues[0]?.message ?? "Check the code." });
+  if (!parsed.success) return apiError(res, 400, "validation-failed", { message: parsed.error.issues[0]?.message ?? "Check the code.", requestId: req.requestId });
   const { portal, challengeId, otp } = parsed.data;
   const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "local";
   const limit = checkLoginRateLimit(`signup-verify:${ip}:${challengeId}`);
-  if (!limit.ok) return res.status(429).json({ ok: false, error: `Too many attempts. Try again in ${limit.retryAfterSeconds}s.` });
+  if (!limit.ok) return apiError(res, 429, "rate-limited", { message: `Too many attempts. Try again in ${limit.retryAfterSeconds}s.`, requestId: req.requestId });
 
   try {
     const verified = await verifySignupOtp(challengeId, otp, portal as PortalKey);
-    if (!verified.ok) return res.status(verified.status).json({ ok: false, error: verified.error });
+    if (!verified.ok) return apiError(res, verified.status, verified.error, { requestId: req.requestId });
 
     const state = await readState();
     const email = normalizeSignupEmail(verified.challenge.email);
     if (state.users.some((u) => u.email.toLowerCase() === email)) {
-      return res.status(409).json({ ok: false, error: "An account with this email already exists. Sign in instead." });
+      return apiError(res, 409, "An account with this email already exists. Sign in instead.", { requestId: req.requestId });
     }
 
     const id = nextId("usr");
@@ -781,8 +782,8 @@ cpmisRemainingRouter.post("/auth/signup/verify-otp", async (req: Request, res: R
     applySessionCookieToExpress(res, portal as PortalKey, session.token);
     return res.json({ ok: true, redirectTo: portalHome(portal as PortalKey) });
   } catch (error) {
-    if (error instanceof PersistenceError) return res.status(503).json({ ok: false, error: "Sign-up could not be completed. Try again." });
+    if (error instanceof PersistenceError) return apiError(res, 503, "Sign-up could not be completed. Try again.", { requestId: req.requestId });
     console.error("[cpmis] signup verify-otp failed", error);
-    return res.status(500).json({ ok: false, error: "signup-failed" });
+    return apiError(res, 500, "signup-failed", { requestId: req.requestId });
   }
 });
