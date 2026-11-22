@@ -3,6 +3,7 @@ import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { persistOr } from "@/lib/server/redirect";
+import { readValidatedUploadFile } from "@/lib/server/file-validation";
 import { putObject, saveFileMetadata, storageKeyForDocument } from "@/lib/server/storage";
 import { nextId } from "@/lib/utils";
 import type { DocumentCategory, RevisionStatus, UserRole } from "@/types";
@@ -13,7 +14,6 @@ export const dynamic = "force-dynamic";
 const categories = new Set<DocumentCategory>(["drawing", "contract", "boq", "photograph", "technical", "minutes", "inspection", "correspondence"]);
 const statuses = new Set<RevisionStatus>(["draft", "in_review", "approved"]);
 const roles = new Set<UserRole>(["administrator", "project_manager", "site_engineer", "quantity_surveyor"]);
-const MAX_BYTES = 25 * 1024 * 1024;
 
 export async function POST(request: Request) {
   const __session = await requireApiSession("administrator");
@@ -41,18 +41,17 @@ export async function POST(request: Request) {
   const state = await readState();
   if (!state.projects.some((project) => project.id === projectId)) return fail("Choose a project.");
   if (!state.users.some((user) => user.id === ownerId)) return fail("Choose an owner.");
-  if (!(file instanceof File) || file.size === 0) return fail("Choose a file.");
-  if (file.size > MAX_BYTES) return fail("Keep the file under 25 MB.");
+  if (!(file instanceof File)) return fail("Choose a file.");
+  const validated = await readValidatedUploadFile(file);
+  if (!validated.ok) return fail(validated.error);
   if ((state.documents ?? []).some((item) => item.projectId === projectId && item.number.toUpperCase() === number.toUpperCase())) {
     return fail("That document number is already on this project.");
   }
   const access = form
     .getAll("access")
     .filter((value): value is string => typeof value === "string" && roles.has(value as UserRole)) as UserRole[];
-  const bytes = Buffer.from(await file.arrayBuffer());
+  const { bytes, fileName, contentType: fileType, size } = validated.value;
   const fileId = nextId("file");
-  const fileName = file.name || "upload";
-  const fileType = file.type || "application/octet-stream";
   let fileKey: string;
   try {
     const stored = await putObject({
@@ -71,7 +70,7 @@ export async function POST(request: Request) {
       key: fileKey,
       fileName,
       contentType: fileType,
-      size: file.size,
+      size,
       body: bytes,
       uploadedBy: __session.id,
       projectId,
@@ -98,7 +97,7 @@ export async function POST(request: Request) {
         revision: {
           fileName,
           fileType,
-          size: file.size,
+          size,
           note: String(form.get("note") ?? "").trim(),
           status: status as RevisionStatus,
           uploadedBy: __session.id,

@@ -1,5 +1,6 @@
 import { readState } from "@/lib/server/memory";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
+import { readValidatedUploadFile } from "@/lib/server/file-validation";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { persistOr, redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
@@ -9,7 +10,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_PHOTOS = 4;
-const MAX_BYTES = 1_500_000;
+const MAX_PHOTO_BYTES = 1_500_000;
+const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
 export async function POST(request: Request) {
   const __session = await requireApiSession("site_engineer");
@@ -71,15 +73,17 @@ async function readPhotos(entries: FormDataEntryValue[]): Promise<ReportPhoto[] 
   if (files.length > MAX_PHOTOS) return null;
   const photos: ReportPhoto[] = [];
   for (const file of files) {
-    if (!file.type.startsWith("image/") || file.size > MAX_BYTES) return null;
-    const bytes = Buffer.from(await file.arrayBuffer());
-    const name = file.name.replace(/[^\w.\- ]+/g, "").slice(0, 80) || "site.jpg";
+    const validated = await readValidatedUploadFile(file, MAX_PHOTO_BYTES);
+    if (!validated.ok) return null;
+    const { fileName, contentType, size, bytes } = validated.value;
+    if (!ALLOWED_PHOTO_TYPES.has(contentType)) return null;
+    const name = fileName.replace(/[^\w.\- ]+/g, "").slice(0, 80) || "site.jpg";
     photos.push({
       id: nextId("photo"),
       name,
-      type: file.type,
-      size: file.size,
-      dataUrl: `data:${file.type};base64,${bytes.toString("base64")}`,
+      type: contentType,
+      size,
+      dataUrl: `data:${contentType};base64,${bytes.toString("base64")}`,
     });
   }
   return photos;
