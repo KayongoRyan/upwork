@@ -22,7 +22,7 @@
  *      preview keeps working before the database is started.
  */
 
-import type { Db, Document } from "mongodb";
+import type { AnyBulkWriteOperation, ClientSession, Db, Document } from "mongodb";
 import { adminReducer, type AdminAction } from "@/lib/data/reducer";
 import { createSeedState } from "@/lib/mock-data/seed";
 import {
@@ -197,10 +197,6 @@ interface StoredDocument extends Document {
   _id: string;
 }
 
-function encodedRecords(items: Identified[]): Document[] {
-  return items.map((item, index) => ({ ...item, _id: item.id, _seq: index }));
-}
-
 function decodedRecords<T>(docs: Document[]): T[] {
   return docs.map((doc) => {
     const record = { ...doc };
@@ -215,21 +211,55 @@ async function readRecords<T>(db: Db, name: string): Promise<T[]> {
   return decodedRecords<T>(docs);
 }
 
-async function syncRecords(db: Db, name: string, before: Identified[], after: Identified[]) {
+async function syncRecords(
+  db: Db,
+  name: string,
+  before: Identified[],
+  after: Identified[],
+  session?: ClientSession,
+): Promise<void> {
   if (JSON.stringify(before) === JSON.stringify(after)) return;
   const collection = db.collection(name);
-  await collection.deleteMany({});
-  if (after.length > 0) await collection.insertMany(encodedRecords(after));
+  const afterIds = new Set(after.map((item) => item.id));
+  const ops: AnyBulkWriteOperation<Document>[] = [];
+
+  for (let index = 0; index < after.length; index += 1) {
+    const item = after[index] as Identified & Record<string, unknown>;
+    ops.push({
+      replaceOne: {
+        filter: { _id: item.id },
+        replacement: { ...item, _id: item.id, _seq: index } as Document,
+        upsert: true,
+      },
+    });
+  }
+
+  for (const item of before) {
+    if (!afterIds.has(item.id)) {
+      ops.push({ deleteOne: { filter: { _id: item.id } } });
+    }
+  }
+
+  if (ops.length === 0) return;
+  await collection.bulkWrite(ops, { ordered: true, ...(session ? { session } : {}) });
 }
 
-async function syncSettings(db: Db, before: OrgSettings | null | undefined, after: OrgSettings) {
+async function syncSettings(db: Db, before: OrgSettings | null | undefined, after: OrgSettings, session?: ClientSession) {
   if (before && JSON.stringify(before) === JSON.stringify(after)) return;
-  await db.collection<StoredDocument>("settings").replaceOne({ _id: SETTINGS_DOC }, { _id: SETTINGS_DOC, ...after }, { upsert: true });
+  await db.collection<StoredDocument>("settings").replaceOne(
+    { _id: SETTINGS_DOC },
+    { _id: SETTINGS_DOC, ...after },
+    { upsert: true, ...(session ? { session } : {}) },
+  );
 }
 
-async function syncMonthlyActivity(db: Db, before: unknown, after: unknown) {
+async function syncMonthlyActivity(db: Db, before: unknown, after: unknown, session?: ClientSession) {
   if (JSON.stringify(before) === JSON.stringify(after)) return;
-  await db.collection<StoredDocument>("monthlyActivity").replaceOne({ _id: MONTHLY_DOC }, { _id: MONTHLY_DOC, items: after }, { upsert: true });
+  await db.collection<StoredDocument>("monthlyActivity").replaceOne(
+    { _id: MONTHLY_DOC },
+    { _id: MONTHLY_DOC, items: after },
+    { upsert: true, ...(session ? { session } : {}) },
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -258,14 +288,12 @@ function notificationsFor(items: AppNotification[], portal: PortalKey, usersById
 /* Load / seed                                                                 */
 /* -------------------------------------------------------------------------- */
 
-async function markSeeded(db: Db) {
-  await db
-    .collection<StoredDocument>("meta")
-    .replaceOne(
-      { _id: SEED_DOC },
-      { _id: SEED_DOC, version: 1, seededAt: new Date().toISOString() },
-      { upsert: true },
-    );
+async function markSeeded(db: Db, session?: ClientSession) {
+  await db.collection<StoredDocument>("meta").replaceOne(
+    { _id: SEED_DOC },
+    { _id: SEED_DOC, version: 1, seededAt: new Date().toISOString() },
+    { upsert: true, ...(session ? { session } : {}) },
+  );
 }
 
 async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
@@ -339,7 +367,18 @@ async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
   };
 }
 
-async function persistState(runtime: MongoRuntime, previous: AdminState | null, next: AdminState) {
+function isTransactionUnsupported(error: unknown): boolean {
+  const code = (error as { code?: number; codeName?: string })?.code;
+  const codeName = String((error as { codeName?: string })?.codeName ?? "");
+  const message = String((error as { message?: string })?.message ?? "");
+  return (
+    code === 20 ||
+    codeName === "IllegalOperation" ||
+    /Transaction numbers are only allowed|replica set|does not support transactions|Transaction support/i.test(message)
+  );
+}
+
+async function persistState(runtime: MongoRuntime, previous: AdminState | null, next: AdminState, session?: ClientSession) {
   const prevUsers = new Map((previous?.users ?? []).map((u) => [u.id, { role: u.role }]));
   const nextUsers = new Map(next.users.map((u) => [u.id, { role: u.role }]));
   for (const portal of PORTAL_KEYS) {
@@ -349,19 +388,50 @@ async function persistState(runtime: MongoRuntime, previous: AdminState | null, 
     for (const name of spec.records) {
       const before = previous ? (previous[name] as Identified[]) : [];
       const after = next[name] as Identified[];
-      await syncRecords(db, name, before, after);
+      await syncRecords(db, name, before, after, session);
     }
 
     if (spec.settings) {
-      await syncSettings(db, previous?.settings, next.settings);
+      await syncSettings(db, previous?.settings, next.settings, session);
     }
     if (spec.monthlyActivity) {
-      await syncMonthlyActivity(db, previous?.monthlyActivity, next.monthlyActivity);
+      await syncMonthlyActivity(db, previous?.monthlyActivity, next.monthlyActivity, session);
     }
 
     const beforeNotices = previous ? notificationsFor(previous.notifications, portal, prevUsers) : [];
     const afterNotices = notificationsFor(next.notifications, portal, nextUsers);
-    await syncRecords(db, "notifications", beforeNotices, afterNotices);
+    await syncRecords(db, "notifications", beforeNotices, afterNotices, session);
+  }
+}
+
+async function persistStateAtomically(
+  runtime: MongoRuntime,
+  previous: AdminState | null,
+  next: AdminState,
+  options?: { seedMarker?: boolean },
+): Promise<void> {
+  const seedMarker = options?.seedMarker ?? false;
+  const session = runtime.client.startSession();
+  try {
+    let unsupported = false;
+    try {
+      await session.withTransaction(async () => {
+        await persistState(runtime, previous, next, session);
+        if (seedMarker) await markSeeded(runtime.dbs.administrator, session);
+      });
+    } catch (error) {
+      if (!isTransactionUnsupported(error)) throw error;
+      unsupported = true;
+    }
+    if (unsupported) {
+      // Standalone MongoDB does not support multi-document transactions.
+      // Fall back to ordered bulk writes, which are atomic per operation and
+      // avoid the delete-all/insert-all window of the previous implementation.
+      await persistState(runtime, previous, next);
+      if (seedMarker) await markSeeded(runtime.dbs.administrator);
+    }
+  } finally {
+    await session.endSession().catch(() => undefined);
   }
 }
 
@@ -382,8 +452,7 @@ async function initialize(): Promise<AdminState> {
   }
 
   const seed = createSeedState();
-  await persistState(runtime, null, seed);
-  await markSeeded(runtime.dbs.administrator);
+  await persistStateAtomically(runtime, null, seed, { seedMarker: true });
   store.__cpmisPortalState = seed;
   store.__cpmisPortalReady = true;
   store.__cpmisPortalMemory = false;
@@ -506,8 +575,7 @@ async function applyNow(action: AdminAction): Promise<AdminState> {
   const runtime = requirePersistenceInProduction(await getMongoRuntime());
   if (runtime) {
     try {
-      await persistState(runtime, state, next);
-      if (action.type === "reset") await markSeeded(runtime.dbs.administrator);
+      await persistStateAtomically(runtime, state, next, { seedMarker: action.type === "reset" });
     } catch (error) {
       console.error("[portal-store] Could not persist the action.", error);
       // Drop the cached state so the next read reflects what the database
