@@ -1,5 +1,7 @@
 import type { Request, Response } from "express";
 import { isPortalKey, type PortalKey } from "@/lib/server/portal-store";
+
+const PORTAL_KEYS: PortalKey[] = ["administrator", "project_manager", "site_engineer", "quantity_surveyor"];
 import type { SessionUser } from "@/lib/server/auth";
 import { apiError } from "./api-response";
 import { getSessionUserByToken, sessionCookieName } from "./auth-bridge";
@@ -33,6 +35,18 @@ export async function requireSession(req: Request, res: Response, portal: string
     return null;
   }
   return { portal, session, token };
+}
+
+/** Validates any portal session cookie. Useful for endpoints that allow any authenticated CPMIS user. */
+export async function requireAnySession(req: Request, res: Response): Promise<AuthenticatedSession | null> {
+  for (const portal of PORTAL_KEYS) {
+    const token = readCookie(req, sessionCookieName(portal));
+    if (!token) continue;
+    const session = await getSessionUserByToken(portal, token);
+    if (session) return { portal, session, token };
+  }
+  apiError(res, 401, "unauthorized", { requestId: req.requestId });
+  return null;
 }
 
 /** CSRF/origin guard for cookie-authenticated or pre-auth browser POSTs. Returns true if response was sent. */

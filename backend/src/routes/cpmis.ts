@@ -28,7 +28,8 @@ import {
   scopeStateForSession,
 } from "@/lib/server/portal-store";
 import { apiError } from "../lib/api-response";
-import { assertSameOrigin, readCookie, requireSession } from "../lib/session";
+import { assertSameOrigin, readCookie, requireAnySession, requireSession } from "../lib/session";
+import { canAccessProject } from "../lib/rbac";
 
 export const cpmisRouter = Router();
 
@@ -276,15 +277,9 @@ cpmisRouter.get("/documents/file", async (req: Request, res: Response) => {
   const revisionId = String(req.query.revisionId ?? "");
   if (!documentId || !revisionId) return apiError(res, 400, "missing-params", { requestId: req.requestId });
 
-  // Find session across portals
-  let session: any = null;
-  for (const portal of ["administrator", "project_manager", "site_engineer", "quantity_surveyor"] as const) {
-    const token = readCookie(req, sessionCookieName(portal));
-    if (!token) continue;
-    session = await getSessionUserByToken(portal, token);
-    if (session) break;
-  }
-  if (!session) return apiError(res, 401, "unauthorized", { requestId: req.requestId });
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  const { session } = auth;
 
   const state = await readState();
   const document = (state.documents ?? []).find((item: any) => item.id === documentId);
@@ -293,13 +288,8 @@ cpmisRouter.get("/documents/file", async (req: Request, res: Response) => {
   const hasAccess = isAdmin || document.access.includes(session.role);
   if (!hasAccess) return apiError(res, 403, "forbidden", { requestId: req.requestId });
   if (!isAdmin) {
-    if (session.role === "site_engineer" || session.role === "quantity_surveyor") {
-      if (session.projectId !== document.projectId) return apiError(res, 403, "forbidden", { requestId: req.requestId });
-    }
-    if (session.role === "project_manager") {
-      const manages = state.projects.some((p: any) => p.id === document.projectId && p.managerId === session.id);
-      if (!manages) return apiError(res, 403, "forbidden", { requestId: req.requestId });
-    }
+    const project = (state.projects ?? []).find((p: any) => p.id === document.projectId);
+    if (!project || !canAccessProject(session, project)) return apiError(res, 403, "forbidden", { requestId: req.requestId });
   }
   const revision = document.revisions.find((item: any) => item.id === revisionId);
   if (!revision) return apiError(res, 404, "not-found", { requestId: req.requestId });
