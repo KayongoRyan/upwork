@@ -28,7 +28,7 @@ import {
   scopeStateForSession,
 } from "@/lib/server/portal-store";
 import { apiError } from "../lib/api-response";
-import { readCookie, requireSession } from "../lib/session";
+import { assertSameOrigin, readCookie, requireSession } from "../lib/session";
 
 export const cpmisRouter = Router();
 
@@ -118,6 +118,7 @@ function withActor(action: AdminAction, actor: { id: string; firstName: string; 
   } as AdminAction;
 }
 cpmisRouter.post("/auth/sign-in", async (req: Request, res: Response) => {
+  if (assertSameOrigin(req, res)) return;
   const body = req.body ?? {};
   const portal = String(body.portal ?? "");
   const email = String(body.email ?? "").trim();
@@ -148,10 +149,16 @@ cpmisRouter.post("/auth/sign-in", async (req: Request, res: Response) => {
 });
 
 cpmisRouter.post("/auth/sign-out", async (req: Request, res: Response) => {
+  if (assertSameOrigin(req, res)) return;
   const body = req.body ?? {};
   const portal = String(body.portal ?? "");
   if (!isPortalKey(portal)) return apiError(res, 400, "Unknown portal.", { requestId: req.requestId });
   const token = readCookie(req, sessionCookieName(portal));
+  const session = token ? await getSessionUserByToken(portal, token) : null;
+  if (session) {
+    const csrfError = verifyCsrfToken(req, session, typeof body.csrfToken === "string" ? body.csrfToken : null);
+    if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  }
   if (token) await signOutByToken(portal, token);
   clearSessionCookieOnExpress(res, portal);
   return res.json({ ok: true });
