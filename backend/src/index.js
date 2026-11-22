@@ -79,13 +79,17 @@ app.use((error, req, res, next) => {
     return res.status(400).json({
       ok: false,
       error: "invalid-json",
+      message: "The request body could not be parsed as valid JSON.",
       requestId: req.requestId,
+      apiVersion: config.apiVersion,
     });
   }
   res.status(500).json({
     ok: false,
     error: "server_error",
+    message: "An unexpected server error occurred.",
     requestId: req.requestId,
+    apiVersion: config.apiVersion,
   });
 });
 

@@ -1,3 +1,4 @@
+import { config } from "../config.js";
 import { ensureDb, mongoStartupHelp } from "../db.js";
 
 export async function requireDb(req, res, next) {
@@ -11,6 +12,7 @@ export async function requireDb(req, res, next) {
       message: "Database is not reachable. See the API server log for setup steps.",
       hint: mongoStartupHelp.split("\n")[0],
       requestId: req.requestId,
+      apiVersion: config.apiVersion,
     });
   }
 }
