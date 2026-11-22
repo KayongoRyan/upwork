@@ -483,6 +483,22 @@ export function verifyCsrf(request: Request, session: SessionUser, bodyToken?: s
   return null;
 }
 
+export function assertSameOrigin(request: Request): NextResponse | null {
+  const origin = request.headers.get("origin");
+  if (!origin) return null; // non-browser or same-origin in some cases; allow
+  let originHost = "";
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    return NextResponse.json({ ok: false, error: "Invalid origin." }, { status: 403 });
+  }
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "";
+  if (host && originHost !== host) {
+    return NextResponse.json({ ok: false, error: "Invalid origin." }, { status: 403 });
+  }
+  return null;
+}
+
 export async function resetDemoAuth(): Promise<void> {
   const mem = memory();
   mem.credentials.clear();

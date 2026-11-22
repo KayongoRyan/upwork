@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { applyAction } from "@/lib/server/portal-store";
 import { readState } from "@/lib/server/memory";
-import { applySessionCookie, createSessionForUser, portalHome, PORTAL_ROLE, setUserPasswordHash } from "@/lib/server/auth";
+import { applySessionCookie, assertSameOrigin, checkLoginRateLimit, createSessionForUser, portalHome, PORTAL_ROLE, setUserPasswordHash } from "@/lib/server/auth";
 import { verifySignupOtp } from "@/lib/server/otp";
 import { nextId } from "@/lib/utils";
 import type { UserAccount } from "@/types";
@@ -11,12 +11,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
-  portal: z.enum(["administrator", "project_manager", "site_engineer", "quantity_surveyor"]),
+  portal: z.enum(["project_manager", "site_engineer", "quantity_surveyor"]),
   challengeId: z.string().min(1),
   otp: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
 });
 
 export async function POST(request: Request) {
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
@@ -27,6 +29,11 @@ export async function POST(request: Request) {
   }
 
   const { portal, challengeId, otp } = parsed.data;
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  const limit = checkLoginRateLimit(`signup-verify:${portal}:${ip}:${challengeId}`);
+  if (!limit.ok) {
+    return NextResponse.json({ ok: false, error: `Too many attempts. Try again in ${limit.retryAfterSeconds}s.` }, { status: 429 });
+  }
   const verified = await verifySignupOtp(challengeId, otp, portal);
   if (!verified.ok) {
     return NextResponse.json({ ok: false, error: verified.error }, { status: verified.status });
