@@ -118,3 +118,27 @@ Today’s site for Lydia on KGL-CGT-25. File today’s report opens the shift fo
 ## Quantity surveyor
 
 Bill of quantities, measured expenditure, and the financial statement for KGL-CGT-25. Send that statement to the project manager. Notices on that project show here. The project manager submits the cost report to the administrator.
+
+## Backup and recovery
+
+Operational backup/restore procedures are documented in [`docs/backup-recovery.md`](docs/backup-recovery.md).
+
+- MongoDB: back up all CPMIS databases (`MONGODB_DB_ADMIN`, `MONGODB_DB_PM`, `MONGODB_DB_SE`, `MONGODB_DB_QS`) and the legacy Express DB (`MONGODB_DB`).
+- Object storage: back up `STORAGE_LOCAL_DIR` (default `data/uploads`) together with MongoDB backups.
+- Scripts:
+
+```bash
+# Dry-run backup
+npm run backup:mongo -- --dry-run
+
+# Backup
+npm run backup:mongo -- --out backups/mongo
+
+# Dry-run restore
+npm run restore:mongo -- --from backups/mongo/<timestamp> --dry-run
+
+# Destructive restore (requires explicit confirmation)
+npm run restore:mongo -- --from backups/mongo/<timestamp> --drop --confirm RESTORE
+```
+
+Always verify restores with `/api/v1/health`, auth smoke tests, and document download checks before reopening traffic.
