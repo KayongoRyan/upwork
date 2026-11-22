@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAnySessionUser, verifyCsrf } from "@/lib/server/auth";
 import {
+  filterVertexaNotificationsForSession,
   listVertexaNotifications,
-  markAllVertexaNotificationsRead,
   markVertexaNotificationRead,
 } from "@/lib/server/vertexa-api";
 
@@ -23,7 +23,7 @@ export async function GET() {
     );
   }
   return NextResponse.json(
-    { ok: true, items: result.items },
+    { ok: true, items: filterVertexaNotificationsForSession(result.items, session) },
     { headers: { "cache-control": "no-store" } },
   );
 }
@@ -37,23 +37,44 @@ export async function PATCH(request: Request) {
     | { id?: unknown; read?: unknown; all?: unknown }
     | null;
 
+  const listed = await listVertexaNotifications();
+  if (listed.error) {
+    return NextResponse.json(
+      { ok: false, error: listed.error },
+      { status: listed.status ?? 502 },
+    );
+  }
+  const visible = filterVertexaNotificationsForSession(listed.items, session);
+
   if (body?.all === true) {
-    const result = await markAllVertexaNotificationsRead();
-    if (result.error && result.updated === 0) {
+    const targets = visible.filter((notice) => !notice.read);
+    let updated = 0;
+    let firstError: { error?: string; status?: number } | null = null;
+    for (const notice of targets) {
+      const result = await markVertexaNotificationRead(notice.id, true);
+      if (result.ok) updated += 1;
+      else if (!firstError) firstError = { error: result.error, status: result.status };
+    }
+    if (firstError && updated === 0) {
       return NextResponse.json(
-        { ok: false, updated: 0, error: result.error },
-        { status: result.status ?? 502 },
+        { ok: false, updated: 0, error: firstError.error },
+        { status: firstError.status ?? 502 },
       );
     }
     return NextResponse.json({
-      ok: !result.error,
-      updated: result.updated,
-      ...(result.error ? { error: result.error } : {}),
+      ok: !firstError,
+      updated,
+      ...(firstError ? { error: firstError.error } : {}),
     });
   }
 
   if (typeof body?.id !== "string" || typeof body.read !== "boolean") {
     return NextResponse.json({ ok: false, error: "invalid-request" }, { status: 400 });
+  }
+
+  const target = visible.find((item) => item.id === body.id);
+  if (!target) {
+    return NextResponse.json({ ok: false, error: "not-found" }, { status: 404 });
   }
 
   const result = await markVertexaNotificationRead(body.id, body.read);

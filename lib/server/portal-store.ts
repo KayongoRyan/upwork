@@ -441,7 +441,13 @@ export function scopeStateForSession(state: AdminState, session: SessionUser): A
     }
   }
 
-  const users = state.users;
+  for (const t of state.tasks) {
+    if (projectIdSet.has(t.projectId)) {
+      const assignee = state.users.find((u) => `${u.firstName} ${u.lastName}` === t.assignee);
+      if (assignee) userIds.add(assignee.id);
+    }
+  }
+  const users = state.users.filter((u) => userIds.has(u.id));
   const employees = state.employees.filter((e) => e.projectId && projectIdSet.has(e.projectId));
   const documents = state.documents.filter((d) => projectIdSet.has(d.projectId) && (session.role === "administrator" || d.access.includes(session.role)));
   const scopedActivityLogs = state.activityLogs.filter((l) => userIds.has(l.userId) || projects.some((p) => l.record.includes(p.code) || l.record.includes(p.name)));
@@ -452,7 +458,7 @@ export function scopeStateForSession(state: AdminState, session: SessionUser): A
   const costReports = state.costReports.filter((r) => projectIdSet.has(r.projectId));
   const reports = state.reports.filter((r) => projectIdSet.has(r.projectId));
   const boq = state.boq.filter((b) => projectIdSet.has(b.projectId));
-  const notifications = state.notifications.filter((n) => n.recipientId === session.id || (n.projectId && projectIdSet.has(n.projectId)));
+  const notifications = state.notifications.filter((n) => n.recipientId === session.id);
 
   return {
     ...state,

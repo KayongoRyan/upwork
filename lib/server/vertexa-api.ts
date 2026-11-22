@@ -11,7 +11,7 @@
  * inquiry record to the administrator's ops screen.
  */
 
-import type { AppNotification, InquiryStatus, NotificationType, VertexaInquiry } from "@/types";
+import type { AppNotification, InquiryStatus, NotificationType, SessionUser, VertexaInquiry } from "@/types";
 
 const DEFAULT_DEV_API_URL = "http://localhost:4000";
 const DEV_API_KEY = "dev-vertexa-api-key";
@@ -161,6 +161,16 @@ type ApiNotification = {
 
 export function isVertexaNotificationId(id: string): boolean {
   return VERTEXA_NOTICE_ID.test(id);
+}
+
+export function canViewVertexaNotification(session: SessionUser, notice: AppNotification): boolean {
+  if (session.role === "administrator") return notice.audience === "admin" || notice.recipientId === session.id;
+  if (session.role === "project_manager") return notice.recipientId === session.id || notice.audience === "pm" && notice.recipientId == null;
+  return notice.recipientId === session.id;
+}
+
+export function filterVertexaNotificationsForSession(items: AppNotification[], session: SessionUser): AppNotification[] {
+  return items.filter((item) => canViewVertexaNotification(session, item));
 }
 
 /**
