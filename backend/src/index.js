@@ -18,31 +18,55 @@ app.use(
   cors({
     origin: config.corsOrigins,
     credentials: true,
-    exposedHeaders: ["X-Request-Id", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After"],
+    exposedHeaders: ["X-Request-Id", "X-API-Version", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After"],
   }),
 );
 app.use(express.json({ limit: "32kb" }));
 app.use(express.urlencoded({ extended: true, limit: "32kb" }));
+
+app.use("/api", (_req, res, next) => {
+  res.setHeader("X-API-Version", config.apiVersion);
+  next();
+});
 
 app.get("/", (_req, res) => {
   res.json({
     ok: true,
     name: "Vertexa CPMIS API",
     version: "0.1.0",
+    apiVersion: config.apiVersion,
+    apiBasePath: config.apiBasePath,
     docs: "See backend/README.md",
   });
 });
 
-app.use("/api/v1/health", healthRouter);
-app.use("/api/v1/inquiries", requireDb, inquiriesRouter);
-app.use("/api/v1/notifications", requireDb, notificationsRouter);
-app.use("/api/v1/cpmis", requireDb, cpmisRouter);
-app.use("/api/v1/cpmis", requireDb, cpmisRemainingRouter);
+const v1 = express.Router();
+v1.get("/", (_req, res) => {
+  res.json({
+    ok: true,
+    version: config.apiVersion,
+    resources: [
+      `${config.apiBasePath}/health`,
+      `${config.apiBasePath}/inquiries`,
+      `${config.apiBasePath}/notifications`,
+      `${config.apiBasePath}/cpmis`,
+    ],
+  });
+});
+v1.use("/health", healthRouter);
+v1.use("/inquiries", requireDb, inquiriesRouter);
+v1.use("/notifications", requireDb, notificationsRouter);
+v1.use("/cpmis", requireDb, cpmisRouter);
+v1.use("/cpmis", requireDb, cpmisRemainingRouter);
+
+app.use(config.apiBasePath, v1);
 
 app.use((req, res) => {
   res.status(404).json({
     ok: false,
     error: "not_found",
+    apiVersion: req.path.startsWith("/api/") ? config.apiVersion : undefined,
+    supportedVersions: req.path.startsWith("/api/") ? [config.apiVersion] : undefined,
     requestId: req.requestId,
   });
 });
