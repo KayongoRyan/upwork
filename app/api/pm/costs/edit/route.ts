@@ -3,7 +3,7 @@ import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { readCostEdits } from "@/lib/server/cost-lines";
 import { redirectTo } from "@/lib/server/redirect";
-import { nextId, PREVIEW_PM_ID } from "@/lib/utils";
+import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const projectId = String(form.get("projectId") ?? "");
   const state = await readState();
-  const project = state.projects.find((item) => item.id === projectId && item.managerId === PREVIEW_PM_ID);
+  const project = state.projects.find((item) => item.id === projectId && item.managerId === __session.id);
   if (!project) return redirectTo(request, "/pm/costs", { error: "That project is not on your portfolio." });
   const rows = state.boq.filter((item) => item.projectId === project.id);
   if (rows.length === 0) return redirectTo(request, "/pm/costs", { error: "There is no bill to edit." });
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     type: "revise-cost-bill",
     projectId,
     lines: parsed.lines,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
+    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
   });
   return redirectTo(request, "/pm/costs", { edited: project.code });
 }

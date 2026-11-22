@@ -3,7 +3,7 @@ import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
-import { nextId, PREVIEW_QS_ID } from "@/lib/utils";
+import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const __csrf = verifyCsrf(request, __session);
   if (__csrf) return __csrf;
   const state = await readState();
-  const surveyor = state.users.find((user) => user.id === PREVIEW_QS_ID && user.role === "quantity_surveyor" && user.status === "active");
+  const surveyor = state.users.find((user) => user.id === __session.id && user.role === "quantity_surveyor" && user.status === "active");
   const project = surveyor?.projectId ? state.projects.find((item) => item.id === surveyor.projectId) : undefined;
   const manager = project ? state.users.find((user) => user.id === project.managerId) : undefined;
   if (!surveyor || !project || !manager) return redirectTo(request, "/qs/reports", { error: "No project is assigned to this account." });
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   await applyPortalAction("quantity_surveyor", {
     type: "send-cost-report",
     surveyorId: surveyor.id,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
+    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
   });
   return redirectTo(request, "/qs/reports", { sent: `${manager.firstName} ${manager.lastName}` });
 }

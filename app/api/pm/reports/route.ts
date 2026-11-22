@@ -2,7 +2,7 @@ import { readState } from "@/lib/server/memory";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
-import { nextId, PREVIEW_PM_ID } from "@/lib/utils";
+import { nextId } from "@/lib/utils";
 import { engineerReportSchema } from "@/lib/validations/schemas";
 
 export const runtime = "nodejs";
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     return redirectTo(request, "/pm/reports", { error: parsed.error.issues[0]?.message ?? "Check the form and try again." });
   }
   const state = await readState();
-  const project = state.projects.find((item) => item.id === parsed.data.projectId && item.managerId === PREVIEW_PM_ID);
+  const project = state.projects.find((item) => item.id === parsed.data.projectId && item.managerId === __session.id);
   const engineer = state.users.find((user) => user.id === parsed.data.engineerId && user.role === "site_engineer" && user.status === "active");
   if (!project) return redirectTo(request, "/pm/reports", { error: "Choose one of your projects." });
   if (!engineer) return redirectTo(request, "/pm/reports", { error: "Choose an active site engineer." });
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     type: "submit-report",
     input: parsed.data,
     toAdmin: true,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
+    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
   });
   return redirectTo(request, "/pm/reports", { sent: state.settings.profileName });
 }

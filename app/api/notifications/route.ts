@@ -8,7 +8,7 @@ import {
   markAllVertexaNotificationsRead,
   markVertexaNotificationRead,
 } from "@/lib/server/vertexa-api";
-import { PREVIEW_PM_ID, PREVIEW_QS_ID } from "@/lib/utils";
+/* current user derived from verified session */
 import type { AdminState, AppNotification } from "@/types";
 
 export const runtime = "nodejs";
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   }
 
   const item = state.notifications.find((notice) => notice.id === id);
-  if (!item || !visible(state, back, item)) return redirectTo(request, back, query);
+  if (!item || !visible(state, back, item, __session.id)) return redirectTo(request, back, query);
   await applyPortalAction(portalForReturn(back), { type: "mark-notification", id, read });
   return redirectTo(request, back, query, id);
 }
@@ -64,13 +64,13 @@ function keptFilters(form: FormData) {
   return query;
 }
 
-function visible(state: AdminState, back: string, item: AppNotification) {
+function visible(state: AdminState, back: string, item: AppNotification, sessionId: string) {
   if (back === "/admin/notifications") return true;
   if (back === "/pm/notifications") {
-    const projects = state.projects.filter((project) => project.managerId === PREVIEW_PM_ID);
-    return isManagerFieldNotice(item, projects, PREVIEW_PM_ID);
+    const projects = state.projects.filter((project) => project.managerId === sessionId);
+    return isManagerFieldNotice(item, projects, sessionId);
   }
-  const surveyor = state.users.find((user) => user.id === PREVIEW_QS_ID);
+  const surveyor = state.users.find((user) => user.id === sessionId);
   const project = state.projects.find((item) => item.id === surveyor?.projectId);
   return project ? isManagerFieldNotice(item, [project]) : false;
 }
