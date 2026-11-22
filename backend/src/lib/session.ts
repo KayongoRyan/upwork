@@ -34,3 +34,22 @@ export async function requireSession(req: Request, res: Response, portal: string
   }
   return { portal, session, token };
 }
+
+/** CSRF/origin guard for cookie-authenticated or pre-auth browser POSTs. Returns true if response was sent. */
+export function assertSameOrigin(req: Request, res: Response): boolean {
+  const origin = req.get("origin");
+  if (!origin) return false;
+  let originHost = "";
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    apiError(res, 403, "invalid-origin", { message: "Invalid origin.", requestId: req.requestId });
+    return true;
+  }
+  const host = req.get("x-forwarded-host") ?? req.get("host") ?? "";
+  if (host && originHost !== host) {
+    apiError(res, 403, "invalid-origin", { message: "Invalid origin.", requestId: req.requestId });
+    return true;
+  }
+  return false;
+}

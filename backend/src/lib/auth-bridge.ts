@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import {
   getSessionUserByToken,
@@ -48,7 +49,9 @@ export function verifyCsrfToken(req: Request, session: SessionUser, bodyToken?: 
   if (!provided || !session.csrfToken) {
     return { status: 403, body: { ok: false, error: "Invalid CSRF token." } };
   }
-  if (provided !== session.csrfToken) {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(session.csrfToken);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     return { status: 403, body: { ok: false, error: "Invalid CSRF token." } };
   }
   return null;
