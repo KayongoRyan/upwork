@@ -394,6 +394,26 @@ const UNIQUE_INDEXES: Array<{ portal: PortalKey; collection: string; keys: Recor
   { portal: "administrator", collection: "projects", keys: { code: 1 }, name: "uniq_projects_code" },
 ];
 
+const RELATIONSHIP_INDEXES: Array<{ portal: PortalKey; collection: string; keys: Record<string, 1>; name: string }> = [
+  { portal: "administrator", collection: "projects", keys: { managerId: 1 }, name: "rel_projects_managerId" },
+  { portal: "administrator", collection: "users", keys: { projectId: 1 }, name: "rel_users_projectId" },
+  { portal: "administrator", collection: "users", keys: { role: 1 }, name: "rel_users_role" },
+  { portal: "administrator", collection: "employees", keys: { projectId: 1 }, name: "rel_employees_projectId" },
+  { portal: "administrator", collection: "documents", keys: { projectId: 1 }, name: "rel_documents_projectId" },
+  { portal: "administrator", collection: "activityLogs", keys: { userId: 1 }, name: "rel_activityLogs_userId" },
+  { portal: "administrator", collection: "workComments", keys: { projectId: 1 }, name: "rel_workComments_projectId" },
+  { portal: "project_manager", collection: "tasks", keys: { projectId: 1 }, name: "rel_tasks_projectId" },
+  { portal: "project_manager", collection: "progressMarks", keys: { projectId: 1 }, name: "rel_progressMarks_projectId" },
+  { portal: "project_manager", collection: "costReports", keys: { projectId: 1 }, name: "rel_costReports_projectId" },
+  { portal: "site_engineer", collection: "reports", keys: { projectId: 1 }, name: "rel_reports_projectId" },
+  { portal: "site_engineer", collection: "reports", keys: { engineerId: 1 }, name: "rel_reports_engineerId" },
+  { portal: "quantity_surveyor", collection: "boq", keys: { projectId: 1 }, name: "rel_boq_projectId" },
+  { portal: "administrator", collection: "notifications", keys: { recipientId: 1 }, name: "rel_notifications_recipientId" },
+  { portal: "project_manager", collection: "notifications", keys: { recipientId: 1 }, name: "rel_notifications_recipientId" },
+  { portal: "site_engineer", collection: "notifications", keys: { recipientId: 1 }, name: "rel_notifications_recipientId" },
+  { portal: "quantity_surveyor", collection: "notifications", keys: { recipientId: 1 }, name: "rel_notifications_recipientId" },
+];
+
 async function applyCollectionValidation(db: Db, collection: string, schema: JsonSchema): Promise<void> {
   const validator = { $jsonSchema: schema };
   try {
@@ -438,6 +458,17 @@ async function ensurePortalValidation(runtime: MongoRuntime): Promise<void> {
     } catch (error) {
       const code = (error as { code?: number })?.code;
       // IndexOptionsConflict/IndexKeySpecsConflict - existing index differs; leave as-is.
+      if (code === 85 || code === 86) continue;
+      throw error;
+    }
+  }
+
+  for (const index of RELATIONSHIP_INDEXES) {
+    const collection = runtime.dbs[index.portal].collection(index.collection);
+    try {
+      await collection.createIndex(index.keys, { name: index.name });
+    } catch (error) {
+      const code = (error as { code?: number })?.code;
       if (code === 85 || code === 86) continue;
       throw error;
     }
