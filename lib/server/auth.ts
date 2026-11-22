@@ -34,6 +34,7 @@ export const PORTAL_HOME: Record<PortalKey, string> = {
 interface SessionRecord {
   _id: string;
   tokenHash: string;
+  csrfToken: string;
   userId: string;
   role: UserRole;
   createdAt: string;
@@ -138,7 +139,7 @@ export function roleDemoPassword(role: UserRole): string {
   return value || fallback[role];
 }
 
-function sessionUser(user: UserAccount): SessionUser {
+function sessionUser(user: UserAccount, csrfToken: string): SessionUser {
   return {
     id: user.id,
     firstName: user.firstName,
@@ -146,6 +147,7 @@ function sessionUser(user: UserAccount): SessionUser {
     email: user.email,
     role: user.role,
     projectId: user.projectId ?? null,
+    csrfToken,
   };
 }
 
@@ -241,6 +243,7 @@ export async function setUserPasswordHash(userId: string, email: string, passwor
   } else {
     memory().credentials.set(userId, record);
   }
+  await destroySessionsForUser(userId);
 }
 
 export async function removeUserCredential(userId: string): Promise<void> {
@@ -250,6 +253,7 @@ export async function removeUserCredential(userId: string): Promise<void> {
   } else {
     memory().credentials.delete(userId);
   }
+  await destroySessionsForUser(userId);
 }
 
 async function findCredentialByEmail(email: string): Promise<CredentialRecord | null> {
@@ -310,16 +314,18 @@ export async function signInWithPassword(
     return { ok: false, error: "This account does not have access to this portal.", status: 403 };
   }
 
-  const token = await createSessionForUser(portal, user);
-  return { ok: true, user: sessionUser(user), token };
+  const session = await createSessionForUser(portal, user);
+  return { ok: true, user: sessionUser(user, session.csrfToken), token: session.token };
 }
 
-export async function createSessionForUser(portal: PortalKey, user: UserAccount): Promise<string> {
+export async function createSessionForUser(portal: PortalKey, user: UserAccount): Promise<{ token: string; csrfToken: string }> {
   const token = crypto.randomBytes(32).toString("hex");
+  const csrfToken = crypto.randomBytes(32).toString("hex");
   const now = new Date();
   const record: SessionRecord = {
     _id: `sess-${crypto.randomUUID()}`,
     tokenHash: hashToken(token),
+    csrfToken,
     userId: user.id,
     role: user.role,
     createdAt: now.toISOString(),
@@ -332,7 +338,7 @@ export async function createSessionForUser(portal: PortalKey, user: UserAccount)
   } else {
     memory().sessions[portal].set(record.tokenHash, record);
   }
-  return token;
+  return { token, csrfToken };
 }
 
 export async function getSessionUser(portal: PortalKey): Promise<SessionUser | null> {
@@ -374,7 +380,17 @@ export async function getSessionUser(portal: PortalKey): Promise<SessionUser | n
     }
   }
 
-  return sessionUser(user);
+  let csrfToken = record.csrfToken;
+  if (!csrfToken) {
+    csrfToken = crypto.randomBytes(32).toString("hex");
+    if (collection) {
+      await collection.updateOne({ tokenHash }, { $set: { csrfToken } });
+    } else {
+      record.csrfToken = csrfToken;
+    }
+  }
+
+  return sessionUser(user, csrfToken);
 }
 
 async function destroySessionByHash(portal: PortalKey, tokenHash: string) {
@@ -383,6 +399,20 @@ async function destroySessionByHash(portal: PortalKey, tokenHash: string) {
     await collection.deleteOne({ tokenHash });
   } else {
     memory().sessions[portal].delete(tokenHash);
+  }
+}
+
+export async function destroySessionsForUser(userId: string): Promise<void> {
+  for (const portal of Object.keys(SESSION_COOKIE) as PortalKey[]) {
+    const collection = await sessionsCollection(portal);
+    if (collection) {
+      await collection.deleteMany({ userId });
+    } else {
+      const store = memory().sessions[portal];
+      for (const [hash, rec] of store.entries()) {
+        if (rec.userId === userId) store.delete(hash);
+      }
+    }
   }
 }
 
@@ -425,10 +455,32 @@ export function portalHome(portal: PortalKey) {
   return PORTAL_HOME[portal];
 }
 
+export async function getAnySessionUser(): Promise<SessionUser | null> {
+  for (const portal of Object.keys(SESSION_COOKIE) as PortalKey[]) {
+    const user = await getSessionUser(portal);
+    if (user) return user;
+  }
+  return null;
+}
+
 export async function requireApiSession(portal: PortalKey): Promise<SessionUser | NextResponse> {
   const user = await getSessionUser(portal);
   if (!user) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   return user;
+}
+
+export function verifyCsrf(request: Request, session: SessionUser, bodyToken?: string | null): NextResponse | null {
+  const method = request.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return null;
+  const provided = request.headers.get("x-csrf-token") ?? bodyToken ?? "";
+  if (!provided || !session.csrfToken) {
+    return NextResponse.json({ ok: false, error: "Invalid CSRF token." }, { status: 403 });
+  }
+  const ok =
+    provided.length === session.csrfToken.length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(session.csrfToken));
+  if (!ok) return NextResponse.json({ ok: false, error: "Invalid CSRF token." }, { status: 403 });
+  return null;
 }
 
 export async function resetDemoAuth(): Promise<void> {

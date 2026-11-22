@@ -1,5 +1,5 @@
 import { readState } from "@/lib/server/memory";
-import { requireApiSession } from "@/lib/server/auth";
+import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { nextId, PREVIEW_SE_ID } from "@/lib/utils";
@@ -14,6 +14,8 @@ const MAX_BYTES = 1_500_000;
 export async function POST(request: Request) {
   const __session = await requireApiSession("site_engineer");
   if (__session instanceof Response) return __session;
+  const __csrf = verifyCsrf(request, __session);
+  if (__csrf) return __csrf;
   const form = await request.formData();
   const date = String(form.get("date") ?? "");
   const summary = String(form.get("summary") ?? "").trim();

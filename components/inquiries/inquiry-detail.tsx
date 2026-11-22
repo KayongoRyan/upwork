@@ -22,7 +22,7 @@ const statusTone: Record<InquiryStatus, "amber" | "navy" | "green"> = {
 
 export function InquiryDetail({ id }: { id: string }) {
   const router = useRouter();
-  const { users, projects } = useAdmin();
+  const { users, projects, viewer } = useAdmin();
   const managers = users.filter((user) => user.role === "project_manager");
 
   const [inquiry, setInquiry] = useState<VertexaInquiry | null>(null);
@@ -72,7 +72,7 @@ export function InquiryDetail({ id }: { id: string }) {
     try {
       const response = await fetch(`/api/vertexa/inquiries/${id}`, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-csrf-token": viewer?.csrfToken ?? "" },
         body: JSON.stringify(patch),
       });
       const data = (await response.json().catch(() => null)) as { ok?: boolean; inquiry?: VertexaInquiry; error?: string } | null;

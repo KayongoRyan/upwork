@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireApiSession, setUserPassword } from "@/lib/server/auth";
+import { requireApiSession, setUserPassword, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { nextId } from "@/lib/utils";
@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const __session = await requireApiSession("administrator");
   if (__session instanceof Response) return __session;
+  const __csrf = verifyCsrf(request, __session);
+  if (__csrf) return __csrf;
   const form = await request.formData();
   const parsed = userSchema.safeParse({
     firstName: form.get("firstName"),

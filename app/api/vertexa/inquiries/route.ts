@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiSession } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { createInquiry } from "@/lib/server/inquiries";
@@ -40,6 +41,8 @@ function inquiryHash(id: string): string {
 
 /** Administrator ops list. Reads through to MongoDB; the demo store has no inquiries. */
 export async function GET(request: Request) {
+  const session = await requireApiSession("administrator");
+  if (session instanceof Response) return session;
   const url = new URL(request.url);
   const status = url.searchParams.get("status") ?? "all";
   const search = url.searchParams.get("search") ?? "";

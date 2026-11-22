@@ -1,5 +1,5 @@
 import { readState } from "@/lib/server/memory";
-import { requireApiSession } from "@/lib/server/auth";
+import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { fullName, nextId } from "@/lib/utils";
@@ -15,6 +15,8 @@ const KINDS = new Set<WorkKind>(["project", "task", "report", "cost", "progress"
 export async function POST(request: Request) {
   const __session = await requireApiSession("administrator");
   if (__session instanceof Response) return __session;
+  const __csrf = verifyCsrf(request, __session);
+  if (__csrf) return __csrf;
   const form = await request.formData();
   const portal = String(form.get("portal") ?? "");
   const type = String(form.get("type") ?? "");

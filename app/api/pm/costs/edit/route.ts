@@ -1,5 +1,5 @@
 import { readState } from "@/lib/server/memory";
-import { requireApiSession } from "@/lib/server/auth";
+import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { readCostEdits } from "@/lib/server/cost-lines";
 import { redirectTo } from "@/lib/server/redirect";
@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const __session = await requireApiSession("project_manager");
   if (__session instanceof Response) return __session;
+  const __csrf = verifyCsrf(request, __session);
+  if (__csrf) return __csrf;
   const form = await request.formData();
   const projectId = String(form.get("projectId") ?? "");
   const state = await readState();

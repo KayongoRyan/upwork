@@ -1,25 +1,38 @@
 import { NextResponse } from "next/server";
-import { clearSessionCookie, portalHome, signOut } from "@/lib/server/auth";
+import { clearSessionCookie, getSessionUser, portalHome, signOut, verifyCsrf } from "@/lib/server/auth";
 import { isPortalKey, type PortalKey } from "@/lib/server/portal-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function readPortal(request: Request): Promise<PortalKey | null> {
+async function readBody(request: Request): Promise<{ portal: PortalKey | null; csrfToken: string | null }> {
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    const body = (await request.json().catch(() => null)) as { portal?: string } | null;
-    return body?.portal && isPortalKey(body.portal) ? body.portal : null;
+    const body = (await request.json().catch(() => null)) as { portal?: string; csrfToken?: string } | null;
+    return {
+      portal: body?.portal && isPortalKey(body.portal) ? body.portal : null,
+      csrfToken: typeof body?.csrfToken === "string" ? body.csrfToken : null,
+    };
   }
   const form = await request.formData().catch(() => null);
   const portal = form?.get("portal");
-  return typeof portal === "string" && isPortalKey(portal) ? portal : null;
+  const csrfToken = form?.get("csrfToken");
+  return {
+    portal: typeof portal === "string" && isPortalKey(portal) ? portal : null,
+    csrfToken: typeof csrfToken === "string" ? csrfToken : null,
+  };
 }
 
 export async function POST(request: Request) {
-  const portal = await readPortal(request);
+  const { portal, csrfToken } = await readBody(request);
   if (!portal) {
     return NextResponse.json({ ok: false, error: "Unknown portal." }, { status: 400 });
+  }
+
+  const session = await getSessionUser(portal);
+  if (session) {
+    const csrf = verifyCsrf(request, session, csrfToken);
+    if (csrf) return csrf;
   }
 
   await signOut(portal);

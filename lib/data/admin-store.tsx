@@ -98,7 +98,7 @@ export function AdminProvider({
       try {
         const response = await fetch(actionsUrl, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", "x-csrf-token": session.csrfToken },
           body: JSON.stringify(action),
           cache: "no-store",
         });
@@ -131,10 +131,13 @@ export function AdminProvider({
   const patchRemoteNotice = useCallback((body: Record<string, unknown>) => {
     void fetch("/api/vertexa/notifications", {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...(session?.csrfToken ? { "x-csrf-token": session.csrfToken } : {}),
+      },
       body: JSON.stringify(body),
     }).catch(() => undefined);
-  }, []);
+  }, [session]);
 
   const markNotification = useCallback(
     (id: string, read: boolean) => {

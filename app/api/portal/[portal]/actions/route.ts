@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { AdminAction } from "@/lib/data/reducer";
-import { getSessionUser, removeUserCredential, resetDemoAuth, setUserPassword } from "@/lib/server/auth";
+import { destroySessionsForUser, getSessionUser, removeUserCredential, resetDemoAuth, setUserPassword, verifyCsrf } from "@/lib/server/auth";
 import { PortalActionError, applyPortalAction, isPortalKey } from "@/lib/server/portal-store";
 
 export const runtime = "nodejs";
@@ -43,6 +43,8 @@ export async function POST(request: Request, context: { params: Promise<{ portal
   if (!session) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
+  const csrf = verifyCsrf(request, session);
+  if (csrf) return csrf;
 
   const action = (await request.json().catch(() => null)) as AdminAction | null;
   if (!action || typeof action !== "object" || typeof action.type !== "string") {
@@ -63,6 +65,9 @@ export async function POST(request: Request, context: { params: Promise<{ portal
       if (typeof pwd === "string") {
         await setUserPassword(secured.stamp.id, secured.input.email, pwd);
       }
+    }
+    if (secured.type === "update-user" && secured.input.status !== "active") {
+      await destroySessionsForUser(secured.id);
     }
     if (secured.type === "delete-user") {
       await removeUserCredential(secured.id);

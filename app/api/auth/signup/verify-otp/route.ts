@@ -76,8 +76,8 @@ export async function POST(request: Request) {
     registeredAt: now.slice(0, 10),
   };
 
-  const token = await createSessionForUser(portal, created);
+  const session = await createSessionForUser(portal, created);
   const response = NextResponse.json({ ok: true, redirectTo: portalHome(portal) });
-  applySessionCookie(response, portal, token);
+  applySessionCookie(response, portal, session.token);
   return response;
 }

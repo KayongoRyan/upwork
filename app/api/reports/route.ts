@@ -1,5 +1,5 @@
 import { overlapsRange } from "@/lib/metrics";
-import { requireApiSession } from "@/lib/server/auth";
+import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { buildCsv } from "@/lib/utils";
 
@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const __session = await requireApiSession("administrator");
   if (__session instanceof Response) return __session;
+  const __csrf = verifyCsrf(request, __session);
+  if (__csrf) return __csrf;
   const url = new URL(request.url);
   const from = url.searchParams.get("from") ?? "2025-01-01";
   const to = url.searchParams.get("to") ?? "2027-12-31";
