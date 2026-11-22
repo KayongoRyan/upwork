@@ -65,7 +65,7 @@ cpmisRouter.post("/portal/:portal/actions", async (req: Request, res: Response) 
         return apiError(res, 400, "password-required", { requestId: req.requestId });
       }
     }
-    const state = await applyPortalAction(auth.portal, secured);
+    const state = await applyPortalAction(auth.portal, secured, auth.session);
     if (secured.type === "create-user") {
       const pwd = "password" in secured ? (secured as any).password : undefined;
       if (typeof pwd === "string") {
@@ -213,12 +213,11 @@ cpmisRouter.post("/documents", upload.single("file"), async (req: Request, res: 
     return res.redirect(303, back + encodeURIComponent("The file metadata could not be saved. Try again."));
   }
   try {
-    await applyPortalAction("administrator", {
-      type: "register-document",
+    await applyPortalAction("administrator", { type: "register-document",
       document: { projectId, number, title, category, discipline, ownerId, access: Array.isArray(form.access) ? form.access : form.access ? [form.access] : [] },
       revision: { fileName, fileType, size, note: String(form.note ?? "").trim(), status, uploadedBy: auth.session.id, fileKey },
       stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: auth.session.id, actorName: `${auth.session.firstName} ${auth.session.lastName}`, actorRole: auth.session.role },
-    } as any);
+    } as any, auth.session);
     return res.redirect(303, `/admin/documents?doc=${encodeURIComponent(id)}`);
   } catch (error) {
     if (error instanceof PersistenceError) return res.redirect(303, back + encodeURIComponent("The document could not be saved. Try again."));
@@ -263,7 +262,7 @@ cpmisRouter.post("/documents/revise", upload.single("file"), async (req: Request
       documentId,
       revision: { fileName, fileType, size, note: String(form.note ?? "").trim(), uploadedBy: auth.session.id, fileKey },
       stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: auth.session.id, actorName: `${auth.session.firstName} ${auth.session.lastName}`, actorRole: auth.session.role },
-    } as any);
+    } as any, auth.session);
     return res.redirect(303, `/admin/documents?doc=${encodeURIComponent(documentId)}`);
   } catch (error) {
     if (error instanceof PersistenceError) return res.redirect(303, back + encodeURIComponent("The revision could not be saved. Try again."));

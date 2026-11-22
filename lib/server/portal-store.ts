@@ -35,7 +35,7 @@ import {
   type MongoRuntime,
 } from "@/lib/server/mongo";
 import { cpmisPortalIds, type CpmisPortalId } from "@/lib/portals";
-import type { AdminState, AppNotification, OrgSettings, SessionUser } from "@/types";
+import type { AdminState, AppNotification, OrgSettings, SessionUser, UserRole } from "@/types";
 
 export const PORTAL_KEYS = cpmisPortalIds;
 
@@ -1063,10 +1063,124 @@ export function applyAction(action: AdminAction): Promise<AdminState> {
   return run;
 }
 
+const PORTAL_ROLE: Record<PortalKey, UserRole> = {
+  administrator: "administrator",
+  project_manager: "project_manager",
+  site_engineer: "site_engineer",
+  quantity_surveyor: "quantity_surveyor",
+};
+
+function targetProjectIds(state: AdminState, action: AdminAction): string[] {
+  switch (action.type) {
+    case "reset":
+    case "mark-notification":
+    case "mark-all-notifications":
+    case "update-settings":
+    case "support-request":
+    case "vertexa-inquiry":
+    case "delete-support-note":
+    case "add-calendar-event":
+    case "delete-calendar-event":
+      return [];
+    case "create-project":
+      return [];
+    case "update-project":
+    case "delete-project":
+    case "set-progress":
+      return [action.id];
+    case "create-user":
+    case "update-user":
+    case "set-user-status":
+    case "delete-user":
+    case "create-employee":
+    case "update-employee":
+    case "delete-employee":
+      return [];
+    case "create-task":
+      return [action.input.projectId];
+    case "set-task-status":
+    case "delete-task":
+    case "set-task-progress": {
+      const task = state.tasks.find((t) => t.id === action.id);
+      return task ? [task.projectId] : [];
+    }
+    case "assign-task":
+    case "schedule-task":
+      return [action.projectId];
+    case "submit-report":
+      return [action.input.projectId];
+    case "delete-report":
+    case "resubmit-report":
+    case "open-report-review":
+    case "decide-report": {
+      const report = state.reports.find((r) => r.id === action.id);
+      return report ? [report.projectId] : [];
+    }
+    case "create-boq":
+    case "update-boq":
+      return [action.input.projectId];
+    case "delete-boq": {
+      const item = state.boq.find((b) => b.id === action.id);
+      return item ? [item.projectId] : [];
+    }
+    case "submit-cost-report":
+    case "revise-cost-bill":
+      return [action.projectId];
+    case "send-cost-report": {
+      const surveyor = state.users.find((u) => u.id === action.surveyorId);
+      return surveyor?.projectId ? [surveyor.projectId] : [];
+    }
+    case "delete-cost-report": {
+      const report = state.costReports.find((r) => r.id === action.id);
+      return report ? [report.projectId] : [];
+    }
+    case "register-document":
+      return [action.document.projectId];
+    case "revise-document":
+    case "issue-revision":
+    case "set-document-access": {
+      const doc = state.documents.find((d) => d.id === action.documentId);
+      return doc ? [doc.projectId] : [];
+    }
+    case "add-work-comment":
+      return [action.projectId];
+    case "delete-work-comment": {
+      const comment = state.workComments.find((c) => c.id === action.id);
+      return comment ? [comment.projectId] : [];
+    }
+    default:
+      return [];
+  }
+}
+
+function sessionCanAccessProjectId(state: AdminState, session: SessionUser, projectId: string): boolean {
+  if (session.role === "administrator") return true;
+  if (session.role === "project_manager") {
+    const project = state.projects.find((p) => p.id === projectId);
+    return project?.managerId === session.id;
+  }
+  if (session.role === "site_engineer" || session.role === "quantity_surveyor") {
+    return session.projectId === projectId;
+  }
+  return false;
+}
+
 /** Applies an action only when the portal owns that part of the work. */
-export async function applyPortalAction(portal: PortalKey, action: AdminAction): Promise<AdminState> {
+export async function applyPortalAction(portal: PortalKey, action: AdminAction, session?: SessionUser): Promise<AdminState> {
   if (!portalCanApply(portal, action)) {
     throw new PortalActionError(portal, action.type);
+  }
+  if (session) {
+    if (session.role !== PORTAL_ROLE[portal]) {
+      throw new PortalActionError(portal, action.type);
+    }
+    const state = await readState();
+    const targets = targetProjectIds(state, action).filter(Boolean);
+    for (const projectId of targets) {
+      if (!sessionCanAccessProjectId(state, session, projectId)) {
+        throw new PortalActionError(portal, action.type);
+      }
+    }
   }
   return applyAction(action);
 }
