@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { AdminAction } from "@/lib/data/reducer";
 import { destroySessionsForUser, getSessionUser, removeUserCredential, resetDemoAuth, setUserPassword, verifyCsrf } from "@/lib/server/auth";
-import { PortalActionError, applyPortalAction, isPortalKey } from "@/lib/server/portal-store";
+import { PortalActionError, applyPortalAction, isPortalKey, scopeStateForSession } from "@/lib/server/portal-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -75,7 +75,7 @@ export async function POST(request: Request, context: { params: Promise<{ portal
     if (secured.type === "reset") {
       await resetDemoAuth();
     }
-    return NextResponse.json(state, { headers: { "cache-control": "no-store" } });
+    return NextResponse.json(scopeStateForSession(state, session), { headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof PortalActionError) {
       return NextResponse.json(
