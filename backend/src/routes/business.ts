@@ -10,6 +10,7 @@ import { apiError } from "../lib/api-response";
 import { requireAnySession, requireSession } from "../lib/session";
 import { canAccessProject, isAdmin } from "../lib/rbac";
 import { verifyCsrfToken, setUserPassword, removeUserCredential, destroySessionsForUser } from "../lib/auth-bridge";
+import { logger } from "../lib/logger";
 
 export const businessRouter = Router();
 
@@ -34,7 +35,7 @@ function handleActionError(error: unknown, req: Request, res: Response) {
   if (error instanceof PersistenceError) {
     return apiError(res, 503, "persistence-failed", { requestId: req.requestId });
   }
-  console.error("[business] action failed", error);
+  logger.error("business.action_failed", error, { requestId: req.requestId, path: req.originalUrl, method: req.method });
   return apiError(res, 500, "action-failed", { requestId: req.requestId });
 }
 
