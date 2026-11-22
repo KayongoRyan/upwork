@@ -1,5 +1,6 @@
 import { MongoClient } from "mongodb";
 import { config } from "./config.js";
+import { getMongoRuntime, mongoUri, resetMongoRuntime } from "@/lib/server/mongo.ts";
 
 /** @type {MongoClient | null} */
 let client = null;
@@ -40,8 +41,17 @@ export async function connectDb() {
   }
 }
 
+export async function ensureCpmisDbs() {
+  const runtime = await getMongoRuntime();
+  if (!runtime && process.env.NODE_ENV === "production") {
+    throw new Error(`CPMIS MongoDB runtime unavailable at ${mongoUri()}`);
+  }
+  return runtime;
+}
+
 export async function ensureDb() {
-  return connectDb();
+  const [database] = await Promise.all([connectDb(), ensureCpmisDbs()]);
+  return database;
 }
 
 export function getDb() {
@@ -52,6 +62,7 @@ export function getDb() {
 }
 
 export async function closeDb() {
+  await resetMongoRuntime().catch(() => undefined);
   if (client) {
     await client.close();
     client = null;

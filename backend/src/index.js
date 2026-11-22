@@ -71,12 +71,16 @@ const server = app.listen(config.port, () => {
 });
 
 connectDb()
-  .then(() => {
+  .then(async () => {
+    const { PORTAL_KEYS, portalDatabaseName } = await import("@/lib/server/mongo.ts");
     console.log(`MongoDB       ${config.mongoDb} @ ${config.mongoUri}`);
+    for (const portal of PORTAL_KEYS) {
+      console.log(`CPMIS DB      ${portalDatabaseName(portal)} (${portal})`);
+    }
   })
   .catch(() => {
     console.warn("\n" + mongoStartupHelp + "\n");
-    console.warn("API is up; inquiry routes return 503 until MongoDB is available.\n");
+    console.warn("API is up; routes return 503 until MongoDB is available.\n");
   });
 
 async function shutdown() {
