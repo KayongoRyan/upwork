@@ -543,6 +543,110 @@ function assertStateIntegrity(state: AdminState): void {
   }
 }
 
+const STATUS_TRANSITIONS: Record<string, Record<string, ReadonlySet<string>>> = {
+  project: {
+    planning: new Set(["planning", "active", "on_hold", "delayed", "completed"]),
+    active: new Set(["active", "on_hold", "delayed", "completed"]),
+    on_hold: new Set(["on_hold", "planning", "active", "delayed", "completed"]),
+    delayed: new Set(["delayed", "active", "on_hold", "completed"]),
+    completed: new Set(["completed", "active"]),
+  },
+  task: {
+    todo: new Set(["todo", "pending", "done"]),
+    pending: new Set(["pending", "todo", "done"]),
+    done: new Set(["done", "todo", "pending"]),
+  },
+  report: {
+    submitted: new Set(["submitted", "in_review", "approved", "rejected"]),
+    in_review: new Set(["in_review", "approved", "rejected"]),
+    approved: new Set(["approved"]),
+    rejected: new Set(["rejected", "submitted"]),
+  },
+  costReport: {
+    pending: new Set(["pending", "submitted"]),
+    submitted: new Set(["submitted"]),
+  },
+  account: {
+    active: new Set(["active", "inactive"]),
+    inactive: new Set(["inactive", "active"]),
+  },
+  employment: {
+    active: new Set(["active", "on_leave", "contract", "inactive"]),
+    on_leave: new Set(["on_leave", "active", "contract", "inactive"]),
+    contract: new Set(["contract", "active", "on_leave", "inactive"]),
+    inactive: new Set(["inactive", "active", "on_leave", "contract"]),
+  },
+  revision: {
+    draft: new Set(["draft", "in_review", "approved"]),
+    in_review: new Set(["in_review", "approved"]),
+    approved: new Set(["approved"]),
+  },
+  inquiry: {
+    received: new Set(["received", "assigned", "closed"]),
+    assigned: new Set(["assigned", "closed"]),
+    closed: new Set(["closed"]),
+  },
+};
+
+function assertTransition(kind: string, id: string, before: string, after: string): void {
+  if (before === after) return;
+  const allowed = STATUS_TRANSITIONS[kind]?.[before];
+  if (!allowed || !allowed.has(after)) {
+    throw new PersistenceError(`Invalid ${kind} status transition for ${id}: ${before} -> ${after}.`);
+  }
+}
+
+function assertStatusTransitions(previous: AdminState | null, next: AdminState): void {
+  if (!previous) return;
+
+  const prevProjects = new Map(previous.projects.map((item) => [item.id, item]));
+  for (const item of next.projects) {
+    const prev = prevProjects.get(item.id);
+    if (prev) assertTransition("project", item.id, prev.status, item.status);
+  }
+
+  const prevTasks = new Map(previous.tasks.map((item) => [item.id, item]));
+  for (const item of next.tasks) {
+    const prev = prevTasks.get(item.id);
+    if (prev) assertTransition("task", item.id, prev.status, item.status);
+  }
+
+  const prevReports = new Map(previous.reports.map((item) => [item.id, item]));
+  for (const item of next.reports) {
+    const prev = prevReports.get(item.id);
+    if (prev) assertTransition("report", item.id, prev.status, item.status);
+  }
+
+  const prevCostReports = new Map(previous.costReports.map((item) => [item.id, item]));
+  for (const item of next.costReports) {
+    const prev = prevCostReports.get(item.id);
+    if (prev) assertTransition("costReport", item.id, prev.status, item.status);
+  }
+
+  const prevUsers = new Map(previous.users.map((item) => [item.id, item]));
+  for (const item of next.users) {
+    const prev = prevUsers.get(item.id);
+    if (prev) assertTransition("account", item.id, prev.status, item.status);
+  }
+
+  const prevEmployees = new Map(previous.employees.map((item) => [item.id, item]));
+  for (const item of next.employees) {
+    const prev = prevEmployees.get(item.id);
+    if (prev) assertTransition("employment", item.id, prev.status, item.status);
+  }
+
+  const prevDocs = new Map(previous.documents.map((item) => [item.id, item]));
+  for (const item of next.documents) {
+    const prev = prevDocs.get(item.id);
+    if (!prev) continue;
+    const prevRevisions = new Map(prev.revisions.map((rev) => [rev.id, rev]));
+    for (const rev of item.revisions) {
+      const prevRev = prevRevisions.get(rev.id);
+      if (prevRev) assertTransition("revision", `${item.id}/${rev.id}`, prevRev.status, rev.status);
+    }
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Load / seed                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -833,6 +937,7 @@ async function applyNow(action: AdminAction): Promise<AdminState> {
   }
   const next = action.type === "reset" ? createSeedState() : adminReducer(state, action);
   assertStateIntegrity(next);
+  if (action.type !== "reset") assertStatusTransitions(state, next);
 
   // In production a missing database is a failed write, not a preview fallback.
   const runtime = requirePersistenceInProduction(await getMongoRuntime());
