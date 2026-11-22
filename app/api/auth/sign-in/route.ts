@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { applySessionCookie, checkLoginRateLimit, portalHome, resetLoginRateLimit, signInWithPassword } from "@/lib/server/auth";
+import { applySessionCookie, assertSameOrigin, checkLoginRateLimit, portalHome, resetLoginRateLimit, signInWithPassword } from "@/lib/server/auth";
 import { isPortalKey } from "@/lib/server/portal-store";
 
 export const runtime = "nodejs";
@@ -13,6 +13,8 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {

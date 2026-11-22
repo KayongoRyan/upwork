@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { hashPassword, checkLoginRateLimit } from "@/lib/server/auth";
+import { assertSameOrigin, checkLoginRateLimit, hashPassword } from "@/lib/server/auth";
 import { createSignupOtp, normalizeSignupEmail, normalizeSignupPhone } from "@/lib/server/otp";
 import { isPortalKey } from "@/lib/server/portal-store";
 import { readState } from "@/lib/server/memory";
@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const schema = z.object({
-  portal: z.enum(["administrator", "project_manager", "site_engineer", "quantity_surveyor"]),
+  portal: z.enum(["project_manager", "site_engineer", "quantity_surveyor"]),
   firstName: z.string().trim().min(2, "First name is required").max(80),
   lastName: z.string().trim().min(2, "Last name is required").max(80),
   phone: z
@@ -23,6 +23,8 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
