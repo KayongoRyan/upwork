@@ -3,7 +3,7 @@ import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { persistOr } from "@/lib/server/redirect";
-import { putObject, storageKeyForDocument } from "@/lib/server/storage";
+import { putObject, saveFileMetadata, storageKeyForDocument } from "@/lib/server/storage";
 import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -46,6 +46,22 @@ export async function POST(request: Request) {
     return fail("The file could not be stored. Try again.");
   }
   const id = nextId("act");
+  try {
+    await saveFileMetadata({
+      key: fileKey,
+      fileName,
+      contentType: fileType,
+      size: file.size,
+      body: bytes,
+      uploadedBy: __session.id,
+      projectId: current.projectId,
+      documentId,
+      revisionId: id,
+      source: "document",
+    });
+  } catch {
+    return fail("The file metadata could not be saved. Try again.");
+  }
   return persistOr(
     async () => {
       await applyPortalAction("administrator", {
