@@ -87,7 +87,7 @@ cpmisRemainingRouter.post("/users", async (req: Request, res: Response) => {
   const id = nextId("act");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("administrator", { type: "create-user", input: parsed.data, stamp: stamp(auth.session, id) } as any);
+      await applyPortalAction("administrator", { type: "create-user", input: parsed.data, stamp: stamp(auth.session, id) } as any, auth.session);
       await setUserPassword(id, parsed.data.email, password);
       return redirect(res, "/admin/users");
     },
@@ -114,7 +114,7 @@ cpmisRemainingRouter.post("/projects", async (req: Request, res: Response) => {
   const id = nextId("act");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("administrator", { type: "create-project", input: parsed.data, stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` } } as any);
+      await applyPortalAction("administrator", { type: "create-project", input: parsed.data, stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` } } as any, auth.session);
       return redirect(res, `/admin/projects/${id}`);
     },
     () => redirect(res, "/admin/projects", { create: "1", error: "The project could not be saved. Try again." }),
@@ -140,7 +140,7 @@ cpmisRemainingRouter.post("/employees", async (req: Request, res: Response) => {
   const id = nextId("act");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("administrator", { type: "create-employee", input: parsed.data, stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` } } as any);
+      await applyPortalAction("administrator", { type: "create-employee", input: parsed.data, stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` } } as any, auth.session);
       return redirect(res, "/admin/employees");
     },
     () => redirect(res, "/admin/employees", { register: "1", error: "The employee could not be saved. Try again." }),
@@ -162,7 +162,7 @@ cpmisRemainingRouter.post("/help", async (req: Request, res: Response) => {
   const id = nextId("hlp");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("administrator", { type: "support-request", topic, message, stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` } } as any);
+      await applyPortalAction("administrator", { type: "support-request", topic, message, stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` } } as any, auth.session);
       return redirect(res, "/admin/help", { saved: "1" }, `ntf-${id}`);
     },
     () => redirect(res, "/admin/help", { error: "The note could not be saved. Try again." }),
@@ -231,7 +231,7 @@ cpmisRemainingRouter.post("/admin/comments", async (req: Request, res: Response)
   const id = nextId("cmt");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("administrator", { type: "add-work-comment", kind, workId, projectId, body, stamp: { id, at: new Date().toISOString() } } as any);
+      await applyPortalAction("administrator", { type: "add-work-comment", kind, workId, projectId, body, stamp: { id, at: new Date().toISOString() } } as any, auth.session);
       return redirect(res, "/admin/notifications", { ...query, commented: "1" }, workId);
     },
     () => fail("The comment could not be saved. Try again."),
@@ -282,7 +282,7 @@ cpmisRemainingRouter.post("/notifications", async (req: Request, res: Response) 
     if (back !== "/admin/notifications") return redirect(res, back);
     return persistOrRedirect(
       async () => {
-        await applyPortalAction("administrator", { type: "mark-all-notifications" } as any);
+        await applyPortalAction("administrator", { type: "mark-all-notifications" } as any, auth.session);
         await markAllVertexaNotificationsRead();
         return redirect(res, back, { ...query, read: "all" });
       },
@@ -301,7 +301,7 @@ cpmisRemainingRouter.post("/notifications", async (req: Request, res: Response) 
   if (!item || !notifVisible(state, back, item, auth.session.id)) return redirect(res, back, query);
   return persistOrRedirect(
     async () => {
-      await applyPortalAction(portalForReturn(back), { type: "mark-notification", id, read: readFlag } as any);
+      await applyPortalAction(portalForReturn(back), { type: "mark-notification", id, read: readFlag } as any, auth.session);
       return redirect(res, back, query, id);
     },
     () => redirect(res, back, { ...query, error: "The notice could not be updated. Try again." }, id),
@@ -365,7 +365,7 @@ cpmisRemainingRouter.post("/pm/reports", async (req: Request, res: Response) => 
   const id = nextId("act");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("project_manager", { type: "submit-report", input: parsed.data, toAdmin: true, stamp: stamp(auth.session, id) } as any);
+      await applyPortalAction("project_manager", { type: "submit-report", input: parsed.data, toAdmin: true, stamp: stamp(auth.session, id) } as any, auth.session);
       return redirect(res, "/pm/reports", { sent: state.settings.profileName });
     },
     () => redirect(res, "/pm/reports", { error: "The report could not be saved. Try again." }),
@@ -388,7 +388,7 @@ cpmisRemainingRouter.post("/pm/reports/open", async (req: Request, res: Response
   const sender = engineer ? `${engineer.firstName} ${engineer.lastName}` : "the sender";
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("project_manager", { type: "open-report-review", id, stamp: stamp(auth.session, stampId) } as any);
+      await applyPortalAction("project_manager", { type: "open-report-review", id, stamp: stamp(auth.session, stampId) } as any, auth.session);
       return redirect(res, "/pm/reports", { opened: sender }, id);
     },
     () => redirect(res, "/pm/reports", { error: "The review could not be opened. Try again." }, id),
@@ -416,7 +416,7 @@ cpmisRemainingRouter.post("/pm/reports/decide", async (req: Request, res: Respon
   const stampId = nextId("act");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("project_manager", { type: "decide-report", id, decision, note, stamp: stamp(auth.session, stampId) } as any);
+      await applyPortalAction("project_manager", { type: "decide-report", id, decision, note, stamp: stamp(auth.session, stampId) } as any, auth.session);
       return redirect(res, "/pm/reports", { reviewSent: sender }, id);
     },
     () => redirect(res, "/pm/reports", { error: "The review could not be saved. Try again." }, id),
@@ -443,7 +443,7 @@ cpmisRemainingRouter.post("/pm/progress", async (req: Request, res: Response) =>
   const id = nextId("act");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("project_manager", { type: "set-progress", id: project.id, progress, note, stamp: stamp(auth.session, id) } as any);
+      await applyPortalAction("project_manager", { type: "set-progress", id: project.id, progress, note, stamp: stamp(auth.session, id) } as any, auth.session);
       return redirect(res, "/pm/progress", { saved: project.code });
     },
     () => redirect(res, "/pm/progress", { error: "The progress update could not be saved. Try again." }),
@@ -467,7 +467,7 @@ cpmisRemainingRouter.post("/pm/events", async (req: Request, res: Response) => {
   const id = nextId("evt");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("project_manager", { type: "add-calendar-event", title, kind, date, stamp: { id, at: new Date().toISOString() } } as any);
+      await applyPortalAction("project_manager", { type: "add-calendar-event", title, kind, date, stamp: { id, at: new Date().toISOString() } } as any, auth.session);
       return redirect(res, "/pm", { period, day: date, added: title }, "calendar");
     },
     () => redirect(res, "/pm", { ...back, error: "The event could not be saved. Try again." }, "calendar"),
@@ -499,13 +499,13 @@ cpmisRemainingRouter.post("/pm/costs", async (req: Request, res: Response) => {
   const edited = nextId("act");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("project_manager", { type: "revise-cost-bill", projectId, lines: parsed.lines, stamp: stamp(auth.session, edited) } as any);
+      await applyPortalAction("project_manager", { type: "revise-cost-bill", projectId, lines: parsed.lines, stamp: stamp(auth.session, edited) } as any, auth.session);
       const fresh = await readState();
       const live = billLines(fresh.boq, projectId);
       const latest = (fresh.costReports ?? []).find((report) => report.projectId === projectId && report.status === "submitted");
       if (latest && sameBill(latest.lines, live)) return redirect(res, "/pm/costs", { error: "These figures are already with the administrator. Change a quantity or rate to send an update." });
       const id = nextId("act");
-      await applyPortalAction("project_manager", { type: "submit-cost-report", projectId, surveyorId: surveyor.id, stamp: stamp(auth.session, id) } as any);
+      await applyPortalAction("project_manager", { type: "submit-cost-report", projectId, surveyorId: surveyor.id, stamp: stamp(auth.session, id) } as any, auth.session);
       return redirect(res, "/pm/costs", { sent: fresh.settings.profileName });
     },
     () => redirect(res, "/pm/costs", { error: "The cost bill could not be saved. Try again." }),
@@ -537,7 +537,7 @@ cpmisRemainingRouter.post("/pm/costs/edit", async (req: Request, res: Response) 
   const id = nextId("act");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("project_manager", { type: "revise-cost-bill", projectId, lines: parsed.lines, stamp: stamp(auth.session, id) } as any);
+      await applyPortalAction("project_manager", { type: "revise-cost-bill", projectId, lines: parsed.lines, stamp: stamp(auth.session, id) } as any, auth.session);
       return redirect(res, "/pm/costs", { edited: project.code });
     },
     () => redirect(res, "/pm/costs", { error: "The cost lines could not be saved. Try again." }),
@@ -582,7 +582,7 @@ cpmisRemainingRouter.post("/qs/reports", async (req: Request, res: Response) => 
   const id = nextId("cst");
   return persistOrRedirect(
     async () => {
-      await applyPortalAction("quantity_surveyor", { type: "send-cost-report", surveyorId: surveyor.id, stamp: stamp(auth.session, id) } as any);
+      await applyPortalAction("quantity_surveyor", { type: "send-cost-report", surveyorId: surveyor.id, stamp: stamp(auth.session, id) } as any, auth.session);
       return redirect(res, "/qs/reports", { sent: `${manager.firstName} ${manager.lastName}` });
     },
     () => redirect(res, "/qs/reports", { error: "The cost report could not be saved. Try again." }),
@@ -655,7 +655,7 @@ cpmisRemainingRouter.post("/se/reports", upload.array("photos", MAX_PHOTOS), asy
         input: { projectId: actor.projectId!, engineerId: actor.id, periodStart: date, periodEnd: date, progress, summary, issues },
         photos,
         stamp: stamp(auth.session, stampId),
-      } as any);
+      } as any, auth.session);
       return redirect(res, "/se/reports", { sent: "1" }, stampId);
     },
     () => redirect(res, "/se/reports", { error: "The report could not be saved. Try again." }),
