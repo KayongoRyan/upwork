@@ -38,6 +38,18 @@ export class PersistenceError extends Error {
   }
 }
 
+export function isMongoConnectivityError(error: unknown): boolean {
+  if (error instanceof PersistenceError) return isMongoConnectivityError(error.detail);
+  const err = error as { name?: string; code?: number | string; message?: string; cause?: unknown };
+  const name = String(err?.name ?? "");
+  const message = String(err?.message ?? "");
+  const code = err?.code;
+  if (name === "MongoNetworkError" || name === "MongoServerSelectionError" || name === "MongoTopologyClosedError") return true;
+  if (code === "ECONNREFUSED" || code === "ETIMEDOUT" || code === "ECONNRESET" || code === "EHOSTUNREACH") return true;
+  if (/server selection timed out|connection.*closed|ECONNREFUSED|ETIMEDOUT|ECONNRESET|topology.*closed/i.test(message)) return true;
+  return err?.cause ? isMongoConnectivityError(err.cause) : false;
+}
+
 /**
  * Production deployments must persist writes. Development keeps the in-memory
  * preview working when MongoDB has not been started yet.
@@ -123,6 +135,20 @@ export async function getMongoRuntime(): Promise<MongoRuntime | null> {
     store.__cpmisMongoRetryAt = Date.now() + RETRY_AFTER_MS;
   }
   return runtime;
+}
+
+export async function resetMongoRuntime(reason?: unknown): Promise<void> {
+  const runtime = store.__cpmisMongoRuntime;
+  store.__cpmisMongoRuntime = null;
+  store.__cpmisMongoRetryAt = 0;
+  store.__cpmisMongoWarned = false;
+  if (runtime?.client) {
+    await runtime.client.close().catch(() => undefined);
+  }
+  if (reason) {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    console.warn(`[mongo] Reset MongoDB runtime for recovery: ${message}`);
+  }
 }
 
 export function mongoAvailable(): boolean {
