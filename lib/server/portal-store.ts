@@ -79,6 +79,8 @@ const PORTAL_COLLECTIONS: Record<
 const SEED_DOC = "seed";
 const SETTINGS_DOC = "org";
 const MONTHLY_DOC = "monthly";
+const SCHEMA_DOC = "schema";
+const CURRENT_SCHEMA_VERSION = 1;
 
 /* -------------------------------------------------------------------------- */
 /* Portal action permissions                                                   */
@@ -648,6 +650,54 @@ function assertStatusTransitions(previous: AdminState | null, next: AdminState):
 }
 
 /* -------------------------------------------------------------------------- */
+/* Schema versioning and migrations                                            */
+/* -------------------------------------------------------------------------- */
+
+type Migration = {
+  version: number;
+  name: string;
+  up: (runtime: MongoRuntime) => Promise<void>;
+};
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    name: "baseline-schema-version",
+    up: async () => {
+      // Baseline: validators/indexes are ensured by ensurePortalValidation().
+    },
+  },
+];
+
+async function readSchemaVersion(runtime: MongoRuntime): Promise<number> {
+  const doc = await runtime.dbs.administrator.collection<StoredDocument>("meta").findOne({ _id: SCHEMA_DOC });
+  const version = doc?.version;
+  return typeof version === "number" && Number.isFinite(version) ? version : 0;
+}
+
+async function writeSchemaVersion(runtime: MongoRuntime, version: number, session?: ClientSession): Promise<void> {
+  await runtime.dbs.administrator.collection<StoredDocument>("meta").replaceOne(
+    { _id: SCHEMA_DOC },
+    { _id: SCHEMA_DOC, version, updatedAt: new Date().toISOString() },
+    { upsert: true, ...(session ? { session } : {}) },
+  );
+}
+
+async function runMigrations(runtime: MongoRuntime): Promise<void> {
+  const current = await readSchemaVersion(runtime);
+  const pending = MIGRATIONS.filter((m) => m.version > current).sort((a, b) => a.version - b.version);
+  for (const migration of pending) {
+    if (migration.version > CURRENT_SCHEMA_VERSION) break;
+    console.info(`[portal-store] Running migration ${migration.version}: ${migration.name}`);
+    await migration.up(runtime);
+    await writeSchemaVersion(runtime, migration.version);
+  }
+  if (current < CURRENT_SCHEMA_VERSION && pending.length === 0) {
+    await writeSchemaVersion(runtime, CURRENT_SCHEMA_VERSION);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Load / seed                                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -807,6 +857,7 @@ async function initialize(): Promise<AdminState> {
   }
 
   await ensurePortalValidation(runtime);
+  await runMigrations(runtime);
 
   const loaded = await loadState(runtime);
   if (loaded) {
@@ -818,6 +869,7 @@ async function initialize(): Promise<AdminState> {
 
   const seed = createSeedState();
   await persistStateAtomically(runtime, null, seed, { seedMarker: true });
+  await writeSchemaVersion(runtime, CURRENT_SCHEMA_VERSION);
   store.__cpmisPortalState = seed;
   store.__cpmisPortalReady = true;
   store.__cpmisPortalMemory = false;
