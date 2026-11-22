@@ -479,6 +479,24 @@ function assertStateIntegrity(state: AdminState): void {
   const projectIds = new Set(state.projects.map((p) => p.id));
   const userIds = new Set(state.users.map((u) => u.id));
 
+  for (const project of state.projects) {
+    if (project.managerId && !userIds.has(project.managerId)) {
+      throw new PersistenceError(`Project ${project.id} references missing manager ${project.managerId}.`);
+    }
+  }
+
+  for (const user of state.users) {
+    if (user.projectId && !projectIds.has(user.projectId)) {
+      throw new PersistenceError(`User ${user.id} references missing project ${user.projectId}.`);
+    }
+  }
+
+  for (const employee of state.employees) {
+    if (employee.projectId && !projectIds.has(employee.projectId)) {
+      throw new PersistenceError(`Employee ${employee.id} references missing project ${employee.projectId}.`);
+    }
+  }
+
   for (const task of state.tasks) {
     if (!projectIds.has(task.projectId)) {
       throw new PersistenceError(`Task ${task.id} references missing project ${task.projectId}.`);
@@ -497,6 +515,30 @@ function assertStateIntegrity(state: AdminState): void {
   for (const item of state.boq) {
     if (!projectIds.has(item.projectId)) {
       throw new PersistenceError(`BOQ ${item.id} references missing project ${item.projectId}.`);
+    }
+  }
+
+  for (const document of state.documents) {
+    if (!projectIds.has(document.projectId)) {
+      throw new PersistenceError(`Document ${document.id} references missing project ${document.projectId}.`);
+    }
+  }
+
+  for (const comment of state.workComments) {
+    if (!projectIds.has(comment.projectId)) {
+      throw new PersistenceError(`Work comment ${comment.id} references missing project ${comment.projectId}.`);
+    }
+  }
+
+  for (const mark of state.progressMarks) {
+    if (!projectIds.has(mark.projectId)) {
+      throw new PersistenceError(`Progress mark ${mark.id} references missing project ${mark.projectId}.`);
+    }
+  }
+
+  for (const report of state.costReports) {
+    if (!projectIds.has(report.projectId)) {
+      throw new PersistenceError(`Cost report ${report.id} references missing project ${report.projectId}.`);
     }
   }
 }
