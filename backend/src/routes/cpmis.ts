@@ -132,7 +132,7 @@ cpmisRouter.post("/auth/sign-in", async (req: Request, res: Response) => {
 
   const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "local";
   const { checkLoginRateLimit, resetLoginRateLimit } = await import("../lib/auth-bridge");
-  const limit = checkLoginRateLimit(`${portal}:${ip}:${email.toLowerCase()}`);
+  const limit = await checkLoginRateLimit(`${portal}:${ip}:${email.toLowerCase()}`);
   if (!limit.ok) {
     return apiError(res, 429, "rate-limited", { message: `Too many sign-in attempts. Try again in ${limit.retryAfterSeconds}s.`, requestId: req.requestId });
   }
@@ -140,7 +140,7 @@ cpmisRouter.post("/auth/sign-in", async (req: Request, res: Response) => {
   try {
     const result = await signInWithPassword(portal, email, password);
     if (!result.ok) return apiError(res, result.status, result.error, { requestId: req.requestId });
-    resetLoginRateLimit(`${portal}:${ip}:${email.toLowerCase()}`);
+    await resetLoginRateLimit(`${portal}:${ip}:${email.toLowerCase()}`);
     applySessionCookieToExpress(res, portal, result.token);
     return res.json({ ok: true, redirectTo: portalHome(portal) });
   } catch (error) {

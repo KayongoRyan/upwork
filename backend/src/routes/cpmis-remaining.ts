@@ -688,7 +688,7 @@ cpmisRemainingRouter.post("/auth/signup/request-otp", async (req: Request, res: 
   if (!parsed.success) return apiError(res, 400, "validation-failed", { message: parsed.error.issues[0]?.message ?? "Check the form.", requestId: req.requestId });
   const input = parsed.data;
   const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "local";
-  const limit = checkLoginRateLimit(`signup:${ip}:${normalizeSignupEmail(input.email)}`);
+  const limit = await checkLoginRateLimit(`signup:${ip}:${normalizeSignupEmail(input.email)}`);
   if (!limit.ok) return apiError(res, 429, "rate-limited", { message: `Too many attempts. Try again in ${limit.retryAfterSeconds}s.`, requestId: req.requestId });
 
   const state = await readState();
@@ -725,7 +725,7 @@ cpmisRemainingRouter.post("/auth/signup/verify-otp", async (req: Request, res: R
   if (!parsed.success) return apiError(res, 400, "validation-failed", { message: parsed.error.issues[0]?.message ?? "Check the code.", requestId: req.requestId });
   const { portal, challengeId, otp } = parsed.data;
   const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "local";
-  const limit = checkLoginRateLimit(`signup-verify:${ip}:${challengeId}`);
+  const limit = await checkLoginRateLimit(`signup-verify:${ip}:${challengeId}`);
   if (!limit.ok) return apiError(res, 429, "rate-limited", { message: `Too many attempts. Try again in ${limit.retryAfterSeconds}s.`, requestId: req.requestId });
 
   try {
