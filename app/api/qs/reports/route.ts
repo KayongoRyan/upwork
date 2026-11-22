@@ -1,5 +1,5 @@
 import { billLines, sameBill } from "@/lib/boq";
-import { requireApiSession } from "@/lib/server/auth";
+import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const __session = await requireApiSession("quantity_surveyor");
   if (__session instanceof Response) return __session;
+  const __csrf = verifyCsrf(request, __session);
+  if (__csrf) return __csrf;
   const state = await readState();
   const surveyor = state.users.find((user) => user.id === PREVIEW_QS_ID && user.role === "quantity_surveyor" && user.status === "active");
   const project = surveyor?.projectId ? state.projects.find((item) => item.id === surveyor.projectId) : undefined;

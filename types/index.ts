@@ -18,6 +18,7 @@ export interface SessionUser {
   email: string;
   role: UserRole;
   projectId: string | null;
+  csrfToken: string;
 }
 
 /** Notices from the public site arrive through the Express API, not a CPMIS portal. */

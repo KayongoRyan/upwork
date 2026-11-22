@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { getVertexaInquiry, updateVertexaInquiry } from "@/lib/server/vertexa-api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  const session = await requireApiSession("administrator");
+  if (session instanceof Response) return session;
   const { id } = await context.params;
   const result = await getVertexaInquiry(id);
   if (result.error || !result.inquiry) {
@@ -21,6 +24,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  const session = await requireApiSession("administrator");
+  if (session instanceof Response) return session;
+  const csrf = verifyCsrf(request, session);
+  if (csrf) return csrf;
   const { id } = await context.params;
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) {

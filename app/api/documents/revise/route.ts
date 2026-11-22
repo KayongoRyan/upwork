@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireApiSession } from "@/lib/server/auth";
+import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { nextId } from "@/lib/utils";
@@ -12,6 +12,8 @@ const MAX_BYTES = 512 * 1024;
 export async function POST(request: Request) {
   const __session = await requireApiSession("administrator");
   if (__session instanceof Response) return __session;
+  const __csrf = verifyCsrf(request, __session);
+  if (__csrf) return __csrf;
   const form = await request.formData();
   const back = new URL("/admin/documents", request.url);
   const documentId = String(form.get("documentId") ?? "");

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAnySessionUser, verifyCsrf } from "@/lib/server/auth";
 import {
   listVertexaNotifications,
   markAllVertexaNotificationsRead,
@@ -10,6 +11,8 @@ export const dynamic = "force-dynamic";
 
 /** Notification notices stored by the Express API, in the CPMIS shape. */
 export async function GET() {
+  const session = await getAnySessionUser();
+  if (!session) return NextResponse.json({ ok: false, items: [], error: "unauthorized" }, { status: 401, headers: { "cache-control": "no-store" } });
   const result = await listVertexaNotifications();
   if (result.error) {
     // The inboxes treat the BFF as best-effort; surface an empty list rather
@@ -26,6 +29,10 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
+  const session = await getAnySessionUser();
+  if (!session) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  const csrf = verifyCsrf(request, session);
+  if (csrf) return csrf;
   const body = (await request.json().catch(() => null)) as
     | { id?: unknown; read?: unknown; all?: unknown }
     | null;

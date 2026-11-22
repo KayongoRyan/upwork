@@ -40,7 +40,7 @@ export function Header({
   search?: { pages: NavItem[]; projectIds: string[]; projectBase?: string };
   portal?: CpmisPortalId;
 }) {
-  const { settings, notifications: allNotifications, markNotification } = useAdmin();
+  const { settings, notifications: allNotifications, markNotification, viewer } = useAdmin();
   const notifications = scope === "field"
     ? allNotifications.filter((item) => isManagerFieldNotice(item, portfolio ?? [], userId))
     : scope === "site"
@@ -119,6 +119,7 @@ export function Header({
             <DropdownMenuItem asChild>
               <form action="/api/auth/sign-out" method="post" className="w-full">
                 <input type="hidden" name="portal" value={portal} />
+                <input type="hidden" name="csrfToken" value={viewer?.csrfToken ?? ""} />
                 <button type="submit" className="w-full text-left">Sign out</button>
               </form>
             </DropdownMenuItem>

@@ -100,7 +100,7 @@ export function UsersView() {
             onSubmit={async (values) => {
               const body = new FormData();
               Object.entries(values).forEach(([key, value]) => body.append(key, String(value ?? "")));
-              const res = await fetch("/api/users", { method: "POST", body });
+              const res = await fetch("/api/users", { method: "POST", body, headers: { "x-csrf-token": data.viewer?.csrfToken ?? "" } });
               if (res.redirected) { router.push(res.url); router.refresh(); return; }
               if (!res.ok) { setFormError("Could not add the user."); return; }
               router.push("/admin/users");
