@@ -599,9 +599,10 @@ const STATUS_TRANSITIONS: Record<string, Record<string, ReadonlySet<string>>> = 
     inactive: new Set(["inactive", "active", "on_leave", "contract"]),
   },
   revision: {
-    draft: new Set(["draft", "in_review", "approved"]),
-    in_review: new Set(["in_review", "approved"]),
-    approved: new Set(["approved"]),
+    draft: new Set(["draft", "in_review", "approved", "superseded"]),
+    in_review: new Set(["in_review", "approved", "superseded"]),
+    approved: new Set(["approved", "superseded"]),
+    superseded: new Set(["superseded"]),
   },
   inquiry: {
     received: new Set(["received", "assigned", "closed"]),

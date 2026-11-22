@@ -875,9 +875,11 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
             item.id === current.id
               ? {
                   ...item,
-                  revisions: item.revisions.map((revision) =>
-                    revision.id === latest.id ? { ...revision, status: "approved" } : revision,
-                  ),
+                  revisions: item.revisions.map((revision) => {
+                    if (revision.id === latest.id) return { ...revision, status: "approved" as const };
+                    if (revision.status === "approved") return { ...revision, status: "superseded" as const };
+                    return revision;
+                  }),
                 }
               : item,
           ),

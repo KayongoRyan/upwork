@@ -16,6 +16,7 @@ export const revisionStatusLabel: Record<RevisionStatus, string> = {
   draft: "Draft",
   in_review: "In review",
   approved: "Approved",
+  superseded: "Superseded",
 };
 
 export const standingLabel = {
@@ -39,6 +40,7 @@ export function issuedRevision(document: ProjectDocument) {
 
 export function standing(document: ProjectDocument, revision: DocumentRevision) {
   const latest = latestRevision(document);
+  if (revision.status === "superseded") return "superseded" as const;
   if (!latest || revision.id !== latest.id) return "superseded" as const;
   if (revision.status === "approved") return "issued" as const;
   return revision.status;
