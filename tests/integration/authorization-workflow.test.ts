@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -96,7 +97,7 @@ describe("authorization and workflow", () => {
       projectId: "p1", assignee: "SE One", dueDate: "2026-12-01", priority: "high",
     });
     expect(res.status).toBe(200);
-    expect(h.applyPortalAction.mock.calls[0][1]).toMatchObject({ type: "schedule-task", id: "t1", projectId: "p1" });
+    expect((h.applyPortalAction as any).mock.calls[0][1]).toMatchObject({ type: "schedule-task", id: "t1", projectId: "p1" });
   });
 
   it("enforces report approval workflow: PM opens then decides", async () => {
@@ -104,12 +105,12 @@ describe("authorization and workflow", () => {
     const a = app();
     const open = await request(a).post("/api/v1/cpmis/business/site-reports/r1/open").send({});
     expect(open.status).toBe(200);
-    expect(h.applyPortalAction.mock.calls[0][1].type).toBe("open-report-review");
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("open-report-review");
 
     h.applyPortalAction.mockClear();
     const decide = await request(a).post("/api/v1/cpmis/business/site-reports/r1/decide").send({ decision: "approved", note: "Looks good" });
     expect(decide.status).toBe(200);
-    expect(h.applyPortalAction.mock.calls[0][1]).toMatchObject({ type: "decide-report", id: "r1", decision: "approved" });
+    expect((h.applyPortalAction as any).mock.calls[0][1]).toMatchObject({ type: "decide-report", id: "r1", decision: "approved" });
   });
 
   it("blocks SE from report approval actions", async () => {
@@ -127,7 +128,7 @@ describe("authorization and workflow", () => {
 
     const ok = await request(app()).patch("/api/v1/cpmis/business/site-reports/r1/resubmit").send({ progress: 20, summary: "Long enough summary for resubmission", issues: "" });
     expect(ok.status).toBe(200);
-    expect(h.applyPortalAction.mock.calls.at(-1)?.[1].type).toBe("resubmit-report");
+    expect((h.applyPortalAction as any).mock.calls.at(-1)?.[1].type).toBe("resubmit-report");
   });
 
   it("restricts BOQ mutations to quantity surveyor", async () => {
@@ -144,20 +145,20 @@ describe("authorization and workflow", () => {
       projectId: "p1", code: "B-2", description: "Steel", unit: "t", estimatedQty: 1, actualQty: 1, unitRate: 100,
     });
     expect(res.status).toBe(201);
-    expect(h.applyPortalAction.mock.calls[0][1]).toMatchObject({ type: "create-boq", surveyorId: "qs1" });
+    expect((h.applyPortalAction as any).mock.calls[0][1]).toMatchObject({ type: "create-boq", surveyorId: "qs1" });
   });
 
   it("enforces cost report workflow permissions", async () => {
     h.currentSession.value = qs;
     const send = await request(app()).post("/api/v1/cpmis/business/cost-reports/send").send({});
     expect(send.status).toBe(201);
-    expect(h.applyPortalAction.mock.calls.at(-1)?.[1].type).toBe("send-cost-report");
+    expect((h.applyPortalAction as any).mock.calls.at(-1)?.[1].type).toBe("send-cost-report");
 
     h.currentSession.value = pm;
     h.applyPortalAction.mockClear();
     const submit = await request(app()).post("/api/v1/cpmis/business/cost-reports/submit").send({ projectId: "p1", surveyorId: "qs1" });
     expect(submit.status).toBe(201);
-    expect(h.applyPortalAction.mock.calls[0][1]).toMatchObject({ type: "submit-cost-report", projectId: "p1", surveyorId: "qs1" });
+    expect((h.applyPortalAction as any).mock.calls[0][1]).toMatchObject({ type: "submit-cost-report", projectId: "p1", surveyorId: "qs1" });
 
     h.currentSession.value = se;
     const bad = await request(app()).post("/api/v1/cpmis/business/cost-reports/send").send({});

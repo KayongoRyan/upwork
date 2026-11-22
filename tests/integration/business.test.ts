@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -102,8 +103,8 @@ describe("business API", () => {
     expect(res.status).toBe(201);
     expect(res.body.ok).toBe(true);
     expect(h.applyPortalAction).toHaveBeenCalled();
-    expect(h.applyPortalAction.mock.calls[0][0]).toBe("administrator");
-    expect(h.applyPortalAction.mock.calls[0][1].type).toBe("create-project");
+    expect((h.applyPortalAction as any).mock.calls[0][0]).toBe("administrator");
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("create-project");
   });
 
   it("forbids SE from creating tasks outside project scope", async () => {
@@ -119,7 +120,7 @@ describe("business API", () => {
     const res = await request(app()).post("/api/v1/cpmis/business/site-reports/r1/open").send({});
     expect(res.status).toBe(200);
     expect(h.applyPortalAction).toHaveBeenCalled();
-    expect(h.applyPortalAction.mock.calls[0][1].type).toBe("open-report-review");
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("open-report-review");
   });
 
   it("blocks PM from deciding report in other project", async () => {
