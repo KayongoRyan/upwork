@@ -75,6 +75,9 @@ cpmisRouter.post("/portal/:portal/actions", async (req: Request, res: Response) 
     if (secured.type === "update-user" && (secured as any).input.status !== "active") {
       await destroySessionsForUser((secured as any).id);
     }
+    if (secured.type === "set-user-status" && (secured as any).status !== "active") {
+      await destroySessionsForUser((secured as any).id);
+    }
     if (secured.type === "delete-user") {
       await removeUserCredential((secured as any).id);
     }
