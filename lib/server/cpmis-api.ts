@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 
 const DEFAULT_DEV_API_URL = "http://localhost:4000";
 
+export const CPMIS_API_VERSION = "v1";
+export const CPMIS_API_PREFIX = `/api/${CPMIS_API_VERSION}/cpmis`;
+
 function baseUrl(): string {
   const configured = process.env.CPMIS_API_URL?.trim() || process.env.VERTEXA_API_URL?.trim();
   if (configured) return configured.replace(/\/+$/, "");
@@ -10,7 +13,7 @@ function baseUrl(): string {
 }
 
 function forwardHeaders(request: Request, extra: Record<string, string> = {}): HeadersInit {
-  const headers: Record<string, string> = { ...extra };
+  const headers: Record<string, string> = { ...extra, "x-api-version": CPMIS_API_VERSION };
   const cookie = request.headers.get("cookie");
   if (cookie) headers.cookie = cookie;
   const csrf = request.headers.get("x-csrf-token");

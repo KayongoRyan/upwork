@@ -11,6 +11,7 @@ healthRouter.get("/", async (req, res) => {
     res.json({
       ok: true,
       service: "vertexa-cpmis-api",
+      apiVersion: config.apiVersion,
       mongodb: "connected",
       database: config.mongoDb,
       requestId: req.requestId,
@@ -20,6 +21,7 @@ healthRouter.get("/", async (req, res) => {
       ok: false,
       error: "mongodb_unavailable",
       service: "vertexa-cpmis-api",
+      apiVersion: config.apiVersion,
       mongodb: "disconnected",
       uri: config.mongoUri,
       help: mongoStartupHelp,

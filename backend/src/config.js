@@ -10,6 +10,8 @@ const isProduction = process.env.NODE_ENV === "production";
 
 export const config = {
   port: Number(process.env.PORT ?? 4000),
+  apiVersion: "v1",
+  apiBasePath: "/api/v1",
   mongoUri: process.env.MONGODB_URI ?? "mongodb://127.0.0.1:27017",
   mongoDb: process.env.MONGODB_DB ?? "vertexa_cpmis",
   corsOrigins: (process.env.CORS_ORIGINS ?? "http://localhost:3030,http://localhost:3000")
