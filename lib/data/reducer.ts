@@ -292,6 +292,8 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       return { ...state, calendarEvents: (state.calendarEvents ?? []).filter((event) => event.id !== action.id) };
     }
     case "create-task": {
+      const project = managedProject(state, action.input.projectId, action.stamp.actorId);
+      if (!project) return state;
       const item: TaskItem = {
         ...action.input,
         id: action.stamp.id,
@@ -308,8 +310,9 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
     }
     case "assign-task": {
       const item = state.tasks.find((task) => task.id === action.id);
-      const project = state.projects.find((entry) => entry.id === action.projectId);
-      if (!item || !project) return state;
+      const project = managedProject(state, action.projectId, action.stamp.actorId);
+      const current = item ? managedProject(state, item.projectId, action.stamp.actorId) : undefined;
+      if (!item || !project || !current) return state;
       return audit(
         {
           ...state,
@@ -324,7 +327,8 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
     }
     case "set-task-status": {
       const item = state.tasks.find((task) => task.id === action.id);
-      if (!item) return state;
+      const project = item ? managedProject(state, item.projectId, action.stamp.actorId) : undefined;
+      if (!item || !project) return state;
       return audit(
         {
           ...state,
@@ -339,7 +343,8 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
     }
     case "delete-task": {
       const item = state.tasks.find((task) => task.id === action.id);
-      if (!item) return state;
+      const project = item ? managedProject(state, item.projectId, action.stamp.actorId) : undefined;
+      if (!item || !project) return state;
       return audit(
         { ...state, tasks: state.tasks.filter((task) => task.id !== item.id) },
         action.stamp,
