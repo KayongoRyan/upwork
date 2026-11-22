@@ -268,6 +268,8 @@ export interface DocumentRevision {
   uploadedAt: string;
   /** Set only for a file uploaded in this preview. Seed revisions have no bytes. */
   dataUrl?: string;
+  /** Object storage key for uploaded file bytes. Preferred over dataUrl for new uploads. */
+  fileKey?: string;
 }
 
 /** One controlled document. Older revisions stay on the record when a new file is added. */
