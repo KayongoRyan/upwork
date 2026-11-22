@@ -287,6 +287,190 @@ function notificationsFor(items: AppNotification[], portal: PortalKey, usersById
 }
 
 /* -------------------------------------------------------------------------- */
+/* Collection-level validation                                                 */
+/* -------------------------------------------------------------------------- */
+
+type JsonSchema = Record<string, unknown>;
+
+function objectSchema(properties: Record<string, JsonSchema>, required: string[] = ["id"]): JsonSchema {
+  return {
+    bsonType: "object",
+    required,
+    additionalProperties: true,
+    properties: {
+      _id: {},
+      _seq: { bsonType: ["int", "long", "double"] },
+      id: { bsonType: "string", minLength: 1 },
+      ...properties,
+    },
+  };
+}
+
+const COLLECTION_VALIDATORS: Partial<Record<RecordCollection | "notifications", JsonSchema>> = {
+  projects: objectSchema({
+    name: { bsonType: "string", minLength: 1 },
+    code: { bsonType: "string", minLength: 1 },
+    description: { bsonType: "string" },
+    client: { bsonType: "string" },
+    location: { bsonType: "string" },
+    managerId: { bsonType: "string" },
+    startDate: { bsonType: "string" },
+    expectedEndDate: { bsonType: "string" },
+    budget: { bsonType: ["int", "long", "double", "decimal"] },
+    spent: { bsonType: ["int", "long", "double", "decimal"] },
+    progress: { bsonType: ["int", "long", "double", "decimal"] },
+    status: { bsonType: "string" },
+    createdAt: { bsonType: "string" },
+  }, ["id", "name", "code", "managerId", "status"]),
+  users: objectSchema({
+    firstName: { bsonType: "string", minLength: 1 },
+    lastName: { bsonType: "string", minLength: 1 },
+    email: { bsonType: "string", minLength: 3 },
+    phone: { bsonType: "string" },
+    role: { enum: ["administrator", "project_manager", "site_engineer", "quantity_surveyor"] },
+    projectId: { bsonType: ["string", "null"] },
+    status: { enum: ["active", "inactive"] },
+    registeredAt: { bsonType: "string" },
+  }, ["id", "firstName", "lastName", "email", "role", "status"]),
+  employees: objectSchema({
+    employeeCode: { bsonType: "string", minLength: 1 },
+    firstName: { bsonType: "string", minLength: 1 },
+    lastName: { bsonType: "string", minLength: 1 },
+    position: { bsonType: "string" },
+    department: { bsonType: "string" },
+    phone: { bsonType: "string" },
+    email: { bsonType: "string" },
+    projectId: { bsonType: ["string", "null"] },
+    status: { bsonType: "string" },
+    hiredAt: { bsonType: "string" },
+  }, ["id", "employeeCode", "firstName", "lastName"]),
+  tasks: objectSchema({
+    title: { bsonType: "string", minLength: 1 },
+    projectId: { bsonType: "string", minLength: 1 },
+    assignee: { bsonType: "string" },
+    dueDate: { bsonType: "string" },
+    priority: { bsonType: "string" },
+    status: { bsonType: "string" },
+    progress: { bsonType: ["int", "long", "double", "decimal"] },
+  }, ["id", "title", "projectId"]),
+  reports: objectSchema({
+    projectId: { bsonType: "string", minLength: 1 },
+    engineerId: { bsonType: "string", minLength: 1 },
+    periodStart: { bsonType: "string" },
+    periodEnd: { bsonType: "string" },
+    progress: { bsonType: ["int", "long", "double", "decimal"] },
+    summary: { bsonType: "string" },
+    issues: { bsonType: "string" },
+    photos: { bsonType: "array" },
+    status: { bsonType: "string" },
+    submittedAt: { bsonType: "string" },
+    reviewedAt: { bsonType: ["string", "null"] },
+  }, ["id", "projectId", "engineerId"]),
+  boq: objectSchema({
+    projectId: { bsonType: "string", minLength: 1 },
+    code: { bsonType: "string" },
+    description: { bsonType: "string" },
+    unit: { bsonType: "string" },
+    estimatedQty: { bsonType: ["int", "long", "double", "decimal"] },
+    actualQty: { bsonType: ["int", "long", "double", "decimal"] },
+    unitRate: { bsonType: ["int", "long", "double", "decimal"] },
+  }, ["id", "projectId"]),
+  notifications: objectSchema({
+    recipientId: { bsonType: "string", minLength: 1 },
+    actorId: { bsonType: "string" },
+    actorName: { bsonType: "string" },
+    kind: { bsonType: "string" },
+    title: { bsonType: "string" },
+    message: { bsonType: "string" },
+    href: { bsonType: "string" },
+    createdAt: { bsonType: "string" },
+    read: { bsonType: "bool" },
+  }, ["id", "recipientId"]),
+};
+
+const UNIQUE_INDEXES: Array<{ portal: PortalKey; collection: string; keys: Record<string, 1>; name: string; collation?: { locale: string; strength: number } }> = [
+  { portal: "administrator", collection: "users", keys: { email: 1 }, name: "uniq_users_email", collation: { locale: "en", strength: 2 } },
+  { portal: "administrator", collection: "employees", keys: { employeeCode: 1 }, name: "uniq_employees_code" },
+  { portal: "administrator", collection: "projects", keys: { code: 1 }, name: "uniq_projects_code" },
+];
+
+async function applyCollectionValidation(db: Db, collection: string, schema: JsonSchema): Promise<void> {
+  const validator = { $jsonSchema: schema };
+  try {
+    await db.command({ collMod: collection, validator, validationLevel: "strict", validationAction: "error" });
+  } catch (error) {
+    const code = (error as { code?: number })?.code;
+    // NamespaceNotFound: create collection with validator.
+    if (code === 26) {
+      await db.createCollection(collection, { validator, validationLevel: "strict", validationAction: "error" });
+      return;
+    }
+    throw error;
+  }
+}
+
+async function ensurePortalValidation(runtime: MongoRuntime): Promise<void> {
+  for (const portal of PORTAL_KEYS) {
+    const db = runtime.dbs[portal];
+    const spec = PORTAL_COLLECTIONS[portal];
+    for (const name of spec.records) {
+      const schema = COLLECTION_VALIDATORS[name];
+      if (schema) await applyCollectionValidation(db, name, schema);
+    }
+    await applyCollectionValidation(db, "notifications", COLLECTION_VALIDATORS.notifications!);
+
+    if (spec.settings) {
+      await applyCollectionValidation(db, "settings", objectSchema({}, ["_id"]));
+    }
+    if (spec.monthlyActivity) {
+      await applyCollectionValidation(db, "monthlyActivity", objectSchema({ items: { bsonType: "array" } }, ["_id"]));
+    }
+  }
+
+  for (const index of UNIQUE_INDEXES) {
+    const collection = runtime.dbs[index.portal].collection(index.collection);
+    try {
+      await collection.createIndex(index.keys, {
+        unique: true,
+        name: index.name,
+        ...(index.collation ? { collation: index.collation } : {}),
+      });
+    } catch (error) {
+      const code = (error as { code?: number })?.code;
+      // IndexOptionsConflict/IndexKeySpecsConflict - existing index differs; leave as-is.
+      if (code === 85 || code === 86) continue;
+      throw error;
+    }
+  }
+}
+
+function assertStateIntegrity(state: AdminState): void {
+  const projectIds = new Set(state.projects.map((p) => p.id));
+  const userIds = new Set(state.users.map((u) => u.id));
+
+  for (const task of state.tasks) {
+    if (!projectIds.has(task.projectId)) {
+      throw new PersistenceError(`Task ${task.id} references missing project ${task.projectId}.`);
+    }
+  }
+
+  for (const report of state.reports) {
+    if (!projectIds.has(report.projectId)) {
+      throw new PersistenceError(`Report ${report.id} references missing project ${report.projectId}.`);
+    }
+    if (!userIds.has(report.engineerId)) {
+      throw new PersistenceError(`Report ${report.id} references missing engineer ${report.engineerId}.`);
+    }
+  }
+
+  for (const item of state.boq) {
+    if (!projectIds.has(item.projectId)) {
+      throw new PersistenceError(`BOQ ${item.id} references missing project ${item.projectId}.`);
+    }
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Load / seed                                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -445,6 +629,8 @@ async function initialize(): Promise<AdminState> {
     return store.__cpmisPortalState;
   }
 
+  await ensurePortalValidation(runtime);
+
   const loaded = await loadState(runtime);
   if (loaded) {
     store.__cpmisPortalState = loaded;
@@ -573,6 +759,7 @@ async function applyNow(action: AdminAction): Promise<AdminState> {
     throw new PersistenceError(error);
   }
   const next = action.type === "reset" ? createSeedState() : adminReducer(state, action);
+  assertStateIntegrity(next);
 
   // In production a missing database is a failed write, not a preview fallback.
   const runtime = requirePersistenceInProduction(await getMongoRuntime());
