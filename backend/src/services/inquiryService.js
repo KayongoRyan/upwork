@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { managerIdForService, serviceLabel } from "../constants/vertexa.js";
+import { serviceLabel } from "../constants/vertexa.js";
 import { ensureDb } from "../db.js";
 import { formatInquiryDetailMessage, inquiryNotificationTitle } from "../lib/formatInquiryMessage.js";
 import { validateInquiryInput } from "../lib/validateInquiry.js";
@@ -54,7 +54,8 @@ export async function createInquiry(body) {
   const data = validation.data;
   const now = new Date();
   const inquiryId = newInquiryId();
-  const recipientId = managerIdForService(data.service);
+  // The trusted BFF resolves the project manager from the live team roster.
+  const recipientId = data.recipientId ?? null;
   const serviceName = data.service === "general" ? "General enquiry" : serviceLabel(data.service);
 
   const inquiry = {
@@ -104,23 +105,27 @@ export async function createInquiry(body) {
     createdAt: now,
   };
 
-  const pmNotice = {
-    _id: `ntf-${inquiryId}-pm`,
-    inquiryId,
-    audience: "pm",
-    recipientId,
-    type: "system",
-    title,
-    message: detailMessage,
-    senderName: data.name,
-    source: "vertexa",
-    read: false,
-    createdAt: now,
-  };
+  const pmNotice = recipientId
+    ? {
+        _id: `ntf-${inquiryId}-pm`,
+        inquiryId,
+        audience: "pm",
+        recipientId,
+        type: "system",
+        title,
+        message: detailMessage,
+        senderName: data.name,
+        source: "vertexa",
+        read: false,
+        createdAt: now,
+      }
+    : null;
 
   const db = await ensureDb();
   await db.collection("inquiries").insertOne(inquiry);
-  await db.collection("notifications").insertMany([adminNotice, pmNotice]);
+  await db
+    .collection("notifications")
+    .insertMany(pmNotice ? [adminNotice, pmNotice] : [adminNotice]);
 
   return {
     ok: true,

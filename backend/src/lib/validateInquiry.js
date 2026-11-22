@@ -2,6 +2,7 @@ import { isInquiryServiceId } from "../constants/vertexa.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^[\d\s()+\-./]{6,30}$/;
+const RECIPIENT_PATTERN = /^[A-Za-z0-9_-]{2,80}$/;
 
 /**
  * @param {Record<string, unknown>} input
@@ -16,6 +17,7 @@ export function validateInquiryInput(input) {
   const budgetRaw = String(input.budget ?? "").trim();
   const startDateRaw = String(input.startDate ?? "").trim();
   const message = String(input.message ?? "").trim();
+  const recipientRaw = String(input.recipientId ?? "").trim();
 
   if (!isInquiryServiceId(service)) return { ok: false, error: "invalid-service" };
   if (name.length < 2 || name.length > 100) return { ok: false, error: "invalid-name" };
@@ -39,6 +41,9 @@ export function validateInquiryInput(input) {
   }
 
   if (message.length < 10 || message.length > 2000) return { ok: false, error: "invalid-message" };
+  if (recipientRaw && !RECIPIENT_PATTERN.test(recipientRaw)) {
+    return { ok: false, error: "invalid-recipient" };
+  }
 
   return {
     ok: true,
@@ -52,6 +57,7 @@ export function validateInquiryInput(input) {
       budget,
       startDate,
       message,
+      recipientId: recipientRaw || null,
     },
   };
 }

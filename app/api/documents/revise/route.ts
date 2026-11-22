@@ -38,10 +38,17 @@ export async function POST(request: Request) {
       fileType: file.type || "application/octet-stream",
       size: file.size,
       note: String(form.get("note") ?? "").trim(),
-      uploadedBy: "u-admin",
+      uploadedBy: __session.id,
       dataUrl: `data:${file.type || "application/octet-stream"};base64,${bytes.toString("base64")}`,
     },
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
+    stamp: {
+      id,
+      at: new Date().toISOString(),
+      notificationId: `ntf-${id}`,
+      actorId: __session.id,
+      actorName: `${__session.firstName} ${__session.lastName}`,
+      actorRole: __session.role,
+    },
   });
   const done = new URL("/admin/documents", request.url);
   done.searchParams.set("doc", documentId);

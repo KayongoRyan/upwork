@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/server/auth";
-import { applyPortalAction } from "@/lib/server/portal-store";
+import { applyPortalAction, readState } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
 import { createInquiry } from "@/lib/server/inquiries";
 import {
@@ -134,6 +134,9 @@ export async function POST(request: Request) {
   }
 
   const serviceId = service as VertexaInquiryServiceId;
+  // Resolve a real project manager from the current team; never a preview id.
+  const state = await readState();
+  const recipientId = managerIdForVertexaInquiry(serviceId, state.users);
   const payload: VertexaInquiryPayload = {
     scope,
     service: serviceId,
@@ -144,6 +147,7 @@ export async function POST(request: Request) {
     budget,
     startDate,
     message,
+    recipientId,
   };
 
   const apiBase = vertexaApiBaseUrl();
@@ -206,7 +210,7 @@ export async function POST(request: Request) {
     serviceName,
     clientName: name,
     message: detailLines,
-    recipientId: managerIdForVertexaInquiry(serviceId),
+    recipientId,
     stamp,
   });
 

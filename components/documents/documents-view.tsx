@@ -85,6 +85,7 @@ export function DocumentsView() {
           <RegisterForm
             projects={data.projects}
             users={data.users}
+            uploaderId={data.viewer?.id ?? ""}
             serverError={params.get("error")}
             onSubmit={(document, revision) => {
               const result = data.registerDocument(document, revision);
@@ -108,6 +109,7 @@ export function DocumentsView() {
               key={revise}
               documents={documents}
               initialId={documents.some((item) => item.id === revise) ? revise : documents[0].id}
+              uploaderId={data.viewer?.id ?? ""}
               serverError={params.get("error")}
               onSubmit={(documentId, revision) => {
                 const result = data.reviseDocument(documentId, revision);
@@ -331,11 +333,13 @@ function AccessEditor({ access, onSave }: { access: UserRole[]; onSave: (access:
 function RegisterForm({
   projects,
   users,
+  uploaderId,
   serverError,
   onSubmit,
 }: {
   projects: { id: string; code: string; name: string }[];
   users: { id: string; firstName: string; lastName: string }[];
+  uploaderId: string;
   serverError?: string | null;
   onSubmit: (document: Omit<ProjectDocument, "id" | "revisions">, revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt">) => void;
 }) {
@@ -369,7 +373,7 @@ function RegisterForm({
                 ownerId: String(data.get("ownerId") ?? ""),
                 access,
               },
-              { ...upload, note: String(data.get("note") ?? "").trim(), status: String(data.get("status") ?? "in_review") as RevisionStatus, uploadedBy: "u-admin" },
+              { ...upload, note: String(data.get("note") ?? "").trim(), status: String(data.get("status") ?? "in_review") as RevisionStatus, uploadedBy: uploaderId },
             );
           })
           .catch((error: Error) => toast.error(error.message))
@@ -429,11 +433,13 @@ function RegisterForm({
 function ReviseForm({
   documents,
   initialId,
+  uploaderId,
   serverError,
   onSubmit,
 }: {
   documents: ProjectDocument[];
   initialId: string;
+  uploaderId: string;
   serverError?: string | null;
   onSubmit: (documentId: string, revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt" | "status">) => void;
 }) {
@@ -456,7 +462,7 @@ function ReviseForm({
         }
         setBusy(true);
         readUpload(file)
-          .then((upload) => onSubmit(String(data.get("documentId") ?? initialId), { ...upload, note: String(data.get("note") ?? "").trim(), uploadedBy: "u-admin" }))
+          .then((upload) => onSubmit(String(data.get("documentId") ?? initialId), { ...upload, note: String(data.get("note") ?? "").trim(), uploadedBy: uploaderId }))
           .catch((error: Error) => toast.error(error.message))
           .finally(() => setBusy(false));
       }}

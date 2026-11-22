@@ -1,6 +1,6 @@
 import { billLines, expenditureFor, linesActual, parseBoq, sameBill } from "@/lib/boq";
 import { createSeedState } from "@/lib/mock-data/seed";
-import { formatMoney, PREVIEW_PM_ID } from "@/lib/utils";
+import { formatMoney } from "@/lib/utils";
 import type {
   ActivityLog,
   ActivityStatus,
@@ -82,7 +82,8 @@ export type AdminAction =
       serviceName: string;
       clientName: string;
       message: string;
-      recipientId: string;
+      /** Project manager who should receive a copy, when the deployment has one. */
+      recipientId?: string | null;
       stamp: Stamp;
     }
   | { type: "delete-support-note"; id: string; stamp: Stamp };
@@ -1002,12 +1003,14 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
               id: `${noteId}-admin`,
               source: "administrator",
             },
-            {
-              ...shared,
-              id: `${noteId}-pm`,
-              source: "administrator",
-              recipientId: action.recipientId,
-            },
+            ...(action.recipientId
+              ? [{
+                  ...shared,
+                  id: `${noteId}-pm`,
+                  source: "administrator" as const,
+                  recipientId: action.recipientId,
+                }]
+              : []),
             ...state.notifications,
           ],
         },
@@ -1140,8 +1143,7 @@ function pmActor(state: AdminState, stamp?: Stamp) {
     const user = state.users.find((item) => item.id === stamp.actorId);
     return { id: stamp.actorId, name: user ? `${user.firstName} ${user.lastName}` : stamp.actorName ?? "User" };
   }
-  const user = state.users.find((item) => item.id === PREVIEW_PM_ID);
-  return { id: PREVIEW_PM_ID, name: user ? `${user.firstName} ${user.lastName}` : "Project manager" };
+  return { id: "unknown", name: stamp?.actorName ?? "Unassigned" };
 }
 
 function audit(
@@ -1170,7 +1172,7 @@ function audit(
 function receipt(state: AdminState, stamp: Stamp, projectId: string, title: string, message: string): AppNotification {
   const actor = actorFromStamp(state, stamp);
   const project = state.projects.find((item) => item.id === projectId);
-  const recipientId = actor.role === "project_manager" ? actor.id : project?.managerId ?? PREVIEW_PM_ID;
+  const recipientId = actor.role === "project_manager" ? actor.id : project?.managerId ?? null;
   return {
     id: `${stamp.notificationId ?? `ntf-${stamp.id}`}-ack`,
     type: "project",

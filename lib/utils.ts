@@ -1,19 +1,8 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-/** Fixed clock for the preview so dates do not drift between server and browser. */
+/** Fixed clock for the demo seed data so dates do not drift between server and browser. */
 export const DEMO_TODAY = "2026-11-06";
-
-export const PREVIEW_ACTOR_ID = "u-admin";
-
-/** Preview project manager. The PM portal is scoped to projects she manages. */
-export const PREVIEW_PM_ID = "u-pm-2";
-
-/** Preview site engineer. She only sees the project on her account. */
-export const PREVIEW_SE_ID = "u-se-2";
-
-/** Preview quantity surveyor. He only sees the project on his account. */
-export const PREVIEW_QS_ID = "u-qs-2";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

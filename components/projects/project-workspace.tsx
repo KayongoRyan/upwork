@@ -18,7 +18,7 @@ import {
   workspaceFor,
   type ProjectEquipment,
 } from "@/lib/project-workspace";
-import { DEMO_TODAY, PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID, daysUntil, formatDate, formatDateTime, formatMoney, fullName } from "@/lib/utils";
+import { DEMO_TODAY, daysUntil, formatDate, formatDateTime, formatMoney, fullName } from "@/lib/utils";
 import type { EngineerReport, EngineerReportStatus } from "@/types";
 
 const sections = [
@@ -63,9 +63,13 @@ export function ProjectWorkspace({ portal }: { portal: "admin" | "pm" | "se" | "
   const data = useAdmin();
   const project = data.projects.find((item) => item.id === projectId) ?? null;
   const back = portal === "admin" ? "/admin/projects" : portal === "pm" ? "/pm/projects" : portal === "se" ? "/se" : "/qs";
-  const scopedId = portal === "se" ? PREVIEW_SE_ID : portal === "qs" ? PREVIEW_QS_ID : null;
-  const scopedProjectId = scopedId ? data.users.find((user) => user.id === scopedId)?.projectId : null;
-  const allowed = portal === "admin" || (portal === "pm" && project?.managerId === PREVIEW_PM_ID) || (scopedProjectId != null && scopedProjectId === project?.id);
+  const viewer = data.viewer;
+  const allowed =
+    portal === "admin"
+      ? viewer?.role === "administrator"
+      : portal === "pm"
+        ? project?.managerId === viewer?.id
+        : viewer?.projectId != null && viewer.projectId === project?.id;
 
   if (!project || !allowed) {
     return (

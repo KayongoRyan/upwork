@@ -1,24 +1,31 @@
+import type { UserAccount } from "@/types";
 import type { VertexaInquiryServiceId } from "@/lib/vertexa-inquiry";
-import { PREVIEW_PM_ID } from "@/lib/utils";
 
 /**
- * Demo routing: Vertexa public inquiries → CPMIS project managers by service line.
+ * Routes a public Vertexa inquiry to a real project manager.
  *
- * Flow:
- * 1. Client uses Let's Talk → /vertexa/contact (or a service page form).
- * 2. Inquiry API validates and calls `vertexa-inquiry`.
- * 3. Administrator always receives a notice; the mapped PM receives a copy with `recipientId`.
- * 4. Follow-up is manual (call/email) using details in the notice body.
- *
- * Replace this map with HR/CRM rules or round-robin when moving off the demo.
+ * The manager is chosen from the active accounts supplied by the caller, so the
+ * lead always lands on a member of the deployment's own team. No preview or demo
+ * identity is baked in: when there is no active project manager the inquiry is
+ * still delivered to the administrator inbox and left unassigned for triage.
  */
-export const vertexaInquiryManagerByService: Record<VertexaInquiryServiceId, string> = {
-  "custom-homes": "u-pm-2", // Sarah Mukamana — custom residential
-  renovations: "u-pm-1", // Joseph Mugisha — renovations
-  extensions: "u-pm-3", // Peter Habimana — extensions
-  general: PREVIEW_PM_ID, // default intake (Sarah)
-};
+const SERVICE_ORDER: VertexaInquiryServiceId[] = [
+  "custom-homes",
+  "renovations",
+  "extensions",
+  "general",
+];
 
-export function managerIdForVertexaInquiry(serviceId: VertexaInquiryServiceId): string {
-  return vertexaInquiryManagerByService[serviceId] ?? PREVIEW_PM_ID;
+type RoutableUser = Pick<UserAccount, "id" | "role" | "status">;
+
+export function managerIdForVertexaInquiry(
+  serviceId: VertexaInquiryServiceId,
+  users: RoutableUser[],
+): string | null {
+  const managers = users.filter(
+    (user) => user.role === "project_manager" && user.status === "active",
+  );
+  if (managers.length === 0) return null;
+  const index = SERVICE_ORDER.indexOf(serviceId);
+  return managers[(index < 0 ? 0 : index) % managers.length]?.id ?? null;
 }
