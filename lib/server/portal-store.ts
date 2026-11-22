@@ -219,9 +219,9 @@ async function syncRecords(
   session?: ClientSession,
 ): Promise<void> {
   if (JSON.stringify(before) === JSON.stringify(after)) return;
-  const collection = db.collection(name);
+  const collection = db.collection<StoredDocument>(name);
   const afterIds = new Set(after.map((item) => item.id));
-  const ops: AnyBulkWriteOperation<Document>[] = [];
+  const ops: AnyBulkWriteOperation<StoredDocument>[] = [];
 
   for (let index = 0; index < after.length; index += 1) {
     const item = after[index] as Identified & Record<string, unknown>;
