@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import {
   getMongoRuntime,
   requireCollectionInProduction,
+  requirePersistenceInProduction,
   type PortalKey,
 } from "@/lib/server/mongo";
 import { readState } from "@/lib/server/portal-store";
@@ -70,7 +71,8 @@ const SCRYPT_KEYLEN = 64;
 const LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 10;
 
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+type RateLimitDoc = { _id: string; count: number; resetAt: number };
+const loginAttemptsFallback = new Map<string, { count: number; resetAt: number }>();
 
 function memory(): AuthMemory {
   const g = globalThis as typeof globalThis & AuthGlobal;
@@ -273,22 +275,57 @@ async function findCredentialByEmail(email: string): Promise<CredentialRecord | 
   return null;
 }
 
-export function checkLoginRateLimit(key: string): { ok: true } | { ok: false; retryAfterSeconds: number } {
+let rateLimitIndexReady: Promise<void> | null = null;
+
+async function rateLimitCollection() {
+  const runtime = requirePersistenceInProduction(await getMongoRuntime());
+  const col = runtime?.dbs.administrator.collection<RateLimitDoc>("login_rate_limits") ?? null;
+  if (col && !rateLimitIndexReady) {
+    rateLimitIndexReady = col
+      .createIndex({ resetAt: 1 }, { expireAfterSeconds: 0 })
+      .then(() => {})
+      .catch(() => {
+        rateLimitIndexReady = null;
+      });
+  }
+  return col;
+}
+
+export async function checkLoginRateLimit(key: string): Promise<{ ok: true } | { ok: false; retryAfterSeconds: number }> {
   const now = Date.now();
-  const current = loginAttempts.get(key);
-  if (!current || now > current.resetAt) {
-    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+  const col = await rateLimitCollection();
+  if (!col) {
+    const current = loginAttemptsFallback.get(key);
+    if (!current || now > current.resetAt) {
+      loginAttemptsFallback.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+      return { ok: true };
+    }
+    if (current.count >= LOGIN_MAX_ATTEMPTS) {
+      return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000)) };
+    }
+    current.count += 1;
     return { ok: true };
   }
-  if (current.count >= LOGIN_MAX_ATTEMPTS) {
-    return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000)) };
+  await rateLimitIndexReady?.catch(() => {});
+  const existing = await col.findOne({ _id: key });
+  if (!existing || now > existing.resetAt) {
+    await col.updateOne({ _id: key }, { $set: { count: 1, resetAt: now + LOGIN_WINDOW_MS } }, { upsert: true });
+    return { ok: true };
   }
-  current.count += 1;
+  if (existing.count >= LOGIN_MAX_ATTEMPTS) {
+    return { ok: false, retryAfterSeconds: Math.max(1, Math.ceil((existing.resetAt - now) / 1000)) };
+  }
+  await col.updateOne({ _id: key, resetAt: existing.resetAt }, { $inc: { count: 1 } });
   return { ok: true };
 }
 
-export function resetLoginRateLimit(key: string) {
-  loginAttempts.delete(key);
+export async function resetLoginRateLimit(key: string): Promise<void> {
+  const col = await rateLimitCollection();
+  if (!col) {
+    loginAttemptsFallback.delete(key);
+    return;
+  }
+  await col.deleteOne({ _id: key }).catch(() => {});
 }
 
 export async function signInWithPassword(
