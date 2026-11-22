@@ -254,7 +254,7 @@ export type DocumentCategory =
   | "inspection"
   | "correspondence";
 
-export type RevisionStatus = "draft" | "in_review" | "approved";
+export type RevisionStatus = "draft" | "in_review" | "approved" | "superseded";
 
 export interface DocumentRevision {
   id: string;
