@@ -8,7 +8,11 @@
     "mongo:local": "node backend/scripts/mongo-local.mjs",
     "build": "next build",
     "start": "node server.js",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration"
   },
   "dependencies": {
     "@hookform/resolvers": "^7.0.3",
@@ -46,11 +50,16 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/supertest": "^7.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
     "mongodb-memory-server": "^11.3.0",
+    "supertest": "^7.3.2",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.3.8",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^5.1.1"
   }
 }
