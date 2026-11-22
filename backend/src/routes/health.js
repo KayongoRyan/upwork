@@ -23,8 +23,7 @@ healthRouter.get("/", async (req, res) => {
       service: "vertexa-cpmis-api",
       apiVersion: config.apiVersion,
       mongodb: "disconnected",
-      uri: config.mongoUri,
-      help: mongoStartupHelp,
+      ...(config.isProduction ? {} : { uri: config.mongoUri, help: mongoStartupHelp }),
       requestId: req.requestId,
     });
   }
