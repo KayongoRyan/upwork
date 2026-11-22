@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { adminReducer, type AdminAction, type Stamp } from "@/lib/data/reducer";
 import { billLines, estimateFor, expenditureFor, parseBoq, sameBill } from "@/lib/boq";
 import { isManagerFieldNotice } from "@/lib/notices";
@@ -32,7 +33,7 @@ import type {
 interface AdminContextValue {
   state: AdminState;
   viewer: SessionUser | null;
-  dispatch: (action: AdminAction) => void;
+  dispatch: (action: AdminAction) => Promise<boolean>;
   /** Demo-store notices merged with the ones MongoDB holds for the public site. */
   notifications: AppNotification[];
   markNotification: (id: string, read: boolean) => void;
@@ -62,6 +63,16 @@ export function AdminProvider({
   const stateUrl = `/api/portal/${portal}/state`;
   const actionsUrl = `/api/portal/${portal}/actions`;
 
+  /** Replaces the optimistic state with the version the server actually holds. */
+  const refreshState = useCallback(async () => {
+    try {
+      const response = await fetch(stateUrl, { cache: "no-store" });
+      if (response.ok) setState((await response.json()) as AdminState);
+    } catch {
+      /* keep the last known state when the server cannot be reached */
+    }
+  }, [stateUrl]);
+
   // CPMIS keeps its demo state in memory; the public site writes to MongoDB.
   // Poll the API through the Next route so both inboxes show the same notices.
   useEffect(() => {
@@ -90,11 +101,11 @@ export function AdminProvider({
     };
   }, [session]);
 
-  const dispatch = useCallback((action: AdminAction) => {
+  const dispatch = useCallback((action: AdminAction): Promise<boolean> => {
     setState((current) => adminReducer(current, action));
-    if (!session) return;
+    if (!session) return Promise.resolve(true);
     pending.current += 1;
-    chain.current = chain.current.then(async () => {
+    const run = chain.current.then(async (): Promise<boolean> => {
       try {
         const response = await fetch(actionsUrl, {
           method: "POST",
@@ -102,14 +113,34 @@ export function AdminProvider({
           body: JSON.stringify(action),
           cache: "no-store",
         });
-        if (!response.ok) return;
+        if (!response.ok) {
+          // The change was not persisted: put the server's version back instead
+          // of leaving an optimistic edit on screen and calling it saved.
+          await refreshState();
+          toast.error(
+            response.status === 503
+              ? "That change could not be saved. The database is unavailable."
+              : "That change could not be saved. Try again.",
+          );
+          return false;
+        }
         const next = (await response.json()) as AdminState;
         if (pending.current === 1) setState(next);
+        return true;
+      } catch {
+        await refreshState();
+        toast.error("That change could not be saved. Check the connection and try again.");
+        return false;
       } finally {
         pending.current -= 1;
       }
     });
-  }, [actionsUrl, session]);
+    chain.current = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }, [actionsUrl, refreshState, session]);
 
   useEffect(() => {
     if (!session) return;
@@ -200,36 +231,31 @@ export function useAdmin() {
       if (state.projects.some((project) => project.code.toUpperCase() === code)) {
         return { ok: false, error: "That project code is already in use." };
       }
-      dispatch({ type: "create-project", input, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "create-project", input, stamp: stamp(viewer) }) };
     },
     updateProject(id: string, input: ProjectInput): ActionResult {
       const code = input.code.trim().toUpperCase();
       if (state.projects.some((project) => project.id !== id && project.code.toUpperCase() === code)) {
         return { ok: false, error: "That project code is already in use." };
       }
-      dispatch({ type: "update-project", id, input, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "update-project", id, input, stamp: stamp(viewer) }) };
     },
     deleteProject(id: string) {
-      dispatch({ type: "delete-project", id, stamp: stamp(viewer) });
+      return dispatch({ type: "delete-project", id, stamp: stamp(viewer) });
     },
     createUser(input: UserInput, password?: string): ActionResult {
       if (emailTaken(state.users, input.email)) return { ok: false, error: "That email is already registered." };
-      dispatch({ type: "create-user", input, password, stamp: stamp(viewer) } as AdminAction);
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "create-user", input, password, stamp: stamp(viewer) } as AdminAction) };
     },
     updateUser(id: string, input: UserInput): ActionResult {
       if (emailTaken(state.users, input.email, id)) return { ok: false, error: "That email is already registered." };
-      dispatch({ type: "update-user", id, input, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "update-user", id, input, stamp: stamp(viewer) }) };
     },
     setUserStatus(id: string, status: UserInput["status"]): ActionResult {
       if (id === viewer?.id && status === "inactive") {
         return { ok: false, error: "You cannot deactivate your own account." };
       }
-      dispatch({ type: "set-user-status", id, status, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "set-user-status", id, status, stamp: stamp(viewer) }) };
     },
     deleteUser(id: string): ActionResult {
       if (id === viewer?.id) return { ok: false, error: "You cannot delete your own account." };
@@ -240,15 +266,13 @@ export function useAdmin() {
           error: `Reassign ${managed.map((project) => project.code).join(", ")} before deleting this manager.`,
         };
       }
-      dispatch({ type: "delete-user", id, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "delete-user", id, stamp: stamp(viewer) }) };
     },
     createEmployee(input: EmployeeInput): ActionResult {
       if (state.employees.some((employee) => employee.employeeCode.toLowerCase() === input.employeeCode.trim().toLowerCase())) {
         return { ok: false, error: "That employee ID is already in use." };
       }
-      dispatch({ type: "create-employee", input, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "create-employee", input, stamp: stamp(viewer) }) };
     },
     updateEmployee(id: string, input: EmployeeInput): ActionResult {
       if (
@@ -258,21 +282,19 @@ export function useAdmin() {
       ) {
         return { ok: false, error: "That employee ID is already in use." };
       }
-      dispatch({ type: "update-employee", id, input, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "update-employee", id, input, stamp: stamp(viewer) }) };
     },
     deleteEmployee(id: string) {
-      dispatch({ type: "delete-employee", id, stamp: stamp(viewer) });
+      return dispatch({ type: "delete-employee", id, stamp: stamp(viewer) });
     },
     createTask(input: TaskInput): ActionResult {
-      dispatch({ type: "create-task", input, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "create-task", input, stamp: stamp(viewer) }) };
     },
     setTaskStatus(id: string, status: TaskInput["status"]) {
-      dispatch({ type: "set-task-status", id, status, stamp: stamp(viewer) });
+      return dispatch({ type: "set-task-status", id, status, stamp: stamp(viewer) });
     },
     assignTask(id: string, projectId: string) {
-      dispatch({ type: "assign-task", id, projectId, stamp: stamp(viewer) });
+      return dispatch({ type: "assign-task", id, projectId, stamp: stamp(viewer) });
     },
     scheduleTask(id: string, input: { projectId: string; assignee: string; dueDate: string; priority: TaskPriority }): ActionResult {
       const task = state.tasks.find((item) => item.id === id);
@@ -282,16 +304,14 @@ export function useAdmin() {
       if (viewer?.role === "project_manager" && (project.managerId !== viewer.id || current.managerId !== viewer.id)) {
         return { ok: false, error: "You can only schedule tasks on your own projects." };
       }
-      dispatch({ type: "schedule-task", id, ...input, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "schedule-task", id, ...input, stamp: stamp(viewer) }) };
     },
     setProjectProgress(id: string, progress: number, note: string): ActionResult {
       const project = state.projects.find((item) => item.id === id);
       if (!project) return { ok: false, error: "That project is not on your portfolio." };
       if (viewer?.role === "project_manager" && project.managerId !== viewer.id) return { ok: false, error: "That project is not on your portfolio." };
       if (project.status === "completed") return { ok: false, error: "A completed project keeps its recorded progress." };
-      dispatch({ type: "set-progress", id, progress, note: note.trim(), stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "set-progress", id, progress, note: note.trim(), stamp: stamp(viewer) }) };
     },
     submitEngineerReport(input: EngineerReportInput): ActionResult {
       const project = state.projects.find((item) =>
@@ -301,8 +321,7 @@ export function useAdmin() {
       if (!project) return { ok: false, error: "Choose one of your projects." };
       if (!engineer) return { ok: false, error: "Choose an active site engineer." };
       if (input.periodEnd < input.periodStart) return { ok: false, error: "Period end must be on or after the start." };
-      dispatch({ type: "submit-report", input, stamp: stamp(viewer), toAdmin: true });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "submit-report", input, stamp: stamp(viewer), toAdmin: true }) };
     },
     openReportReview(id: string): ActionResult {
       const report = state.reports.find((item) => item.id === id);
@@ -310,8 +329,7 @@ export function useAdmin() {
       if (!report || !project) return { ok: false, error: "That report is not on your portfolio." };
       if (viewer?.role === "project_manager" && project.managerId !== viewer.id) return { ok: false, error: "That report is not on your portfolio." };
       if (report.status !== "submitted") return { ok: false, error: "Only a submitted report can be opened for review." };
-      dispatch({ type: "open-report-review", id, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "open-report-review", id, stamp: stamp(viewer) }) };
     },
     decideReport(id: string, decision: Extract<EngineerReportStatus, "approved" | "rejected">, note: string): ActionResult {
       const report = state.reports.find((item) => item.id === id);
@@ -320,32 +338,31 @@ export function useAdmin() {
       if (viewer?.role === "project_manager" && project.managerId !== viewer.id) return { ok: false, error: "That report is not on your portfolio." };
       if (report.status !== "in_review") return { ok: false, error: "Open the report for review before you approve or reject it." };
       if (decision === "rejected" && note.trim().length < 3) return { ok: false, error: "A rejection needs a note the engineer can act on." };
-      dispatch({ type: "decide-report", id, decision, note, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "decide-report", id, decision, note, stamp: stamp(viewer) }) };
     },
     deleteTask(id: string) {
-      dispatch({ type: "delete-task", id, stamp: stamp(viewer) });
+      return dispatch({ type: "delete-task", id, stamp: stamp(viewer) });
     },
     setAssignedTaskProgress(engineerId: string, id: string, progress: number, status: TaskStatus) {
-      dispatch({ type: "set-task-progress", id, engineerId, progress, status, stamp: stamp(viewer) });
+      return dispatch({ type: "set-task-progress", id, engineerId, progress, status, stamp: stamp(viewer) });
     },
     submitSiteReport(input: EngineerReportInput) {
-      dispatch({ type: "submit-report", input, stamp: stamp(viewer) });
+      return dispatch({ type: "submit-report", input, stamp: stamp(viewer) });
     },
     resubmitSiteReport(id: string, input: { progress: number; summary: string; issues: string; photos: ReportPhoto[] }) {
-      dispatch({ type: "resubmit-report", id, ...input, stamp: stamp(viewer) });
+      return dispatch({ type: "resubmit-report", id, ...input, stamp: stamp(viewer) });
     },
     createBoqLine(surveyorId: string, input: BoqInput) {
-      dispatch({ type: "create-boq", surveyorId, input, stamp: stamp(viewer) });
+      return dispatch({ type: "create-boq", surveyorId, input, stamp: stamp(viewer) });
     },
     updateBoqLine(surveyorId: string, id: string, input: BoqInput) {
-      dispatch({ type: "update-boq", surveyorId, id, input, stamp: stamp(viewer) });
+      return dispatch({ type: "update-boq", surveyorId, id, input, stamp: stamp(viewer) });
     },
     deleteBoqLine(surveyorId: string, id: string) {
-      dispatch({ type: "delete-boq", surveyorId, id, stamp: stamp(viewer) });
+      return dispatch({ type: "delete-boq", surveyorId, id, stamp: stamp(viewer) });
     },
     submitCostReport(projectId: string, surveyorId: string) {
-      dispatch({ type: "submit-cost-report", projectId, surveyorId, stamp: stamp(viewer) });
+      return dispatch({ type: "submit-cost-report", projectId, surveyorId, stamp: stamp(viewer) });
     },
     registerDocument(
       document: Omit<ProjectDocument, "id" | "revisions">,
@@ -369,30 +386,27 @@ export function useAdmin() {
       const current = (state.documents ?? []).find((item) => item.id === documentId);
       if (!current) return { ok: false, error: "That document is not on the register." };
       if (!revision.fileName) return { ok: false, error: "Choose a file." };
-      dispatch({ type: "revise-document", documentId, revision, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "revise-document", documentId, revision, stamp: stamp(viewer) }) };
     },
     issueRevision(documentId: string): ActionResult {
       const current = (state.documents ?? []).find((item) => item.id === documentId);
       const latest = current?.revisions[current.revisions.length - 1];
       if (!current || !latest) return { ok: false, error: "That document is not on the register." };
       if (latest.status === "approved") return { ok: false, error: "The latest revision is already issued." };
-      dispatch({ type: "issue-revision", documentId, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "issue-revision", documentId, stamp: stamp(viewer) }) };
     },
     setDocumentAccess(documentId: string, access: UserRole[]): ActionResult {
       if (!(state.documents ?? []).some((item) => item.id === documentId)) return { ok: false, error: "That document is not on the register." };
-      dispatch({ type: "set-document-access", documentId, access, stamp: stamp(viewer) });
-      return { ok: true };
+      return { ok: true, saved: dispatch({ type: "set-document-access", documentId, access, stamp: stamp(viewer) }) };
     },
     updateSettings(patch: Partial<OrgSettings>) {
-      dispatch({ type: "update-settings", patch, stamp: stamp(viewer) });
+      return dispatch({ type: "update-settings", patch, stamp: stamp(viewer) });
     },
     saveSupportRequest(topic: string, message: string) {
-      dispatch({ type: "support-request", topic, message, stamp: stamp(viewer) });
+      return dispatch({ type: "support-request", topic, message, stamp: stamp(viewer) });
     },
     resetDemo() {
-      dispatch({ type: "reset" });
+      return dispatch({ type: "reset" });
     },
     projectById(id: string | null | undefined) {
       return state.projects.find((project) => project.id === id) ?? null;
@@ -433,8 +447,7 @@ export function usePm() {
       if (live.length === 0) return { ok: false, error: "There is no bill to submit." };
       const latest = (data.costReports ?? []).find((report) => report.projectId === projectId && report.status === "submitted");
       if (latest && sameBill(latest.lines, live)) return { ok: false, error: "This measurement is already submitted." };
-      data.submitCostReport(projectId, surveyor.id);
-      return { ok: true };
+      return { ok: true, saved: data.submitCostReport(projectId, surveyor.id) };
     },
     openReview: data.openReportReview,
     decideReport: data.decideReport,
@@ -447,8 +460,8 @@ export function usePm() {
     },
     deleteTask(id: string) {
       const task = data.tasks.find((item) => item.id === id);
-      if (!task || !ids.has(task.projectId)) return;
-      data.deleteTask(id);
+      if (!task || !ids.has(task.projectId)) return Promise.resolve(false);
+      return data.deleteTask(id);
     },
     markNotification: data.markNotification,
     projectById: data.projectById,
@@ -472,31 +485,31 @@ export function useSiteEngineer() {
     updateTask(id: string, progress: number, status: TaskStatus): ActionResult {
       const task = tasks.find((item) => item.id === id);
       if (!task || !actor) return { ok: false, error: "That task is not assigned to you." };
-      data.setAssignedTaskProgress(actor.id, id, progress, status);
-      return { ok: true };
+      return { ok: true, saved: data.setAssignedTaskProgress(actor.id, id, progress, status) };
     },
     submitDaily(input: { date: string; progress: number; summary: string; issues: string; photos: ReportPhoto[] }): ActionResult {
       if (!actor?.projectId) return { ok: false, error: "No project is assigned to this account." };
       if (input.summary.trim().length < 12) return { ok: false, error: "Write a short account of the shift, at least a sentence." };
-      data.submitSiteReport({
-        projectId: actor.projectId,
-        engineerId: actor.id,
-        periodStart: input.date,
-        periodEnd: input.date,
-        progress: input.progress,
-        summary: input.summary,
-        issues: input.issues,
-        photos: input.photos,
-      });
-      return { ok: true };
+      return {
+        ok: true,
+        saved: data.submitSiteReport({
+          projectId: actor.projectId,
+          engineerId: actor.id,
+          periodStart: input.date,
+          periodEnd: input.date,
+          progress: input.progress,
+          summary: input.summary,
+          issues: input.issues,
+          photos: input.photos,
+        }),
+      };
     },
     resubmit(id: string, input: { progress: number; summary: string; issues: string; photos: ReportPhoto[] }): ActionResult {
       const report = reports.find((item) => item.id === id);
       if (!report) return { ok: false, error: "That report is not on your project." };
       if (report.status !== "rejected") return { ok: false, error: "Only a rejected report can be sent back." };
       if (input.summary.trim().length < 12) return { ok: false, error: "Write what changed since the rejection." };
-      data.resubmitSiteReport(id, input);
-      return { ok: true };
+      return { ok: true, saved: data.resubmitSiteReport(id, input) };
     },
   };
 }
@@ -530,21 +543,18 @@ export function useQuantitySurveyor() {
     add(input: BoqInput): ActionResult {
       const parsed = checked(input);
       if ("ok" in parsed) return parsed;
-      data.createBoqLine(actor!.id, parsed);
-      return { ok: true };
+      return { ok: true, saved: data.createBoqLine(actor!.id, parsed) };
     },
     save(id: string, input: BoqInput): ActionResult {
       if (!lines.some((item) => item.id === id)) return { ok: false, error: "That line is not on your bill." };
       const parsed = checked(input);
       if ("ok" in parsed) return parsed;
-      data.updateBoqLine(actor!.id, id, parsed);
-      return { ok: true };
+      return { ok: true, saved: data.updateBoqLine(actor!.id, id, parsed) };
     },
     remove(id: string): ActionResult {
       if (!lines.some((item) => item.id === id)) return { ok: false, error: "That line is not on your bill." };
       if (!actor) return { ok: false, error: "No project is assigned to this account." };
-      data.deleteBoqLine(actor.id, id);
-      return { ok: true };
+      return { ok: true, saved: data.deleteBoqLine(actor.id, id) };
     },
     markNotification: data.markNotification,
   };

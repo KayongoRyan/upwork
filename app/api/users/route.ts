@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiSession, setUserPassword, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
+import { persistOr } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 import { userSchema } from "@/lib/validations/schemas";
 
@@ -43,11 +44,20 @@ export async function POST(request: Request) {
     return NextResponse.redirect(back, 303);
   }
   const id = nextId("act");
-  await applyPortalAction("administrator", {
-    type: "create-user",
-    input: parsed.data,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
-  });
-  await setUserPassword(id, parsed.data.email, password);
-  return NextResponse.redirect(back, 303);
+  return persistOr(
+    async () => {
+      await applyPortalAction("administrator", {
+        type: "create-user",
+        input: parsed.data,
+        stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
+      });
+      await setUserPassword(id, parsed.data.email, password);
+      return NextResponse.redirect(back, 303);
+    },
+    () => {
+      back.searchParams.set("add", "1");
+      back.searchParams.set("error", "The account could not be saved. Try again.");
+      return NextResponse.redirect(back, 303);
+    },
+  );
 }

@@ -46,8 +46,9 @@ export function SettingsView() {
   const data = useAdmin();
   const [tab, setTab] = useState<Tab>("organization");
 
-  function save(patch: Partial<OrgSettings>, message: string) {
-    data.updateSettings(patch);
+  async function save(patch: Partial<OrgSettings>, message: string) {
+    const saved = data.updateSettings(patch);
+    if (saved && !(await saved)) return;
     toast.success(message);
   }
 
@@ -173,8 +174,9 @@ export function SettingsView() {
           type="button"
           variant="outline"
           className="mt-3"
-          onClick={() => {
-            data.resetDemo();
+          onClick={async () => {
+            const saved = data.resetDemo();
+            if (saved && !(await saved)) return;
             toast.success("Demonstration data restored.");
           }}
         >

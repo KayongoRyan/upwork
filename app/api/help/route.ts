@@ -1,6 +1,6 @@
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
-import { redirectTo } from "@/lib/server/redirect";
+import { persistOr, redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -26,11 +26,16 @@ export async function POST(request: Request) {
     return redirectTo(request, "/admin/help", { error: "Write the note in a sentence or more." });
   }
   const id = nextId("hlp");
-  await applyPortalAction("administrator", {
-    type: "support-request",
-    topic,
-    message,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
-  });
-  return redirectTo(request, "/admin/help", { saved: "1" }, `ntf-${id}`);
+  return persistOr(
+    async () => {
+      await applyPortalAction("administrator", {
+        type: "support-request",
+        topic,
+        message,
+        stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
+      });
+      return redirectTo(request, "/admin/help", { saved: "1" }, `ntf-${id}`);
+    },
+    () => redirectTo(request, "/admin/help", { error: "The note could not be saved. Try again." }),
+  );
 }

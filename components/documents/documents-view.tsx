@@ -87,12 +87,13 @@ export function DocumentsView() {
             users={data.users}
             uploaderId={data.viewer?.id ?? ""}
             serverError={params.get("error")}
-            onSubmit={(document, revision) => {
+            onSubmit={async (document, revision) => {
               const result = data.registerDocument(document, revision);
               if (!result.ok) {
                 toast.error(result.error);
                 return;
               }
+              if (result.saved && !(await result.saved)) return;
               toast.success(revision.status === "approved" ? "Document issued as Rev 01." : "Document registered. Rev 01 is not issued.");
               setSaved(true);
               window.history.replaceState(null, "", "/admin/documents");
@@ -111,12 +112,13 @@ export function DocumentsView() {
               initialId={documents.some((item) => item.id === revise) ? revise : documents[0].id}
               uploaderId={data.viewer?.id ?? ""}
               serverError={params.get("error")}
-              onSubmit={(documentId, revision) => {
+              onSubmit={async (documentId, revision) => {
                 const result = data.reviseDocument(documentId, revision);
                 if (!result.ok) {
                   toast.error(result.error);
                   return;
                 }
+                if (result.saved && !(await result.saved)) return;
                 toast.success("Revision uploaded. It is not issued.");
                 setSaved(true);
                 setOpenId(documentId);
@@ -185,15 +187,17 @@ export function DocumentsView() {
                     users={data.users}
                     onToggle={() => setOpenId(openId === item.id ? null : item.id)}
                     onReviseHref={`/admin/documents?revise=${item.id}`}
-                    onIssue={() => {
+                    onIssue={async () => {
                       const result = data.issueRevision(item.id);
-                      if (!result.ok) toast.error(result.error);
-                      else toast.success(`${item.number} issued. Earlier revisions are superseded.`);
+                      if (!result.ok) { toast.error(result.error); return; }
+                      if (result.saved && !(await result.saved)) return;
+                      toast.success(`${item.number} issued. Earlier revisions are superseded.`);
                     }}
-                    onAccess={(access) => {
+                    onAccess={async (access) => {
                       const result = data.setDocumentAccess(item.id, access);
-                      if (!result.ok) toast.error(result.error);
-                      else toast.success("Access updated.");
+                      if (!result.ok) { toast.error(result.error); return; }
+                      if (result.saved && !(await result.saved)) return;
+                      toast.success("Access updated.");
                     }}
                   />
                 );

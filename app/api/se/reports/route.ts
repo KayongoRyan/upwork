@@ -1,7 +1,7 @@
 import { readState } from "@/lib/server/memory";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
-import { redirectTo } from "@/lib/server/redirect";
+import { persistOr, redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 import type { ReportPhoto } from "@/types";
 
@@ -44,21 +44,26 @@ export async function POST(request: Request) {
   if (!photos) return redirectTo(request, "/se/report", { error: "Each photo has to be an image under 1.5 MB. Four is the limit." });
 
   const id = nextId("rpt");
-  await applyPortalAction("site_engineer", {
-    type: "submit-report",
-    input: {
-      projectId: project.id,
-      engineerId: engineer.id,
-      periodStart: date,
-      periodEnd: date,
-      progress: Number(progressRaw),
-      summary,
-      issues,
-      photos,
+  return persistOr(
+    async () => {
+      await applyPortalAction("site_engineer", {
+        type: "submit-report",
+        input: {
+          projectId: project.id,
+          engineerId: engineer.id,
+          periodStart: date,
+          periodEnd: date,
+          progress: Number(progressRaw),
+          summary,
+          issues,
+          photos,
+        },
+        stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
+      });
+      return redirectTo(request, "/se/history", { filed: "1" }, id);
     },
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
-  });
-  return redirectTo(request, "/se/history", { filed: "1" }, id);
+    () => redirectTo(request, "/se/report", { error: "The report could not be saved. Try again." }),
+  );
 }
 
 async function readPhotos(entries: FormDataEntryValue[]): Promise<ReportPhoto[] | null> {

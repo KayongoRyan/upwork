@@ -2,7 +2,7 @@ import { billLines, sameBill } from "@/lib/boq";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
-import { redirectTo } from "@/lib/server/redirect";
+import { persistOr, redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -27,10 +27,15 @@ export async function POST(request: Request) {
   if (already) return redirectTo(request, "/qs/reports", { error: "These figures are already with your project manager." });
 
   const id = nextId("cst");
-  await applyPortalAction("quantity_surveyor", {
-    type: "send-cost-report",
-    surveyorId: surveyor.id,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
-  });
-  return redirectTo(request, "/qs/reports", { sent: `${manager.firstName} ${manager.lastName}` });
+  return persistOr(
+    async () => {
+      await applyPortalAction("quantity_surveyor", {
+        type: "send-cost-report",
+        surveyorId: surveyor.id,
+        stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
+      });
+      return redirectTo(request, "/qs/reports", { sent: `${manager.firstName} ${manager.lastName}` });
+    },
+    () => redirectTo(request, "/qs/reports", { error: "The cost report could not be saved. Try again." }),
+  );
 }

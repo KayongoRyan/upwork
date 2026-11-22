@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
+import { persistOr } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 import { projectSchema } from "@/lib/validations/schemas";
 
@@ -42,10 +43,19 @@ export async function POST(request: Request) {
     return NextResponse.redirect(back, 303);
   }
   const id = nextId("act");
-  await applyPortalAction("administrator", {
-    type: "create-project",
-    input: parsed.data,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
-  });
-  return NextResponse.redirect(new URL(`/admin/projects/${id}`, request.url), 303);
+  return persistOr(
+    async () => {
+      await applyPortalAction("administrator", {
+        type: "create-project",
+        input: parsed.data,
+        stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
+      });
+      return NextResponse.redirect(new URL(`/admin/projects/${id}`, request.url), 303);
+    },
+    () => {
+      back.searchParams.set("create", "1");
+      back.searchParams.set("error", "The project could not be saved. Try again.");
+      return NextResponse.redirect(back, 303);
+    },
+  );
 }

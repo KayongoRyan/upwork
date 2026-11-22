@@ -72,16 +72,18 @@ export function TasksView() {
           {projectStatuses.map((status) => <option key={status} value={status}>{projectStatusLabel[status]}</option>)}
         </select>
       </form>
-      {statusFilter ? <ActivityBoard statusLabel={projectStatusLabel[statusFilter]} tasks={tasks} selectedId={selected?.id ?? null} projectById={data.projectById} href={href} onDelete={(id) => { data.deleteTask(id); toast.success("Task removed."); }} onAssign={data.assignTask} onStatus={data.setTaskStatus} projects={data.projects} /> : focus ? <ProjectStanding project={focus} tasks={focusTasks} selected={selected} /> : <ProjectGroups projects={listed} tasks={data.tasks} openProject={(id) => href(id)} />}
-      {statusFilter ? null : <ActivityBoard tasks={tasks} selectedId={selected?.id ?? null} projectById={data.projectById} href={href} onDelete={(id) => { data.deleteTask(id); toast.success("Task removed."); }} onAssign={data.assignTask} onStatus={data.setTaskStatus} projects={data.projects} />}
+      {statusFilter ? <ActivityBoard statusLabel={projectStatusLabel[statusFilter]} tasks={tasks} selectedId={selected?.id ?? null} projectById={data.projectById} href={href} onDelete={async (id) => { const saved = data.deleteTask(id); if (saved && !(await saved)) return; toast.success("Task removed."); }} onAssign={data.assignTask} onStatus={data.setTaskStatus} projects={data.projects} /> : focus ? <ProjectStanding project={focus} tasks={focusTasks} selected={selected} /> : <ProjectGroups projects={listed} tasks={data.tasks} openProject={(id) => href(id)} />}
+      {statusFilter ? null : <ActivityBoard tasks={tasks} selectedId={selected?.id ?? null} projectById={data.projectById} href={href} onDelete={async (id) => { const saved = data.deleteTask(id); if (saved && !(await saved)) return; toast.success("Task removed."); }} onAssign={data.assignTask} onStatus={data.setTaskStatus} projects={data.projects} />}
       <Dialog open={open} onOpenChange={setOpen}>
         {open ? (
           <DialogContent title="Add task" description="The task is added to the preview board only." className="sm:max-w-lg">
             <TaskForm
               projects={data.projects.map((project) => ({ id: project.id, label: `${project.code} — ${project.name}` }))}
               onCancel={() => setOpen(false)}
-              onSubmit={(values) => {
-                data.createTask(values);
+              onSubmit={async (values) => {
+                const result = data.createTask(values);
+                if (!result.ok) { toast.error(result.error); return; }
+                if (result.saved && !(await result.saved)) return;
                 toast.success("Task added.");
                 setOpen(false);
               }}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { applySessionCookie, assertSameOrigin, checkLoginRateLimit, portalHome, resetLoginRateLimit, signInWithPassword } from "@/lib/server/auth";
+import { PersistenceError } from "@/lib/server/mongo";
 import { isPortalKey } from "@/lib/server/portal-store";
 
 export const runtime = "nodejs";
@@ -35,7 +36,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await signInWithPassword(portal, email, password);
+  let result: Awaited<ReturnType<typeof signInWithPassword>>;
+  try {
+    result = await signInWithPassword(portal, email, password);
+  } catch (error) {
+    if (error instanceof PersistenceError) {
+      return NextResponse.json(
+        { ok: false, error: "The server could not start your session. Try again." },
+        { status: 503 },
+      );
+    }
+    throw error;
+  }
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
   }

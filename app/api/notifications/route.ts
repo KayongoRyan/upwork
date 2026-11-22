@@ -2,7 +2,7 @@ import { isManagerFieldNotice } from "@/lib/notices";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction, type PortalKey } from "@/lib/server/portal-store";
-import { redirectTo } from "@/lib/server/redirect";
+import { persistOr, redirectTo } from "@/lib/server/redirect";
 import {
   isVertexaNotificationId,
   markAllVertexaNotificationsRead,
@@ -31,9 +31,14 @@ export async function POST(request: Request) {
   const state = await readState();
   if (form.get("all") === "1") {
     if (back !== "/admin/notifications") return redirectTo(request, back);
-    await applyPortalAction("administrator", { type: "mark-all-notifications" });
-    await markAllVertexaNotificationsRead();
-    return redirectTo(request, back, { ...query, read: "all" });
+    return persistOr(
+      async () => {
+        await applyPortalAction("administrator", { type: "mark-all-notifications" });
+        await markAllVertexaNotificationsRead();
+        return redirectTo(request, back, { ...query, read: "all" });
+      },
+      () => redirectTo(request, back, { ...query, error: "The notices could not be marked read. Try again." }),
+    );
   }
 
   const id = String(form.get("id") ?? "");
@@ -45,8 +50,13 @@ export async function POST(request: Request) {
 
   const item = state.notifications.find((notice) => notice.id === id);
   if (!item || !visible(state, back, item, __session.id)) return redirectTo(request, back, query);
-  await applyPortalAction(portalForReturn(back), { type: "mark-notification", id, read });
-  return redirectTo(request, back, query, id);
+  return persistOr(
+    async () => {
+      await applyPortalAction(portalForReturn(back), { type: "mark-notification", id, read });
+      return redirectTo(request, back, query, id);
+    },
+    () => redirectTo(request, back, { ...query, error: "The notice could not be updated. Try again." }, id),
+  );
 }
 
 function portalForReturn(back: string): PortalKey {

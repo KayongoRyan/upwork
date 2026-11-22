@@ -1,7 +1,7 @@
 import { readState } from "@/lib/server/memory";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
-import { redirectTo } from "@/lib/server/redirect";
+import { persistOr, redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -24,12 +24,17 @@ export async function POST(request: Request) {
   const progress = Number(raw);
   if (progress > 100) return redirectTo(request, "/pm/progress", { error: "Progress must be a whole number from 0 to 100." });
   const id = nextId("act");
-  await applyPortalAction("project_manager", {
-    type: "set-progress",
-    id: project.id,
-    progress,
-    note,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
-  });
-  return redirectTo(request, "/pm/progress", { saved: project.code });
+  return persistOr(
+    async () => {
+      await applyPortalAction("project_manager", {
+        type: "set-progress",
+        id: project.id,
+        progress,
+        note,
+        stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
+      });
+      return redirectTo(request, "/pm/progress", { saved: project.code });
+    },
+    () => redirectTo(request, "/pm/progress", { error: "The progress update could not be saved. Try again." }),
+  );
 }

@@ -60,24 +60,26 @@ export function EmployeesView() {
   });
   const viewing = data.employees.find((employee) => employee.id === viewId) ?? null;
 
-  function save(values: EmployeeFormValues) {
+  async function save(values: EmployeeFormValues) {
     const result = editor === "new" ? data.createEmployee(values) : editor ? data.updateEmployee(editor.id, values) : { ok: false as const, error: "Nothing to save." };
     if (!result.ok) {
       setFormError(result.error);
       return;
     }
+    if (result.saved && !(await result.saved)) return;
     toast.success(editor === "new" ? "Employee registered in this preview." : "Employee updated in this preview.");
     setEditor(null);
     setFormError(null);
   }
 
-  function saveAssignment() {
+  async function saveAssignment() {
     if (!assigning) return;
     const result = data.updateEmployee(assigning.id, { ...assigning, projectId: assignProject });
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
+    if (result.saved && !(await result.saved)) return;
     toast.success("Project assignment updated.");
     setAssigning(null);
   }
@@ -219,9 +221,10 @@ export function EmployeesView() {
         body={pendingDelete ? `${fullName(pendingDelete)} will be removed from the workforce list in this preview.` : ""}
         confirmLabel="Remove employee"
         onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!pendingDelete) return;
-          data.deleteEmployee(pendingDelete.id);
+          const saved = data.deleteEmployee(pendingDelete.id);
+          if (saved && !(await saved)) return;
           toast.success("Employee removed from this preview.");
           setPendingDelete(null);
         }}

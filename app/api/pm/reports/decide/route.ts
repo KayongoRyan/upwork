@@ -1,7 +1,7 @@
 import { readState } from "@/lib/server/memory";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
-import { redirectTo } from "@/lib/server/redirect";
+import { persistOr, redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -34,12 +34,17 @@ export async function POST(request: Request) {
     return redirectTo(request, "/pm/reports", { error: "Write a comment for the person who sent this report." }, id);
   }
   const stampId = nextId("act");
-  await applyPortalAction("project_manager", {
-    type: "decide-report",
-    id,
-    decision,
-    note,
-    stamp: { id: stampId, at: new Date().toISOString(), notificationId: `ntf-${stampId}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
-  });
-  return redirectTo(request, "/pm/reports", { reviewSent: sender }, id);
+  return persistOr(
+    async () => {
+      await applyPortalAction("project_manager", {
+        type: "decide-report",
+        id,
+        decision,
+        note,
+        stamp: { id: stampId, at: new Date().toISOString(), notificationId: `ntf-${stampId}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
+      });
+      return redirectTo(request, "/pm/reports", { reviewSent: sender }, id);
+    },
+    () => redirectTo(request, "/pm/reports", { error: "The review could not be saved. Try again." }, id),
+  );
 }

@@ -1,7 +1,7 @@
 import { readState } from "@/lib/server/memory";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
-import { redirectTo } from "@/lib/server/redirect";
+import { persistOr, redirectTo } from "@/lib/server/redirect";
 import { fullName, nextId } from "@/lib/utils";
 import type { AdminState, WorkKind } from "@/types";
 
@@ -36,15 +36,20 @@ export async function POST(request: Request) {
   if (projectId == null || !onPortal(state, portal, kind, workId, projectId)) return fail("That work is not on this portal.");
 
   const id = nextId("cmt");
-  await applyPortalAction("administrator", {
-    type: "add-work-comment",
-    kind,
-    workId,
-    projectId,
-    body,
-    stamp: { id, at: new Date().toISOString() },
-  });
-  return redirectTo(request, "/admin/notifications", { ...query, commented: "1" }, workId);
+  return persistOr(
+    async () => {
+      await applyPortalAction("administrator", {
+        type: "add-work-comment",
+        kind,
+        workId,
+        projectId,
+        body,
+        stamp: { id, at: new Date().toISOString() },
+      });
+      return redirectTo(request, "/admin/notifications", { ...query, commented: "1" }, workId);
+    },
+    () => fail("The comment could not be saved. Try again."),
+  );
 }
 
 function projectFor(state: AdminState, kind: WorkKind, workId: string) {

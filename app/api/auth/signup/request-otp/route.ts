@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertSameOrigin, checkLoginRateLimit, hashPassword } from "@/lib/server/auth";
+import { PersistenceError } from "@/lib/server/mongo";
 import { createSignupOtp, normalizeSignupEmail, normalizeSignupPhone } from "@/lib/server/otp";
 import { isPortalKey } from "@/lib/server/portal-store";
 import { readState } from "@/lib/server/memory";
@@ -63,14 +64,25 @@ export async function POST(request: Request) {
   }
 
   const passwordHash = await hashPassword(password);
-  const result = await createSignupOtp({
-    portal,
-    firstName,
-    lastName,
-    phone,
-    email,
-    passwordHash,
-  });
+  let result: Awaited<ReturnType<typeof createSignupOtp>>;
+  try {
+    result = await createSignupOtp({
+      portal,
+      firstName,
+      lastName,
+      phone,
+      email,
+      passwordHash,
+    });
+  } catch (error) {
+    if (error instanceof PersistenceError) {
+      return NextResponse.json(
+        { ok: false, error: "The verification code could not be saved. Try again." },
+        { status: 503 },
+      );
+    }
+    throw error;
+  }
 
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: result.status });

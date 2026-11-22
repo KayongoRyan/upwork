@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
+import { persistOr } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -30,27 +31,32 @@ export async function POST(request: Request) {
   if (file.size > MAX_BYTES) return fail("Keep the preview file under 512 KB.");
   const bytes = Buffer.from(await file.arrayBuffer());
   const id = nextId("act");
-  await applyPortalAction("administrator", {
-    type: "revise-document",
-    documentId,
-    revision: {
-      fileName: file.name || "upload",
-      fileType: file.type || "application/octet-stream",
-      size: file.size,
-      note: String(form.get("note") ?? "").trim(),
-      uploadedBy: __session.id,
-      dataUrl: `data:${file.type || "application/octet-stream"};base64,${bytes.toString("base64")}`,
+  return persistOr(
+    async () => {
+      await applyPortalAction("administrator", {
+        type: "revise-document",
+        documentId,
+        revision: {
+          fileName: file.name || "upload",
+          fileType: file.type || "application/octet-stream",
+          size: file.size,
+          note: String(form.get("note") ?? "").trim(),
+          uploadedBy: __session.id,
+          dataUrl: `data:${file.type || "application/octet-stream"};base64,${bytes.toString("base64")}`,
+        },
+        stamp: {
+          id,
+          at: new Date().toISOString(),
+          notificationId: `ntf-${id}`,
+          actorId: __session.id,
+          actorName: `${__session.firstName} ${__session.lastName}`,
+          actorRole: __session.role,
+        },
+      });
+      const done = new URL("/admin/documents", request.url);
+      done.searchParams.set("doc", documentId);
+      return NextResponse.redirect(done, 303);
     },
-    stamp: {
-      id,
-      at: new Date().toISOString(),
-      notificationId: `ntf-${id}`,
-      actorId: __session.id,
-      actorName: `${__session.firstName} ${__session.lastName}`,
-      actorRole: __session.role,
-    },
-  });
-  const done = new URL("/admin/documents", request.url);
-  done.searchParams.set("doc", documentId);
-  return NextResponse.redirect(done, 303);
+    () => fail("The revision could not be saved. Try again."),
+  );
 }

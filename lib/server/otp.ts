@@ -7,7 +7,11 @@
  */
 
 import crypto from "node:crypto";
-import { getMongoRuntime, type PortalKey } from "@/lib/server/mongo";
+import {
+  getMongoRuntime,
+  requireCollectionInProduction,
+  type PortalKey,
+} from "@/lib/server/mongo";
 import { PORTAL_ROLE } from "@/lib/server/auth";
 import { sendSms } from "@/lib/server/sms";
 
@@ -99,7 +103,7 @@ export async function createSignupOtp(input: CreateOtpInput): Promise<CreateOtpR
   const now = new Date();
   const email = normalizeEmail(input.email);
   const phone = normalizePhone(input.phone);
-  const col = await collection();
+  const col = requireCollectionInProduction(await collection());
 
   // Basic resend throttling per portal+email/phone.
   const recentCutoff = new Date(now.getTime() - RESEND_MIN_MS).toISOString();
@@ -141,18 +145,23 @@ export async function createSignupOtp(input: CreateOtpInput): Promise<CreateOtpR
     lastSentAt: now.toISOString(),
   };
 
+  // Persist before sending: if storage fails, no code is sent that could never
+  // be verified, and the caller sees a failure instead of a false success.
+  if (col) {
+    await col.insertOne(record);
+  } else {
+    memory().challenges.set(challengeId, record);
+  }
+
   const roleLabel = PORTAL_ROLE[input.portal].replaceAll("_", " ");
   const message = `Your CPMIS ${roleLabel} portal verification code is ${otp}. It expires in 10 minutes.`;
   const demoFallback = process.env.OTP_DEMO_FALLBACK === "true";
   const sms = await sendSms(phone, message);
   if (!sms.ok && !demoFallback) {
+    // Do not leave a challenge the user cannot verify.
+    if (col) await col.deleteOne({ _id: challengeId }).catch(() => undefined);
+    else memory().challenges.delete(challengeId);
     return { ok: false, status: sms.status, error: sms.error };
-  }
-
-  if (col) {
-    await col.insertOne(record);
-  } else {
-    memory().challenges.set(challengeId, record);
   }
 
   return { ok: true, challengeId, expiresAt: record.expiresAt, ...(demoFallback ? { demoOtp: otp } : {}) };
@@ -163,7 +172,7 @@ export type VerifyOtpResult =
   | { ok: false; error: string; status: number };
 
 export async function verifySignupOtp(challengeId: string, otp: string, portal: PortalKey): Promise<VerifyOtpResult> {
-  const col = await collection();
+  const col = requireCollectionInProduction(await collection());
   let record: SignupChallenge | null = null;
   if (col) {
     record = (await col.findOne({ _id: challengeId })) ?? null;

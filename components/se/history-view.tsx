@@ -41,7 +41,7 @@ function HistoryCard({
   onResubmit,
 }: {
   report: EngineerReport;
-  onResubmit: (id: string, input: { progress: number; summary: string; issues: string; photos: ReportPhoto[] }) => { ok: true } | { ok: false; error: string };
+  onResubmit: (id: string, input: { progress: number; summary: string; issues: string; photos: ReportPhoto[] }) => { ok: true; saved?: Promise<boolean> } | { ok: false; error: string };
 }) {
   const [open, setOpen] = useState(report.status === "rejected");
   const [summary, setSummary] = useState(report.summary);
@@ -83,14 +83,13 @@ function HistoryCard({
           {open ? (
             <form
               className="mt-3 grid max-w-3xl gap-3"
-              onSubmit={(event) => {
+              onSubmit={async (event) => {
                 event.preventDefault();
                 const result = onResubmit(report.id, { progress, summary, issues, photos });
-                if (!result.ok) toast.error(result.error);
-                else {
-                  toast.success("Resubmitted. It is back with your project manager.");
-                  setOpen(false);
-                }
+                if (!result.ok) { toast.error(result.error); return; }
+                if (result.saved && !(await result.saved)) return;
+                toast.success("Resubmitted. It is back with your project manager.");
+                setOpen(false);
               }}
             >
               <Label>
