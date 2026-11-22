@@ -52,7 +52,7 @@ function AssignForm({
 }: {
   projects: { id: string; code: string; name: string }[];
   people: string[];
-  onCreate: (input: TaskFormValues) => { ok: true } | { ok: false; error: string };
+  onCreate: (input: TaskFormValues) => { ok: true; saved?: Promise<boolean> } | { ok: false; error: string };
 }) {
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -69,12 +69,13 @@ function AssignForm({
   return (
     <form
       className="grid gap-3 rounded-[22px] border border-black/5 bg-card p-4 md:grid-cols-2"
-      onSubmit={form.handleSubmit((values) => {
+      onSubmit={form.handleSubmit(async (values) => {
         const result = onCreate(values);
         if (!result.ok) {
           toast.error(result.error);
           return;
         }
+        if (result.saved && !(await result.saved)) return;
         toast.success("Task assigned.");
         form.reset({ ...values, title: "", dueDate: "" });
       })}
@@ -121,7 +122,7 @@ function ScheduleRow({
   projects: { id: string; code: string }[];
   people: string[];
   notes: WorkComment[];
-  onSave: (id: string, input: { projectId: string; assignee: string; dueDate: string; priority: TaskPriority }) => { ok: true } | { ok: false; error: string };
+  onSave: (id: string, input: { projectId: string; assignee: string; dueDate: string; priority: TaskPriority }) => { ok: true; saved?: Promise<boolean> } | { ok: false; error: string };
   onStatus: (id: string, status: TaskStatus) => void;
 }) {
   const [projectId, setProjectId] = useState(task.projectId);
@@ -160,10 +161,11 @@ function ScheduleRow({
       <Button
         type="button"
         size="sm"
-        onClick={() => {
+        onClick={async () => {
           const result = onSave(task.id, { projectId, assignee, dueDate, priority });
-          if (!result.ok) toast.error(result.error);
-          else toast.success("Task updated.");
+          if (!result.ok) { toast.error(result.error); return; }
+          if (result.saved && !(await result.saved)) return;
+          toast.success("Task updated.");
         }}
       >
         Save

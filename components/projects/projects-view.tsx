@@ -64,12 +64,13 @@ export function ProjectsView() {
 
   const viewing = data.projects.find((project) => project.id === viewId) ?? null;
 
-  function save(values: ProjectFormValues) {
+  async function save(values: ProjectFormValues) {
     const result = editor === "new" ? data.createProject(values) : editor ? data.updateProject(editor.id, values) : { ok: false as const, error: "Nothing to save." };
     if (!result.ok) {
       setFormError(result.error);
       return;
     }
+    if (result.saved && !(await result.saved)) return;
     toast.success(editor === "new" ? "Project created in this preview." : "Project updated in this preview.");
     setEditor(null);
     setFormError(null);
@@ -90,12 +91,13 @@ export function ProjectsView() {
             managers={managers}
             serverError={formError ?? params.get("error")}
             onCancel={() => { window.location.assign("/admin/projects"); }}
-            onSubmit={(values) => {
+            onSubmit={async (values) => {
               const result = data.createProject(values);
               if (!result.ok) {
                 setFormError(result.error);
                 return;
               }
+              if (result.saved && !(await result.saved)) return;
               toast.success("Project created in this preview.");
               setFormError(null);
               setSaved(true);
@@ -249,9 +251,10 @@ export function ProjectsView() {
         body={pendingDelete ? `${pendingDelete.name} will be removed from this preview. Assigned people will be unassigned, and its tasks will be removed.` : ""}
         confirmLabel="Delete project"
         onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!pendingDelete) return;
-          data.deleteProject(pendingDelete.id);
+          const saved = data.deleteProject(pendingDelete.id);
+          if (saved && !(await saved)) return;
           toast.success("Project deleted from this preview.");
           setPendingDelete(null);
         }}

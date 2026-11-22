@@ -3,6 +3,7 @@ import { z } from "zod";
 import { applyAction } from "@/lib/server/portal-store";
 import { readState } from "@/lib/server/memory";
 import { applySessionCookie, assertSameOrigin, checkLoginRateLimit, createSessionForUser, portalHome, PORTAL_ROLE, setUserPasswordHash } from "@/lib/server/auth";
+import { PersistenceError } from "@/lib/server/mongo";
 import { verifySignupOtp } from "@/lib/server/otp";
 import { nextId } from "@/lib/utils";
 import type { UserAccount } from "@/types";
@@ -34,7 +35,18 @@ export async function POST(request: Request) {
   if (!limit.ok) {
     return NextResponse.json({ ok: false, error: `Too many attempts. Try again in ${limit.retryAfterSeconds}s.` }, { status: 429 });
   }
-  const verified = await verifySignupOtp(challengeId, otp, portal);
+  let verified: Awaited<ReturnType<typeof verifySignupOtp>>;
+  try {
+    verified = await verifySignupOtp(challengeId, otp, portal);
+  } catch (error) {
+    if (error instanceof PersistenceError) {
+      return NextResponse.json(
+        { ok: false, error: "The verification could not be saved. Try again." },
+        { status: 503 },
+      );
+    }
+    throw error;
+  }
   if (!verified.ok) {
     return NextResponse.json({ ok: false, error: verified.error }, { status: verified.status });
   }
@@ -61,30 +73,40 @@ export async function POST(request: Request) {
     status: "active" as const,
   };
 
-  await applyAction({
-    type: "create-user",
-    input: userInput,
-    stamp: {
+  try {
+    await applyAction({
+      type: "create-user",
+      input: userInput,
+      stamp: {
+        id,
+        at: now,
+        notificationId: `ntf-${id}`,
+        actorId: id,
+        actorName: `${ch.firstName} ${ch.lastName}`.trim(),
+        actorRole: role,
+      },
+    });
+
+    await setUserPasswordHash(id, email, ch.passwordHash);
+
+    const created: UserAccount = {
+      ...userInput,
+      projectId: null,
       id,
-      at: now,
-      notificationId: `ntf-${id}`,
-      actorId: id,
-      actorName: `${ch.firstName} ${ch.lastName}`.trim(),
-      actorRole: role,
-    },
-  });
+      registeredAt: now.slice(0, 10),
+    };
 
-  await setUserPasswordHash(id, email, ch.passwordHash);
-
-  const created: UserAccount = {
-    ...userInput,
-    projectId: null,
-    id,
-    registeredAt: now.slice(0, 10),
-  };
-
-  const session = await createSessionForUser(portal, created);
-  const response = NextResponse.json({ ok: true, redirectTo: portalHome(portal) });
-  applySessionCookie(response, portal, session.token);
-  return response;
+    const session = await createSessionForUser(portal, created);
+    const response = NextResponse.json({ ok: true, redirectTo: portalHome(portal) });
+    applySessionCookie(response, portal, session.token);
+    return response;
+  } catch (error) {
+    if (error instanceof PersistenceError) {
+      return NextResponse.json(
+        { ok: false, error: "Your account could not be saved. Try again." },
+        { status: 503 },
+      );
+    }
+    throw error;
+  }
 }

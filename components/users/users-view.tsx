@@ -60,25 +60,27 @@ export function UsersView() {
   });
   const viewing = data.users.find((user) => user.id === viewId) ?? null;
 
-  function save(values: UserFormValues) {
+  async function save(values: UserFormValues) {
     if (!editor) return;
     const result = data.updateUser(editor.id, values);
     if (!result.ok) {
       setFormError(result.error);
       return;
     }
+    if (result.saved && !(await result.saved)) return;
     toast.success("User updated.");
     setEditor(null);
     setFormError(null);
   }
 
-  function toggleStatus(user: UserAccount) {
+  async function toggleStatus(user: UserAccount) {
     const next = user.status === "active" ? "inactive" : "active";
     const result = data.setUserStatus(user.id, next);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
+    if (result.saved && !(await result.saved)) return;
     toast.success(next === "active" ? "Account activated." : "Account deactivated.");
   }
 
@@ -199,11 +201,12 @@ export function UsersView() {
         body={pendingDelete ? `${fullName(pendingDelete)} will be removed from this preview. Project managers still assigned to a project cannot be deleted.` : ""}
         confirmLabel="Delete user"
         onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!pendingDelete) return;
           const result = data.deleteUser(pendingDelete.id);
-          if (!result.ok) toast.error(result.error);
-          else toast.success("User deleted from this preview.");
+          if (!result.ok) { toast.error(result.error); return; }
+          if (result.saved && !(await result.saved)) return;
+          toast.success("User deleted from this preview.");
           setPendingDelete(null);
         }}
       />

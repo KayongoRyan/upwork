@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
+import { persistOr } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 import { employeeSchema } from "@/lib/validations/schemas";
 
@@ -40,10 +41,19 @@ export async function POST(request: Request) {
     return NextResponse.redirect(back, 303);
   }
   const id = nextId("act");
-  await applyPortalAction("administrator", {
-    type: "create-employee",
-    input: parsed.data,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
-  });
-  return NextResponse.redirect(back, 303);
+  return persistOr(
+    async () => {
+      await applyPortalAction("administrator", {
+        type: "create-employee",
+        input: parsed.data,
+        stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
+      });
+      return NextResponse.redirect(back, 303);
+    },
+    () => {
+      back.searchParams.set("register", "1");
+      back.searchParams.set("error", "The employee could not be saved. Try again.");
+      return NextResponse.redirect(back, 303);
+    },
+  );
 }

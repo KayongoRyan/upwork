@@ -348,4 +348,10 @@ export type EngineerReportInput = Pick<
   "projectId" | "engineerId" | "periodStart" | "periodEnd" | "progress" | "summary" | "issues"
 > & { photos?: ReportPhoto[] };
 
-export type ActionResult = { ok: true } | { ok: false; error: string };
+/**
+ * Result of a client-side write. `saved` resolves once the server has persisted
+ * the change, so callers can hold their success message until it is real.
+ */
+export type ActionResult =
+  | { ok: true; saved?: Promise<boolean> }
+  | { ok: false; error: string };

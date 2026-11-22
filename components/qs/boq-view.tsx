@@ -57,7 +57,7 @@ export function QsBoq() {
   );
 }
 
-function AddLine({ projectId, onAdd }: { projectId: string; onAdd: (input: Omit<BoqItem, "id">) => { ok: true } | { ok: false; error: string } }) {
+function AddLine({ projectId, onAdd }: { projectId: string; onAdd: (input: Omit<BoqItem, "id">) => { ok: true; saved?: Promise<boolean> } | { ok: false; error: string } }) {
   const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
   const [unit, setUnit] = useState<string>(boqUnits[0]);
@@ -68,7 +68,7 @@ function AddLine({ projectId, onAdd }: { projectId: string; onAdd: (input: Omit<
   return (
     <form
       className="grid gap-3 rounded-[22px] border border-black/5 bg-card p-4 sm:grid-cols-2 lg:grid-cols-6"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault();
         const result = onAdd({
           projectId,
@@ -79,15 +79,14 @@ function AddLine({ projectId, onAdd }: { projectId: string; onAdd: (input: Omit<
           actualQty: Number(actualQty),
           unitRate: Number(unitRate),
         });
-        if (!result.ok) toast.error(result.error);
-        else {
-          toast.success("Line added. Project expenditure now includes it.");
-          setCode("");
-          setDescription("");
-          setEstimatedQty("0");
-          setActualQty("0");
-          setUnitRate("0");
-        }
+        if (!result.ok) { toast.error(result.error); return; }
+        if (result.saved && !(await result.saved)) return;
+        toast.success("Line added. Project expenditure now includes it.");
+        setCode("");
+        setDescription("");
+        setEstimatedQty("0");
+        setActualQty("0");
+        setUnitRate("0");
       }}
     >
       <Label>Code<Input className="mt-1" value={code} onChange={(event) => setCode(event.target.value)} required /></Label>
@@ -114,8 +113,8 @@ function LineRow({
   onRemove,
 }: {
   item: BoqItem;
-  onSave: (id: string, input: Omit<BoqItem, "id">) => { ok: true } | { ok: false; error: string };
-  onRemove: (id: string) => { ok: true } | { ok: false; error: string };
+  onSave: (id: string, input: Omit<BoqItem, "id">) => { ok: true; saved?: Promise<boolean> } | { ok: false; error: string };
+  onRemove: (id: string) => { ok: true; saved?: Promise<boolean> } | { ok: false; error: string };
 }) {
   const [estimatedQty, setEstimatedQty] = useState(String(item.estimatedQty));
   const [actualQty, setActualQty] = useState(String(item.actualQty));
@@ -147,10 +146,11 @@ function LineRow({
             type="button"
             size="sm"
             variant="navy"
-            onClick={() => {
+            onClick={async () => {
               const result = onSave(item.id, draft);
-              if (!result.ok) toast.error(result.error);
-              else toast.success("Saved. Project expenditure was recalculated.");
+              if (!result.ok) { toast.error(result.error); return; }
+              if (result.saved && !(await result.saved)) return;
+              toast.success("Saved. Project expenditure was recalculated.");
             }}
           >
             Save
@@ -159,10 +159,11 @@ function LineRow({
             type="button"
             size="sm"
             variant="outline"
-            onClick={() => {
+            onClick={async () => {
               const result = onRemove(item.id);
-              if (!result.ok) toast.error(result.error);
-              else toast.success("Line removed. Project expenditure was recalculated.");
+              if (!result.ok) { toast.error(result.error); return; }
+              if (result.saved && !(await result.saved)) return;
+              toast.success("Line removed. Project expenditure was recalculated.");
             }}
           >
             Remove

@@ -2,7 +2,7 @@ import { readState } from "@/lib/server/memory";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { readCostEdits } from "@/lib/server/cost-lines";
-import { redirectTo } from "@/lib/server/redirect";
+import { persistOr, redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -23,11 +23,16 @@ export async function POST(request: Request) {
   const parsed = readCostEdits(form, rows);
   if (!parsed.ok) return redirectTo(request, "/pm/costs", { error: parsed.error });
   const id = nextId("act");
-  await applyPortalAction("project_manager", {
-    type: "revise-cost-bill",
-    projectId,
-    lines: parsed.lines,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
-  });
-  return redirectTo(request, "/pm/costs", { edited: project.code });
+  return persistOr(
+    async () => {
+      await applyPortalAction("project_manager", {
+        type: "revise-cost-bill",
+        projectId,
+        lines: parsed.lines,
+        stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
+      });
+      return redirectTo(request, "/pm/costs", { edited: project.code });
+    },
+    () => redirectTo(request, "/pm/costs", { error: "The cost lines could not be saved. Try again." }),
+  );
 }

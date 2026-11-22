@@ -1,6 +1,6 @@
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
-import { redirectTo } from "@/lib/server/redirect";
+import { persistOr, redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -22,12 +22,17 @@ export async function POST(request: Request) {
     return redirectTo(request, "/pm", { ...back, error: "Click a date on the calendar." }, "calendar");
   }
   const id = nextId("evt");
-  await applyPortalAction("project_manager", {
-    type: "add-calendar-event",
-    title,
-    kind,
-    date,
-    stamp: { id, at: new Date().toISOString() },
-  });
-  return redirectTo(request, "/pm", { period, day: date, added: title }, "calendar");
+  return persistOr(
+    async () => {
+      await applyPortalAction("project_manager", {
+        type: "add-calendar-event",
+        title,
+        kind,
+        date,
+        stamp: { id, at: new Date().toISOString() },
+      });
+      return redirectTo(request, "/pm", { period, day: date, added: title }, "calendar");
+    },
+    () => redirectTo(request, "/pm", { ...back, error: "The event could not be saved. Try again." }, "calendar"),
+  );
 }

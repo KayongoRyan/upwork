@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/server/auth";
 import { applyPortalAction, readState } from "@/lib/server/portal-store";
-import { redirectTo } from "@/lib/server/redirect";
+import { redirectTo, persistOr } from "@/lib/server/redirect";
 import { createInquiry } from "@/lib/server/inquiries";
 import {
   canUseInMemoryFallback,
@@ -205,16 +205,21 @@ export async function POST(request: Request) {
     .join("\n");
 
   const stamp = { id: inquiry.id, at: inquiry.createdAt, notificationId: `ntf-${inquiry.id}` };
-  await applyPortalAction("administrator", {
-    type: "vertexa-inquiry",
-    serviceName,
-    clientName: name,
-    message: detailLines,
-    recipientId,
-    stamp,
-  });
+  return persistOr(
+    async () => {
+      await applyPortalAction("administrator", {
+        type: "vertexa-inquiry",
+        serviceName,
+        clientName: name,
+        message: detailLines,
+        recipientId,
+        stamp,
+      });
 
-  return asJson
-    ? NextResponse.json({ ok: true, inquiry: { id: inquiry.id }, fallback: true }, { status: 201 })
-    : redirectTo(request, returnTo, { saved: "1" }, inquiryHash(inquiry.id));
+      return asJson
+        ? NextResponse.json({ ok: true, inquiry: { id: inquiry.id }, fallback: true }, { status: 201 })
+        : redirectTo(request, returnTo, { saved: "1" }, inquiryHash(inquiry.id));
+    },
+    () => fail("unavailable", 503),
+  );
 }

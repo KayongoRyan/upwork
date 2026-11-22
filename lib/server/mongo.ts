@@ -27,6 +27,36 @@ export interface MongoRuntime {
   dbs: Record<PortalKey, Db>;
 }
 
+/**
+ * Thrown when a write cannot be committed. Callers must surface this as a
+ * failure instead of reporting the operation as successful.
+ */
+export class PersistenceError extends Error {
+  constructor(readonly detail?: unknown) {
+    super("The database did not accept the change.");
+    this.name = "PersistenceError";
+  }
+}
+
+/**
+ * Production deployments must persist writes. Development keeps the in-memory
+ * preview working when MongoDB has not been started yet.
+ */
+export function requirePersistenceInProduction(runtime: MongoRuntime | null): MongoRuntime | null {
+  if (!runtime && process.env.NODE_ENV === "production") {
+    throw new PersistenceError("database-unavailable");
+  }
+  return runtime;
+}
+
+/** Same rule for modules that resolve a collection directly instead of a runtime. */
+export function requireCollectionInProduction<T>(collection: T | null): T | null {
+  if (!collection && process.env.NODE_ENV === "production") {
+    throw new PersistenceError("database-unavailable");
+  }
+  return collection;
+}
+
 interface MongoGlobal {
   __cpmisMongoRuntime?: MongoRuntime | null;
   __cpmisMongoConnecting?: Promise<MongoRuntime | null>;

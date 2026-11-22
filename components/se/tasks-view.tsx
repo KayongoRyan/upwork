@@ -33,18 +33,19 @@ export function SeTasks() {
   );
 }
 
-function TaskCard({ task, onSave }: { task: TaskItem; onSave: (id: string, progress: number, status: TaskStatus) => { ok: true } | { ok: false; error: string } }) {
+function TaskCard({ task, onSave }: { task: TaskItem; onSave: (id: string, progress: number, status: TaskStatus) => { ok: true; saved?: Promise<boolean> } | { ok: false; error: string } }) {
   const [progress, setProgress] = useState(task.progress);
   const [status, setStatus] = useState<TaskStatus>(task.status);
 
   return (
     <form
       className="rounded-[22px] border border-black/5 bg-card p-4 sm:p-5"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault();
         const result = onSave(task.id, progress, status);
-        if (!result.ok) toast.error(result.error);
-        else toast.success("Progress saved.");
+        if (!result.ok) { toast.error(result.error); return; }
+        if (result.saved && !(await result.saved)) return;
+        toast.success("Progress saved.");
       }}
     >
       <div className="flex items-start justify-between gap-3">

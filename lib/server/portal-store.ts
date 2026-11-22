@@ -25,7 +25,13 @@
 import type { Db, Document } from "mongodb";
 import { adminReducer, type AdminAction } from "@/lib/data/reducer";
 import { createSeedState } from "@/lib/mock-data/seed";
-import { getMongoRuntime, portalDatabaseName, type MongoRuntime } from "@/lib/server/mongo";
+import {
+  getMongoRuntime,
+  PersistenceError,
+  portalDatabaseName,
+  requirePersistenceInProduction,
+  type MongoRuntime,
+} from "@/lib/server/mongo";
 import { cpmisPortalIds, type CpmisPortalId } from "@/lib/portals";
 import type { AdminState, AppNotification, OrgSettings, SessionUser } from "@/types";
 
@@ -172,6 +178,8 @@ export function portalCanApply(portal: PortalKey, action: AdminAction): boolean 
 interface StoreGlobal {
   __cpmisPortalState?: AdminState;
   __cpmisPortalReady?: boolean;
+  /** True while the cached state is the development-only in-memory fallback. */
+  __cpmisPortalMemory?: boolean;
   __cpmisPortalInit?: Promise<AdminState>;
   __cpmisPortalQueue?: Promise<unknown>;
 }
@@ -361,6 +369,7 @@ async function initialize(): Promise<AdminState> {
   const runtime = await getMongoRuntime();
   if (!runtime) {
     store.__cpmisPortalState ??= createSeedState();
+    store.__cpmisPortalMemory = true;
     return store.__cpmisPortalState;
   }
 
@@ -368,6 +377,7 @@ async function initialize(): Promise<AdminState> {
   if (loaded) {
     store.__cpmisPortalState = loaded;
     store.__cpmisPortalReady = true;
+    store.__cpmisPortalMemory = false;
     return loaded;
   }
 
@@ -376,6 +386,7 @@ async function initialize(): Promise<AdminState> {
   await markSeeded(runtime.dbs.administrator);
   store.__cpmisPortalState = seed;
   store.__cpmisPortalReady = true;
+  store.__cpmisPortalMemory = false;
   console.info(
     `[portal-store] Seeded ${portalDatabaseName("administrator")}, ${portalDatabaseName("project_manager")}, ` +
       `${portalDatabaseName("site_engineer")}, ${portalDatabaseName("quantity_surveyor")}.`,
@@ -384,7 +395,17 @@ async function initialize(): Promise<AdminState> {
 }
 
 async function ensureState(): Promise<AdminState> {
-  if (store.__cpmisPortalReady && store.__cpmisPortalState) return store.__cpmisPortalState;
+  if (store.__cpmisPortalReady && store.__cpmisPortalState) {
+    if (!store.__cpmisPortalMemory) return store.__cpmisPortalState;
+    // A development fallback was seeded before MongoDB became reachable.
+    // Reload from the database so a later write cannot overwrite persisted data
+    // with the stale in-memory copy.
+    const runtime = await getMongoRuntime();
+    if (!runtime) return store.__cpmisPortalState;
+    store.__cpmisPortalReady = false;
+    store.__cpmisPortalState = undefined;
+    store.__cpmisPortalMemory = false;
+  }
   if (!store.__cpmisPortalInit) {
     store.__cpmisPortalInit = initialize().finally(() => {
       store.__cpmisPortalInit = undefined;
@@ -472,19 +493,34 @@ export function scopeStateForSession(state: AdminState, session: SessionUser): A
 }
 
 async function applyNow(action: AdminAction): Promise<AdminState> {
-  const state = await ensureState();
+  let state: AdminState;
+  try {
+    state = await ensureState();
+  } catch (error) {
+    console.error("[portal-store] Could not load the workspace before the action.", error);
+    throw new PersistenceError(error);
+  }
   const next = action.type === "reset" ? createSeedState() : adminReducer(state, action);
 
-  const runtime = await getMongoRuntime();
+  // In production a missing database is a failed write, not a preview fallback.
+  const runtime = requirePersistenceInProduction(await getMongoRuntime());
   if (runtime) {
     try {
       await persistState(runtime, state, next);
       if (action.type === "reset") await markSeeded(runtime.dbs.administrator);
     } catch (error) {
-      console.error("[portal-store] Could not persist the action; keeping it in memory.", error);
+      console.error("[portal-store] Could not persist the action.", error);
+      // Drop the cached state so the next read reflects what the database
+      // actually holds instead of a change that was never committed.
+      store.__cpmisPortalReady = false;
+      store.__cpmisPortalState = undefined;
+      store.__cpmisPortalMemory = false;
+      throw new PersistenceError(error);
     }
   }
 
+  // Only publish the new state after it has been persisted (or the preview is
+  // intentionally running without MongoDB in development).
   store.__cpmisPortalState = next;
   return next;
 }

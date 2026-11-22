@@ -1,7 +1,7 @@
 import { readState } from "@/lib/server/memory";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
-import { redirectTo } from "@/lib/server/redirect";
+import { persistOr, redirectTo } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 import { engineerReportSchema } from "@/lib/validations/schemas";
 
@@ -32,11 +32,16 @@ export async function POST(request: Request) {
   if (!project) return redirectTo(request, "/pm/reports", { error: "Choose one of your projects." });
   if (!engineer) return redirectTo(request, "/pm/reports", { error: "Choose an active site engineer." });
   const id = nextId("act");
-  await applyPortalAction("project_manager", {
-    type: "submit-report",
-    input: parsed.data,
-    toAdmin: true,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
-  });
-  return redirectTo(request, "/pm/reports", { sent: state.settings.profileName });
+  return persistOr(
+    async () => {
+      await applyPortalAction("project_manager", {
+        type: "submit-report",
+        input: parsed.data,
+        toAdmin: true,
+        stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
+      });
+      return redirectTo(request, "/pm/reports", { sent: state.settings.profileName });
+    },
+    () => redirectTo(request, "/pm/reports", { error: "The report could not be saved. Try again." }),
+  );
 }

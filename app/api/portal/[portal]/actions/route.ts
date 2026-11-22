@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { AdminAction } from "@/lib/data/reducer";
 import { destroySessionsForUser, getSessionUser, removeUserCredential, resetDemoAuth, setUserPassword, verifyCsrf } from "@/lib/server/auth";
+import { PersistenceError } from "@/lib/server/mongo";
 import { PortalActionError, applyPortalAction, isPortalKey, scopeStateForSession } from "@/lib/server/portal-store";
 
 export const runtime = "nodejs";
@@ -83,6 +84,10 @@ export async function POST(request: Request, context: { params: Promise<{ portal
         { status: 403 },
       );
     }
-    return NextResponse.json({ ok: false, error: "action-failed" }, { status: 400 });
+    if (error instanceof PersistenceError) {
+      return NextResponse.json({ ok: false, error: "persistence-failed" }, { status: 503 });
+    }
+    console.error("[portal-actions] Action failed.", error);
+    return NextResponse.json({ ok: false, error: "action-failed" }, { status: 500 });
   }
 }

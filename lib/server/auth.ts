@@ -2,7 +2,11 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
-import { getMongoRuntime, type PortalKey } from "@/lib/server/mongo";
+import {
+  getMongoRuntime,
+  requireCollectionInProduction,
+  type PortalKey,
+} from "@/lib/server/mongo";
 import { readState } from "@/lib/server/portal-store";
 import type { SessionUser, UserAccount, UserRole } from "@/types";
 
@@ -237,7 +241,7 @@ export async function setUserPasswordHash(userId: string, email: string, passwor
     passwordHash,
     updatedAt: new Date().toISOString(),
   };
-  const collection = await credentialsCollection();
+  const collection = requireCollectionInProduction(await credentialsCollection());
   if (collection) {
     await collection.replaceOne({ _id: record._id }, record, { upsert: true });
   } else {
@@ -247,7 +251,7 @@ export async function setUserPasswordHash(userId: string, email: string, passwor
 }
 
 export async function removeUserCredential(userId: string): Promise<void> {
-  const collection = await credentialsCollection();
+  const collection = requireCollectionInProduction(await credentialsCollection());
   if (collection) {
     await collection.deleteOne({ userId });
   } else {
@@ -332,7 +336,7 @@ export async function createSessionForUser(portal: PortalKey, user: UserAccount)
     lastSeenAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
   };
-  const collection = await sessionsCollection(portal);
+  const collection = requireCollectionInProduction(await sessionsCollection(portal));
   if (collection) {
     await collection.insertOne(record);
   } else {
@@ -404,7 +408,7 @@ async function destroySessionByHash(portal: PortalKey, tokenHash: string) {
 
 export async function destroySessionsForUser(userId: string): Promise<void> {
   for (const portal of Object.keys(SESSION_COOKIE) as PortalKey[]) {
-    const collection = await sessionsCollection(portal);
+    const collection = requireCollectionInProduction(await sessionsCollection(portal));
     if (collection) {
       await collection.deleteMany({ userId });
     } else {
@@ -504,10 +508,10 @@ export async function resetDemoAuth(): Promise<void> {
   mem.credentials.clear();
   for (const portal of Object.keys(mem.sessions) as PortalKey[]) mem.sessions[portal].clear();
   mem.seeded = false;
-  const collection = await credentialsCollection();
+  const collection = requireCollectionInProduction(await credentialsCollection());
   if (collection) await collection.deleteMany({});
   for (const portal of Object.keys(SESSION_COOKIE) as PortalKey[]) {
-    const col = await sessionsCollection(portal);
+    const col = requireCollectionInProduction(await sessionsCollection(portal));
     if (col) await col.deleteMany({});
   }
   await ensureCredentialsSeeded();

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { clearSessionCookie, getSessionUser, portalHome, signOut, verifyCsrf } from "@/lib/server/auth";
+import { PersistenceError } from "@/lib/server/mongo";
 import { isPortalKey, type PortalKey } from "@/lib/server/portal-store";
 
 export const runtime = "nodejs";
@@ -35,7 +36,17 @@ export async function POST(request: Request) {
     if (csrf) return csrf;
   }
 
-  await signOut(portal);
+  try {
+    await signOut(portal);
+  } catch (error) {
+    if (error instanceof PersistenceError) {
+      return NextResponse.json(
+        { ok: false, error: "The session could not be cleared. Try again." },
+        { status: 503 },
+      );
+    }
+    throw error;
+  }
   const accept = request.headers.get("accept") ?? "";
   const loginPath = `${portalHome(portal)}/login`;
   if (accept.includes("application/json")) {

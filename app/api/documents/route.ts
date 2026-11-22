@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
+import { persistOr } from "@/lib/server/redirect";
 import { nextId } from "@/lib/utils";
 import type { DocumentCategory, RevisionStatus, UserRole } from "@/types";
 
@@ -49,36 +50,41 @@ export async function POST(request: Request) {
     .filter((value): value is string => typeof value === "string" && roles.has(value as UserRole)) as UserRole[];
   const bytes = Buffer.from(await file.arrayBuffer());
   const id = nextId("act");
-  await applyPortalAction("administrator", {
-    type: "register-document",
-    document: {
-      projectId,
-      number,
-      title,
-      category: category as DocumentCategory,
-      discipline,
-      ownerId,
-      access,
+  return persistOr(
+    async () => {
+      await applyPortalAction("administrator", {
+        type: "register-document",
+        document: {
+          projectId,
+          number,
+          title,
+          category: category as DocumentCategory,
+          discipline,
+          ownerId,
+          access,
+        },
+        revision: {
+          fileName: file.name || "upload",
+          fileType: file.type || "application/octet-stream",
+          size: file.size,
+          note: String(form.get("note") ?? "").trim(),
+          status: status as RevisionStatus,
+          uploadedBy: __session.id,
+          dataUrl: `data:${file.type || "application/octet-stream"};base64,${bytes.toString("base64")}`,
+        },
+        stamp: {
+          id,
+          at: new Date().toISOString(),
+          notificationId: `ntf-${id}`,
+          actorId: __session.id,
+          actorName: `${__session.firstName} ${__session.lastName}`,
+          actorRole: __session.role,
+        },
+      });
+      const done = new URL("/admin/documents", request.url);
+      done.searchParams.set("doc", id);
+      return NextResponse.redirect(done, 303);
     },
-    revision: {
-      fileName: file.name || "upload",
-      fileType: file.type || "application/octet-stream",
-      size: file.size,
-      note: String(form.get("note") ?? "").trim(),
-      status: status as RevisionStatus,
-      uploadedBy: __session.id,
-      dataUrl: `data:${file.type || "application/octet-stream"};base64,${bytes.toString("base64")}`,
-    },
-    stamp: {
-      id,
-      at: new Date().toISOString(),
-      notificationId: `ntf-${id}`,
-      actorId: __session.id,
-      actorName: `${__session.firstName} ${__session.lastName}`,
-      actorRole: __session.role,
-    },
-  });
-  const done = new URL("/admin/documents", request.url);
-  done.searchParams.set("doc", id);
-  return NextResponse.redirect(done, 303);
+    () => fail("The document could not be saved. Try again."),
+  );
 }

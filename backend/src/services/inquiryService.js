@@ -261,7 +261,8 @@ export async function updateInquiry(id, body) {
   }
 
   const db = await ensureDb();
-  await db.collection("inquiries").updateOne({ _id: String(id) }, update);
+  const result = await db.collection("inquiries").updateOne({ _id: String(id) }, update);
+  if (result.matchedCount === 0) return { ok: false, error: "not_found" };
   const updated = await getInquiry(id);
   return { ok: true, inquiry: updated };
 }
