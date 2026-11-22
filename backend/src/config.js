@@ -3,29 +3,73 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+// Load backend/.env first, then repo-root .env, then process env wins.
 dotenv.config({ path: path.resolve(here, "../.env") });
+dotenv.config({ path: path.resolve(here, "../../.env") });
 dotenv.config();
 
-const isProduction = process.env.NODE_ENV === "production";
+const nodeEnv = process.env.NODE_ENV ?? "development";
+const isProduction = nodeEnv === "production";
+
+function parseBool(value, fallback) {
+  if (value === undefined || value === "") return fallback;
+  const v = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(v)) return true;
+  if (["0", "false", "no", "off"].includes(v)) return false;
+  return fallback;
+}
+
+function parseNumber(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+function parseCsv(value, fallback = []) {
+  const raw = (value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
+  return raw.length > 0 ? raw : fallback;
+}
+
+const corsOrigins = parseCsv(
+  process.env.CORS_ORIGINS,
+  isProduction ? [] : ["http://localhost:3030", "http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003"],
+);
+
+const apiKey = process.env.VERTEXA_API_KEY?.trim() || process.env.API_KEY?.trim() || (isProduction ? "" : "dev-vertexa-api-key");
 
 export const config = {
-  port: Number(process.env.PORT ?? 4000),
+  nodeEnv,
+  isProduction,
+  port: parseNumber(process.env.PORT, 4000),
+  trustProxy: parseBool(process.env.TRUST_PROXY, isProduction),
   apiVersion: "v1",
   apiBasePath: "/api/v1",
-  mongoUri: process.env.MONGODB_URI ?? "mongodb://127.0.0.1:27017",
-  mongoDb: process.env.MONGODB_DB ?? "vertexa_cpmis",
-  corsOrigins: (process.env.CORS_ORIGINS ?? "http://localhost:3030,http://localhost:3000")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean),
+  mongoUri: process.env.MONGODB_URI?.trim() || "mongodb://127.0.0.1:27017",
+  mongoDb: process.env.MONGODB_DB?.trim() || "vertexa_cpmis",
+  corsOrigins,
   /** Shared secret for admin routes. BFF sends it as X-API-Key or Bearer token. */
-  apiKey:
-    process.env.VERTEXA_API_KEY?.trim() ||
-    process.env.API_KEY?.trim() ||
-    (isProduction ? "" : "dev-vertexa-api-key"),
+  apiKey,
   /** Public inquiry creation (POST /api/v1/inquiries). */
   inquiryRateLimit: {
-    windowMs: Number(process.env.INQUIRY_RATE_LIMIT_WINDOW_MS ?? 10 * 60 * 1000),
-    max: Number(process.env.INQUIRY_RATE_LIMIT_MAX ?? 20),
+    windowMs: parseNumber(process.env.INQUIRY_RATE_LIMIT_WINDOW_MS, 10 * 60 * 1000),
+    max: parseNumber(process.env.INQUIRY_RATE_LIMIT_MAX, 20),
   },
 };
+
+export function validateProductionConfig() {
+  if (!isProduction) return [];
+  const missing = [];
+  if (!config.mongoUri) missing.push("MONGODB_URI");
+  if (!config.apiKey) missing.push("VERTEXA_API_KEY or API_KEY");
+  if (config.corsOrigins.length === 0) missing.push("CORS_ORIGINS");
+  if (config.corsOrigins.some((o) => /localhost|127\.0\.0\.1/i.test(o))) missing.push("CORS_ORIGINS (must not include localhost in production)");
+  if (parseBool(process.env.OTP_DEMO_FALLBACK, false)) missing.push("OTP_DEMO_FALLBACK must be false in production");
+  return missing;
+}
+
+export function assertProductionConfig() {
+  const problems = validateProductionConfig();
+  if (problems.length > 0) {
+    const message = `Invalid production configuration: ${problems.join("; ")}`;
+    throw new Error(message);
+  }
+}

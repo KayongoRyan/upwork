@@ -16,7 +16,7 @@ const portals = [
   { id: "vertexa", label: "Vertexa Group", port: 3030, home: "/vertexa" },
 ];
 
-const hostname = "localhost";
+const hostname = process.env.HOST?.trim() || "localhost";
 const step = 10;
 const attempts = 50;
 const app = next({ dev, hostname, turbopack: dev });

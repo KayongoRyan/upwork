@@ -4,12 +4,13 @@ type LogMeta = Record<string, unknown>;
 
 function serializeError(error: unknown) {
   if (error instanceof Error) {
+    const e = error as unknown as Record<string, unknown>;
     return {
       name: error.name,
       message: error.message,
       stack: process.env.NODE_ENV === "production" ? undefined : error.stack,
-      ...(typeof (error as Record<string, unknown>).code === "string" ? { code: (error as Record<string, unknown>).code } : {}),
-      ...(typeof (error as Record<string, unknown>).status === "number" ? { status: (error as Record<string, unknown>).status } : {}),
+      ...(typeof e.code === "string" ? { code: e.code } : {}),
+      ...(typeof e.status === "number" ? { status: e.status } : {}),
     };
   }
   return { message: String(error) };

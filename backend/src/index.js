@@ -1,6 +1,6 @@
 import cors from "cors";
 import express from "express";
-import { config } from "./config.js";
+import { config, assertProductionConfig } from "./config.js";
 import { closeDb, connectDb, mongoStartupHelp } from "./db.js";
 import { requestContext } from "./middleware/requestContext.js";
 import { requireDb } from "./middleware/requireDb.js";
@@ -40,6 +40,8 @@ for (const method of ["get", "post", "put", "patch", "delete", "all", "use"]) {
   };
 }
 
+assertProductionConfig();
+
 const app = express();
 for (const method of ["get", "post", "put", "patch", "delete", "all", "use"]) {
   const original = app[method];
@@ -48,6 +50,7 @@ for (const method of ["get", "post", "put", "patch", "delete", "all", "use"]) {
   }
 }
 
+app.set("trust proxy", config.trustProxy);
 app.disable("x-powered-by");
 app.use(requestContext);
 app.use(
