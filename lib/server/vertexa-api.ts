@@ -37,6 +37,8 @@ export type VertexaInquiryPayload = {
   budget: string | null;
   startDate: string | null;
   message: string;
+  /** Resolved by the authenticated BFF; the backend never guesses a person. */
+  recipientId?: string | null;
 };
 
 export type VertexaForwardResult =

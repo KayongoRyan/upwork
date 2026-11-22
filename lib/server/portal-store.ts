@@ -27,7 +27,6 @@ import { adminReducer, type AdminAction } from "@/lib/data/reducer";
 import { createSeedState } from "@/lib/mock-data/seed";
 import { getMongoRuntime, portalDatabaseName, type MongoRuntime } from "@/lib/server/mongo";
 import { cpmisPortalIds, type CpmisPortalId } from "@/lib/portals";
-import { PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID } from "@/lib/utils";
 import type { AdminState, AppNotification, OrgSettings, SessionUser } from "@/types";
 
 export const PORTAL_KEYS = cpmisPortalIds;
@@ -230,17 +229,11 @@ async function syncMonthlyActivity(db: Db, before: unknown, after: unknown) {
 /* -------------------------------------------------------------------------- */
 
 function notificationPortal(item: AppNotification, usersById?: Map<string, { role: string }>): PortalKey {
-  if (item.recipientId && usersById) {
-    const role = usersById.get(item.recipientId)?.role;
+  if (item.recipientId) {
+    const role = usersById?.get(item.recipientId)?.role;
     if (role === "project_manager") return "project_manager";
     if (role === "site_engineer") return "site_engineer";
     if (role === "quantity_surveyor") return "quantity_surveyor";
-    if (role === "administrator") return "administrator";
-  }
-  if (item.recipientId) {
-    if (item.recipientId === PREVIEW_PM_ID) return "project_manager";
-    if (item.recipientId === PREVIEW_SE_ID) return "site_engineer";
-    if (item.recipientId === PREVIEW_QS_ID) return "quantity_surveyor";
     return "administrator";
   }
   if (item.source === "project_manager") return "project_manager";

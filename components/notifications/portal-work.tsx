@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { expenditureFor, formatPercent, lineActual } from "@/lib/boq";
 import { useAdmin } from "@/lib/data/admin-store";
 import { accountStatusLabel, projectStatusLabel, roleLabel, taskStatusLabel } from "@/lib/labels";
-import { formatDate, formatDateTime, formatMoney, fullName, PREVIEW_PM_ID } from "@/lib/utils";
+import { formatDate, formatDateTime, formatMoney, fullName } from "@/lib/utils";
 import type { UserAccount, UserRole, WorkComment, WorkKind } from "@/types";
 
 const reportStatus = { submitted: "Submitted", in_review: "In review", approved: "Approved", rejected: "Rejected" } as const;
@@ -21,7 +21,7 @@ export function PortalWork({ portal, type }: { portal: Portal; type: string }) {
     .filter((user) => user.role === portal)
     .sort((a, b) => Number(b.status === "active") - Number(a.status === "active") || fullName(a).localeCompare(fullName(b)));
   const events = portal === "project_manager" ? (data.calendarEvents ?? []) : [];
-  const calendarManager = data.users.find((user) => user.id === PREVIEW_PM_ID);
+  const calendarManager = data.viewer?.role === "project_manager" ? data.viewer : null;
 
   return (
     <div className="mb-8 space-y-4">

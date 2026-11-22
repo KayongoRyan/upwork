@@ -6,13 +6,15 @@ import { PageHeader } from "@/components/shared/page-header";
 import { useAdmin } from "@/lib/data/admin-store";
 import { navItems, pmNavItems, qsNavItems, seNavItems } from "@/lib/navigation";
 import { searchRecords } from "@/lib/search";
-import { PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID } from "@/lib/utils";
 
 export function SearchResults({ portal }: { portal: "admin" | "pm" | "se" | "qs" }) {
   const query = useSearchParams().get("q")?.trim() ?? "";
   const data = useAdmin();
-  const pmIds = data.projects.filter((project) => project.managerId === PREVIEW_PM_ID).map((project) => project.id);
-  const siteId = data.users.find((user) => user.id === (portal === "se" ? PREVIEW_SE_ID : PREVIEW_QS_ID))?.projectId ?? null;
+  const viewer = data.viewer;
+  const pmIds = portal === "pm" && viewer
+    ? data.projects.filter((project) => project.managerId === viewer.id).map((project) => project.id)
+    : [];
+  const siteId = portal === "se" || portal === "qs" ? viewer?.projectId ?? null : null;
   const projectIds = portal === "admin" ? undefined : portal === "pm" ? pmIds : siteId ? [siteId] : [];
   const pages = portal === "pm" ? pmNavItems : portal === "se" ? seNavItems : portal === "qs" ? qsNavItems : navItems;
   const groups = searchRecords({

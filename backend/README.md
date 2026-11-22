@@ -55,7 +55,7 @@ the Next.js app manages directly — see the root [`README.md`](../README.md#per
 | GET | `/api/v1/inquiries` | admin key | List inquiries (`status`, `search`, `limit`) |
 | GET | `/api/v1/inquiries/:id` | admin key | Get one inquiry |
 | PATCH | `/api/v1/inquiries/:id` | admin key | Update status/recipient/project and append note |
-| GET | `/api/v1/notifications?recipientId=u-pm-2` | admin key | PM inbox |
+| GET | `/api/v1/notifications?recipientId=<user-id>` | admin key | PM inbox |
 | GET | `/api/v1/notifications?audience=admin` | admin key | Admin inbox |
 | PATCH | `/api/v1/notifications/:id/read` | admin key | Mark read |
 
@@ -84,4 +84,4 @@ The Next.js app talks to this API server-side and forwards the admin key from `V
 - **Admin inquiry ops**: `GET/PATCH /api/vertexa/inquiries` and `GET/PATCH /api/vertexa/inquiries/:id` proxy the authenticated admin inquiry routes.
 - **Notifications**: `GET/PATCH /api/vertexa/notifications` proxies the authenticated notification routes (read-through + mark-read/mark-all for admin-audience notices). The root layout seeds initial notices server-side and the provider polls every 10 seconds; the demo workspace still renders if the API is unavailable.
 
-Development defaults `VERTEXA_API_URL` to `http://localhost:4000`. If the API is not running in development (`ECONNREFUSED`), public inquiry create falls back to the in-memory store so the site keeps working, and logs a warning. Timeouts/5xx are reported as `unavailable` rather than retried, because the API may already have stored the inquiry. The PM preview (`u-pm-2`) only receives notices whose backend `recipientId` is `u-pm-2`.
+Development defaults `VERTEXA_API_URL` to `http://localhost:4000`. If the API is not running in development (`ECONNREFUSED`), public inquiry create falls back to the in-memory store so the site keeps working, and logs a warning. Timeouts/5xx are reported as `unavailable` rather than retried, because the API may already have stored the inquiry. The BFF resolves an active project manager from the live CPMIS roster and sends that account id as `recipientId`; when the roster has no active project manager only the administrator notice is created and the lead stays unassigned for triage.
