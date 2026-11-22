@@ -517,6 +517,13 @@ function readUpload(file: File) {
 
 function downloadRevision(item: ProjectDocument, revision: DocumentRevision) {
   const anchor = window.document.createElement("a");
+  if (revision.fileKey) {
+    anchor.href = `/api/documents/file?documentId=${encodeURIComponent(item.id)}&revisionId=${encodeURIComponent(revision.id)}`;
+    anchor.download = revision.fileName;
+    anchor.rel = "noopener";
+    anchor.click();
+    return;
+  }
   if (revision.dataUrl) {
     anchor.href = revision.dataUrl;
     anchor.download = revision.fileName;

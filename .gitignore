@@ -24,6 +24,9 @@ backend/node_modules
 # local MongoDB data (npm run mongo:local)
 .mongo-data/
 
+# local object storage uploads
+data/uploads/
+
 # misc
 .DS_Store
 *.pem
