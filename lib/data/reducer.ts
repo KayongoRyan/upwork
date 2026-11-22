@@ -1,6 +1,6 @@
 import { billLines, expenditureFor, linesActual, parseBoq, sameBill } from "@/lib/boq";
 import { createSeedState } from "@/lib/mock-data/seed";
-import { formatMoney, PREVIEW_ACTOR_ID, PREVIEW_PM_ID } from "@/lib/utils";
+import { formatMoney, PREVIEW_PM_ID } from "@/lib/utils";
 import type {
   ActivityLog,
   ActivityStatus,
@@ -1094,8 +1094,16 @@ function measure(
 }
 
 function managedProject(state: AdminState, projectId: string, managerId?: string) {
-  const owner = managerId || PREVIEW_PM_ID;
-  return state.projects.find((project) => project.id === projectId && project.managerId === owner);
+  if (!managerId) return undefined;
+  const actor = state.users.find((user) => user.id === managerId);
+  const project = state.projects.find((item) => item.id === projectId);
+  if (!project || !actor) return undefined;
+  if (actor.role === "administrator") return project;
+  if (actor.role === "project_manager") return project.managerId === managerId ? project : undefined;
+  if (actor.role === "site_engineer" || actor.role === "quantity_surveyor") {
+    return actor.projectId === projectId ? project : undefined;
+  }
+  return undefined;
 }
 
 function withAdmin(access: ProjectDocument["access"]): ProjectDocument["access"] {
@@ -1117,16 +1125,18 @@ function actorFromStamp(state: AdminState, stamp: Stamp) {
       role: stamp.actorRole ?? user?.role,
     };
   }
-  const user = state.users.find((item) => item.id === PREVIEW_PM_ID);
-  return { id: PREVIEW_PM_ID, name: user ? `${user.firstName} ${user.lastName}` : "Project manager", role: "project_manager" as const };
+  return { id: "unknown", name: stamp.actorName ?? "Unknown user", role: undefined as UserRole | undefined };
 }
 
 function pmActor(state: AdminState, stamp?: Stamp) {
   const actor = stamp ? actorFromStamp(state, stamp) : null;
   if (actor && actor.role === "project_manager") return { id: actor.id, name: actor.name };
-  const user = state.users.find((item) => item.id === (stamp?.actorId ?? PREVIEW_PM_ID));
-  const id = stamp?.actorId ?? PREVIEW_PM_ID;
-  return { id, name: user ? `${user.firstName} ${user.lastName}` : stamp?.actorName ?? "Project manager" };
+  if (stamp?.actorId) {
+    const user = state.users.find((item) => item.id === stamp.actorId);
+    return { id: stamp.actorId, name: user ? `${user.firstName} ${user.lastName}` : stamp.actorName ?? "User" };
+  }
+  const user = state.users.find((item) => item.id === PREVIEW_PM_ID);
+  return { id: PREVIEW_PM_ID, name: user ? `${user.firstName} ${user.lastName}` : "Project manager" };
 }
 
 function audit(
@@ -1141,7 +1151,7 @@ function audit(
   const resolved = actor ?? (stamp.actorId ? { id: stamp.actorId, name: stamp.actorName ?? state.settings.profileName } : undefined);
   const entry: ActivityLog = {
     id: stamp.id.startsWith("log") ? stamp.id : `log-${stamp.id}`,
-    userId: resolved?.id ?? PREVIEW_ACTOR_ID,
+    userId: resolved?.id ?? "unknown",
     userName: resolved?.name ?? state.settings.profileName,
     action,
     module,
@@ -1154,6 +1164,8 @@ function audit(
 
 function receipt(state: AdminState, stamp: Stamp, projectId: string, title: string, message: string): AppNotification {
   const actor = actorFromStamp(state, stamp);
+  const project = state.projects.find((item) => item.id === projectId);
+  const recipientId = actor.role === "project_manager" ? actor.id : project?.managerId ?? PREVIEW_PM_ID;
   return {
     id: `${stamp.notificationId ?? `ntf-${stamp.id}`}-ack`,
     type: "project",
@@ -1162,7 +1174,7 @@ function receipt(state: AdminState, stamp: Stamp, projectId: string, title: stri
     source: "administrator",
     senderName: state.settings.profileName,
     projectId,
-    recipientId: actor.role === "project_manager" ? actor.id : PREVIEW_PM_ID,
+    recipientId,
     read: false,
     createdAt: stamp.at,
   };

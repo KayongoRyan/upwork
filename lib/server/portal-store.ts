@@ -28,7 +28,7 @@ import { createSeedState } from "@/lib/mock-data/seed";
 import { getMongoRuntime, portalDatabaseName, type MongoRuntime } from "@/lib/server/mongo";
 import { cpmisPortalIds, type CpmisPortalId } from "@/lib/portals";
 import { PREVIEW_PM_ID, PREVIEW_QS_ID, PREVIEW_SE_ID } from "@/lib/utils";
-import type { AdminState, AppNotification, OrgSettings } from "@/types";
+import type { AdminState, AppNotification, OrgSettings, SessionUser } from "@/types";
 
 export const PORTAL_KEYS = cpmisPortalIds;
 
@@ -406,6 +406,70 @@ async function ensureState(): Promise<AdminState> {
 
 export async function readState(): Promise<AdminState> {
   return ensureState();
+}
+
+function projectIdsForSession(state: AdminState, session: SessionUser): Set<string> | null {
+  if (session.role === "administrator") return null; // all
+  if (session.role === "project_manager") {
+    return new Set(state.projects.filter((p) => p.managerId === session.id).map((p) => p.id));
+  }
+  // site_engineer / quantity_surveyor: assigned project only
+  const projectId = session.projectId;
+  return projectId ? new Set([projectId]) : new Set();
+}
+
+export function scopeStateForSession(state: AdminState, session: SessionUser): AdminState {
+  const ids = projectIdsForSession(state, session);
+  if (!ids) return state;
+
+  const projects = state.projects.filter((p) => ids.has(p.id));
+  const projectIdSet = new Set(projects.map((p) => p.id));
+  const userIds = new Set<string>();
+  for (const p of projects) {
+    if (p.managerId) userIds.add(p.managerId);
+  }
+  for (const u of state.users) {
+    if (u.projectId && projectIdSet.has(u.projectId)) userIds.add(u.id);
+    if (u.id === session.id) userIds.add(u.id);
+  }
+  // include users referenced by tasks/reports on scoped projects
+  // Tasks have assignee as name; user list is already fully included.
+  for (const r of state.reports) {
+    if (projectIdSet.has(r.projectId)) {
+      userIds.add(r.engineerId);
+      if (r.reviewerId) userIds.add(r.reviewerId);
+    }
+  }
+
+  const users = state.users;
+  const employees = state.employees.filter((e) => e.projectId && projectIdSet.has(e.projectId));
+  const documents = state.documents.filter((d) => projectIdSet.has(d.projectId) && (session.role === "administrator" || d.access.includes(session.role)));
+  const scopedActivityLogs = state.activityLogs.filter((l) => userIds.has(l.userId) || projects.some((p) => l.record.includes(p.code) || l.record.includes(p.name)));
+  const workComments = state.workComments.filter((c) => projectIdSet.has(c.projectId));
+  const tasks = state.tasks.filter((t) => projectIdSet.has(t.projectId));
+  const calendarEvents = state.calendarEvents;
+  const progressMarks = state.progressMarks.filter((m) => projectIdSet.has(m.projectId));
+  const costReports = state.costReports.filter((r) => projectIdSet.has(r.projectId));
+  const reports = state.reports.filter((r) => projectIdSet.has(r.projectId));
+  const boq = state.boq.filter((b) => projectIdSet.has(b.projectId));
+  const notifications = state.notifications.filter((n) => n.recipientId === session.id || (n.projectId && projectIdSet.has(n.projectId)));
+
+  return {
+    ...state,
+    projects,
+    users,
+    employees,
+    documents,
+    activityLogs: scopedActivityLogs,
+    workComments,
+    tasks,
+    calendarEvents,
+    progressMarks,
+    costReports,
+    reports,
+    boq,
+    notifications,
+  };
 }
 
 async function applyNow(action: AdminAction): Promise<AdminState> {

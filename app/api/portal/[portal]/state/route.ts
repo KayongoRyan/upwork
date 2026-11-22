@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/auth";
-import { isPortalKey, readState } from "@/lib/server/portal-store";
+import { isPortalKey, readState, scopeStateForSession } from "@/lib/server/portal-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,5 +20,5 @@ export async function GET(_request: Request, context: { params: Promise<{ portal
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const state = await readState();
-  return NextResponse.json(state, { headers: { "cache-control": "no-store" } });
+  return NextResponse.json(scopeStateForSession(state, session), { headers: { "cache-control": "no-store" } });
 }
