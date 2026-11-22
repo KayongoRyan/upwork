@@ -12,7 +12,14 @@ function baseUrl(): string {
   throw new Error("CPMIS_API_URL or VERTEXA_API_URL must be configured in production.");
 }
 
-function forwardHeaders(request: Request, extra: Record<string, string> = {}): HeadersInit {
+function vertexaApiKey(): string {
+  const configured = process.env.VERTEXA_API_KEY?.trim() || process.env.API_KEY?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV !== "production") return "dev-vertexa-api-key";
+  return "";
+}
+
+function forwardHeaders(request: Request, extra: Record<string, string> = {}, adminAuth = false): HeadersInit {
   const headers: Record<string, string> = { ...extra, "x-api-version": CPMIS_API_VERSION };
   const cookie = request.headers.get("cookie");
   if (cookie) headers.cookie = cookie;
@@ -24,6 +31,10 @@ function forwardHeaders(request: Request, extra: Record<string, string> = {}): H
   if (origin) headers.origin = origin;
   const contentType = request.headers.get("content-type");
   if (contentType && !headers["content-type"]) headers["content-type"] = contentType;
+  if (adminAuth) {
+    const key = vertexaApiKey();
+    if (key) headers["x-api-key"] = key;
+  }
   return headers;
 }
 
@@ -33,10 +44,10 @@ function applySetCookies(upstream: Response, response: NextResponse) {
   for (const value of values) response.headers.append("set-cookie", value);
 }
 
-export async function proxyCpmisJson(request: Request, path: string, init?: { method?: string; body?: unknown }): Promise<NextResponse> {
+export async function proxyCpmisJson(request: Request, path: string, init?: { method?: string; body?: unknown; adminAuth?: boolean }): Promise<NextResponse> {
   const method = init?.method ?? request.method;
   const body = init?.body !== undefined ? JSON.stringify(init.body) : (method !== "GET" && method !== "HEAD" ? await request.text() : undefined);
-  const headers = forwardHeaders(request, body ? { "content-type": "application/json", accept: "application/json" } : { accept: "application/json" });
+  const headers = forwardHeaders(request, body ? { "content-type": "application/json", accept: "application/json" } : { accept: "application/json" }, init?.adminAuth === true);
 
   let upstream: Response;
   try {
@@ -62,9 +73,9 @@ export async function proxyCpmisJson(request: Request, path: string, init?: { me
   return response;
 }
 
-export async function proxyCpmisRaw(request: Request, path: string, init?: { method?: string }): Promise<NextResponse> {
+export async function proxyCpmisRaw(request: Request, path: string, init?: { method?: string; adminAuth?: boolean }): Promise<NextResponse> {
   const method = init?.method ?? request.method;
-  const headers = forwardHeaders(request, { accept: request.headers.get("accept") ?? "*/*" });
+  const headers = forwardHeaders(request, { accept: request.headers.get("accept") ?? "*/*" }, init?.adminAuth === true);
   let upstream: Response;
   try {
     upstream = await fetch(`${baseUrl()}${path}`, {
