@@ -28,32 +28,9 @@ import {
   scopeStateForSession,
 } from "@/lib/server/portal-store";
 import { apiError } from "../lib/api-response";
+import { readCookie, requireSession } from "../lib/session";
 
 export const cpmisRouter = Router();
-
-function readCookie(req: Request, name: string): string | undefined {
-  const header = req.headers.cookie;
-  if (!header) return undefined;
-  for (const part of header.split(";")) {
-    const [k, ...rest] = part.trim().split("=");
-    if (k === name) return decodeURIComponent(rest.join("="));
-  }
-  return undefined;
-}
-
-async function requireSession(req: Request, res: Response, portal: string) {
-  if (!isPortalKey(portal)) {
-    apiError(res, 404, "unknown-portal", { requestId: req.requestId });
-    return null;
-  }
-  const token = readCookie(req, sessionCookieName(portal));
-  const session = token ? await getSessionUserByToken(portal, token) : null;
-  if (!session) {
-    apiError(res, 401, "unauthorized", { requestId: req.requestId });
-    return null;
-  }
-  return { portal, session, token: token! };
-}
 
 cpmisRouter.get("/portal/:portal/state", async (req: Request, res: Response) => {
   const auth = await requireSession(req, res, String(req.params.portal));

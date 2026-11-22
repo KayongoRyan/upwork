@@ -14,12 +14,9 @@ import { readState } from "@/lib/server/memory";
 import { apiError } from "../lib/api-response";
 import {
   applyPortalAction,
-  isPortalKey,
   type PortalKey,
 } from "@/lib/server/portal-store";
 import {
-  getSessionUserByToken,
-  sessionCookieName,
   setUserPassword,
   checkLoginRateLimit,
   hashPassword,
@@ -30,6 +27,7 @@ import {
 } from "@/lib/server/auth";
 import { createSignupOtp, normalizeSignupEmail, normalizeSignupPhone, verifySignupOtp } from "@/lib/server/otp";
 import { verifyCsrfToken, applySessionCookieToExpress } from "../lib/auth-bridge";
+import { requireSession } from "../lib/session";
 import { userSchema, projectSchema, employeeSchema, engineerReportSchema } from "@/lib/validations/schemas";
 import { isVertexaNotificationId, markAllVertexaNotificationsRead, markVertexaNotificationRead } from "@/lib/server/vertexa-api";
 import type { AdminState, AppNotification, ReportPhoto, UserAccount, WorkKind } from "@/types";
@@ -37,29 +35,7 @@ import type { AdminState, AppNotification, ReportPhoto, UserAccount, WorkKind } 
 export const cpmisRemainingRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
-function readCookie(req: Request, name: string): string | undefined {
-  const header = req.headers.cookie;
-  if (!header) return undefined;
-  for (const part of header.split(";")) {
-    const [k, ...rest] = part.trim().split("=");
-    if (k === name) return decodeURIComponent(rest.join("="));
-  }
-  return undefined;
-}
-
-async function requireSession(req: Request, res: Response, portal: string) {
-  if (!isPortalKey(portal)) {
-    apiError(res, 404, "unknown-portal", { requestId: req.requestId });
-    return null;
-  }
-  const token = readCookie(req, sessionCookieName(portal));
-  const session = token ? await getSessionUserByToken(portal, token) : null;
-  if (!session) {
-    apiError(res, 401, "unauthorized", { requestId: req.requestId });
-    return null;
-  }
-  return { portal: portal as PortalKey, session, token: token! };
-}
+// session validation centralized in ../lib/session
 
 function redirect(res: Response, path: string, query: Record<string, string> = {}, hash = "") {
   const url = new URL(path, "http://localhost");
