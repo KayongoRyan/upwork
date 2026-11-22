@@ -8,8 +8,9 @@ import { SearchQueryProvider } from "@/components/search/search-query";
 import { AdminProvider } from "@/lib/data/admin-store";
 import { getSessionUser } from "@/lib/server/auth";
 import { portalByPort, readBoundPorts, type CpmisPortalId } from "@/lib/portals";
-import { readState } from "@/lib/server/portal-store";
-import { listVertexaNotifications } from "@/lib/server/vertexa-api";
+import { readState, scopeStateForSession } from "@/lib/server/portal-store";
+import { filterVertexaNotificationsForSession, listVertexaNotifications } from "@/lib/server/vertexa-api";
+import type { AdminState } from "@/types";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -39,16 +40,58 @@ function requestPortal(headers: Headers): CpmisPortalId {
   return portal && portal.id !== "vertexa" ? portal.id : "administrator";
 }
 
+const EMPTY_STATE: AdminState = {
+  projects: [],
+  users: [],
+  employees: [],
+  activityLogs: [],
+  notifications: [],
+  tasks: [],
+  reports: [],
+  boq: [],
+  costReports: [],
+  documents: [],
+  settings: {
+    organizationName: "",
+    registrationNumber: "",
+    industry: "",
+    address: "",
+    city: "",
+    country: "",
+    phone: "",
+    email: "",
+    website: "",
+    timezone: "UTC",
+    dateFormat: "YYYY-MM-DD",
+    currency: "RWF",
+    language: "en",
+    compactTables: false,
+    emailAlerts: false,
+    delayAlerts: false,
+    userRegistrationAlerts: false,
+    weeklyDigest: false,
+    profileName: "",
+    profileEmail: "",
+    profilePhone: "",
+    profileTitle: "",
+  },
+  monthlyActivity: [],
+  progressMarks: [],
+  calendarEvents: [],
+  workComments: [],
+};
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   await connection();
   const requestHeaders = await headers();
   const portal = requestPortal(requestHeaders);
-  const [initialState, notificationsResult, session] = await Promise.all([
-    readState(),
-    listVertexaNotifications(),
-    getSessionUser(portal),
-  ]);
-  const { items: initialNotifications } = notificationsResult;
+  const session = await getSessionUser(portal);
+  const [initialState, initialNotifications] = session
+    ? await Promise.all([
+        readState().then((state) => scopeStateForSession(state, session)),
+        listVertexaNotifications().then((result) => filterVertexaNotificationsForSession(result.items, session)),
+      ])
+    : [EMPTY_STATE, []];
   const query = requestHeaders.get("x-cpmis-q") ?? "";
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
