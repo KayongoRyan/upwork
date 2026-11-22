@@ -3,7 +3,7 @@ import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { costReportPdf } from "@/lib/server/cost-pdf";
 import { readState } from "@/lib/server/memory";
 import { redirectTo } from "@/lib/server/redirect";
-import { PREVIEW_PM_ID, fullName } from "@/lib/utils";
+import { fullName } from "@/lib/utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const projectId = String(form.get("projectId") ?? "");
   const state = await readState();
-  const project = state.projects.find((item) => item.id === projectId && item.managerId === PREVIEW_PM_ID);
+  const project = state.projects.find((item) => item.id === projectId && item.managerId === __session.id);
   const rows = state.boq.filter((item) => item.projectId === projectId);
   if (!project) return redirectTo(request, "/pm/costs", { error: "That project is not on your portfolio." });
   if (rows.length === 0) return redirectTo(request, "/pm/costs", { error: "There is no bill to save." });

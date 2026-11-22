@@ -2,7 +2,7 @@ import { readState } from "@/lib/server/memory";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
-import { nextId, PREVIEW_PM_ID } from "@/lib/utils";
+import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const report = state.reports.find((item) => item.id === id);
   const project = report ? state.projects.find((item) => item.id === report.projectId) : undefined;
   const engineer = report ? state.users.find((user) => user.id === report.engineerId) : undefined;
-  if (!report || !project || project.managerId !== PREVIEW_PM_ID) {
+  if (!report || !project || project.managerId !== __session.id) {
     return redirectTo(request, "/pm/reports", { error: "That report is not on your portfolio." });
   }
   if (report.status !== "submitted") {
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   await applyPortalAction("project_manager", {
     type: "open-report-review",
     id,
-    stamp: { id: stampId, at: new Date().toISOString(), notificationId: `ntf-${stampId}` },
+    stamp: { id: stampId, at: new Date().toISOString(), notificationId: `ntf-${stampId}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
   });
   const sender = engineer ? `${engineer.firstName} ${engineer.lastName}` : "the sender";
   return redirectTo(request, "/pm/reports", { opened: sender }, id);

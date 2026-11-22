@@ -2,7 +2,7 @@ import { readState } from "@/lib/server/memory";
 import { requireApiSession, verifyCsrf } from "@/lib/server/auth";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
-import { nextId, PREVIEW_SE_ID } from "@/lib/utils";
+import { nextId } from "@/lib/utils";
 import type { ReportPhoto } from "@/types";
 
 export const runtime = "nodejs";
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   }
 
   const state = await readState();
-  const engineer = state.users.find((user) => user.id === PREVIEW_SE_ID && user.role === "site_engineer" && user.status === "active");
+  const engineer = state.users.find((user) => user.id === __session.id && user.role === "site_engineer" && user.status === "active");
   const project = engineer ? state.projects.find((item) => item.id === engineer.projectId) : undefined;
   if (!engineer || !project) return redirectTo(request, "/se/report", { error: "No project is assigned to this account." });
 
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       issues,
       photos,
     },
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
+    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
   });
   return redirectTo(request, "/se/history", { filed: "1" }, id);
 }

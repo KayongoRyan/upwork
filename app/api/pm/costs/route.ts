@@ -4,7 +4,7 @@ import { readCostEdits } from "@/lib/server/cost-lines";
 import { readState } from "@/lib/server/memory";
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { redirectTo } from "@/lib/server/redirect";
-import { nextId, PREVIEW_PM_ID } from "@/lib/utils";
+import { nextId } from "@/lib/utils";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const projectId = String(form.get("projectId") ?? "");
   const state = await readState();
-  const project = state.projects.find((item) => item.id === projectId && item.managerId === PREVIEW_PM_ID);
+  const project = state.projects.find((item) => item.id === projectId && item.managerId === __session.id);
   const surveyor = state.users.find((user) => user.role === "quantity_surveyor" && user.status === "active" && user.projectId === projectId);
   const rows = state.boq.filter((item) => item.projectId === projectId);
   if (!project) return redirectTo(request, "/pm/costs", { error: "That project is not on your portfolio." });
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     type: "revise-cost-bill",
     projectId,
     lines: parsed.lines,
-    stamp: { id: edited, at: new Date().toISOString(), notificationId: `ntf-${edited}` },
+    stamp: { id: edited, at: new Date().toISOString(), notificationId: `ntf-${edited}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
   });
   const fresh = await readState();
   const live = billLines(fresh.boq, projectId);
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     type: "submit-cost-report",
     projectId,
     surveyorId: surveyor.id,
-    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` },
+    stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}`, actorId: __session.id, actorName: `${__session.firstName} ${__session.lastName}`, actorRole: __session.role },
   });
   return redirectTo(request, "/pm/costs", { sent: fresh.settings.profileName });
 }
