@@ -6,6 +6,7 @@ import { requestContext } from "./middleware/requestContext.js";
 import { requireDb } from "./middleware/requireDb.js";
 import { cpmisRouter } from "./routes/cpmis.ts";
 import { cpmisRemainingRouter } from "./routes/cpmis-remaining.ts";
+import { businessRouter } from "./routes/business.ts";
 import { healthRouter } from "./routes/health.js";
 import { inquiriesRouter } from "./routes/inquiries.js";
 import { notificationsRouter } from "./routes/notifications.js";
@@ -50,6 +51,7 @@ v1.get("/", (_req, res) => {
       `${config.apiBasePath}/inquiries`,
       `${config.apiBasePath}/notifications`,
       `${config.apiBasePath}/cpmis`,
+      `${config.apiBasePath}/cpmis/business`,
     ],
   });
 });
@@ -57,6 +59,7 @@ v1.use("/health", healthRouter);
 v1.use("/inquiries", requireDb, inquiriesRouter);
 v1.use("/notifications", requireDb, notificationsRouter);
 v1.use("/cpmis", requireDb, cpmisRouter);
+v1.use("/cpmis/business", requireDb, businessRouter);
 v1.use("/cpmis", requireDb, cpmisRemainingRouter);
 
 app.use(config.apiBasePath, v1);
@@ -75,6 +78,15 @@ app.use((error, req, res, next) => {
   void next;
   console.error(`[${req.requestId ?? "no-request-id"}]`, error);
   if (res.headersSent) return;
+  if (error?.name === "PersistenceError") {
+    return res.status(503).json({
+      ok: false,
+      error: "persistence-failed",
+      message: "The database is temporarily unavailable. Try again.",
+      requestId: req.requestId,
+      apiVersion: config.apiVersion,
+    });
+  }
   if (error?.type === "entity.parse.failed" || error instanceof SyntaxError) {
     return res.status(400).json({
       ok: false,

@@ -870,7 +870,7 @@ async function persistStateAtomically(
 }
 
 async function initialize(): Promise<AdminState> {
-  const runtime = await getMongoRuntime();
+  const runtime = requirePersistenceInProduction(await getMongoRuntime());
   if (!runtime) {
     store.__cpmisPortalState ??= createSeedState();
     store.__cpmisPortalMemory = true;
@@ -907,7 +907,7 @@ async function ensureState(): Promise<AdminState> {
     // A development fallback was seeded before MongoDB became reachable.
     // Reload from the database so a later write cannot overwrite persisted data
     // with the stale in-memory copy.
-    const runtime = await getMongoRuntime();
+    const runtime = requirePersistenceInProduction(await getMongoRuntime());
     if (!runtime) return store.__cpmisPortalState;
     store.__cpmisPortalReady = false;
     store.__cpmisPortalState = undefined;
