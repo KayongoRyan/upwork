@@ -8,8 +8,8 @@
     "predev": "node scripts/check-deps.mjs",
     "predev:backend": "node scripts/check-deps.mjs",
     "prestart": "node scripts/check-deps.mjs",
-    "dev": "node --watch src/index.js",
-    "dev:backend": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "dev": "tsx watch src/index.js",
+    "dev:backend": "tsx watch src/index.js",
+    "start": "tsx src/index.js"
   }
 }

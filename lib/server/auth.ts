@@ -345,10 +345,8 @@ export async function createSessionForUser(portal: PortalKey, user: UserAccount)
   return { token, csrfToken };
 }
 
-export async function getSessionUser(portal: PortalKey): Promise<SessionUser | null> {
+export async function getSessionUserByToken(portal: PortalKey, token: string): Promise<SessionUser | null> {
   await ensureCredentialsSeeded();
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE[portal])?.value;
   if (!token) return null;
   const tokenHash = hashToken(token);
 
@@ -397,6 +395,13 @@ export async function getSessionUser(portal: PortalKey): Promise<SessionUser | n
   return sessionUser(user, csrfToken);
 }
 
+export async function getSessionUser(portal: PortalKey): Promise<SessionUser | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE[portal])?.value;
+  if (!token) return null;
+  return getSessionUserByToken(portal, token);
+}
+
 async function destroySessionByHash(portal: PortalKey, tokenHash: string) {
   const collection = await sessionsCollection(portal);
   if (collection) {
@@ -420,13 +425,33 @@ export async function destroySessionsForUser(userId: string): Promise<void> {
   }
 }
 
+export async function signOutByToken(portal: PortalKey, token: string): Promise<void> {
+  if (token) {
+    await destroySessionByHash(portal, hashToken(token));
+  }
+}
+
 export async function signOut(portal: PortalKey): Promise<void> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE[portal])?.value;
   if (token) {
-    await destroySessionByHash(portal, hashToken(token));
+    await signOutByToken(portal, token);
   }
   cookieStore.delete(SESSION_COOKIE[portal]);
+}
+
+export function sessionCookieName(portal: PortalKey): string {
+  return SESSION_COOKIE[portal];
+}
+
+export function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: SESSION_TTL_MS / 1000,
+  };
 }
 
 export async function requirePortalSession(portal: PortalKey): Promise<SessionUser> {
