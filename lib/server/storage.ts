@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { getMongoRuntime, requireCollectionInProduction } from "@/lib/server/mongo";
 
 export type StorageDriver = "local";
 
@@ -111,6 +113,62 @@ export function getObjectStream(key: string): Readable | null {
   } catch {
     return null;
   }
+}
+
+export interface FileMetadataRecord {
+  _id: string;
+  key: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  sha256: string;
+  storageDriver: StorageDriver;
+  uploadedBy: string;
+  uploadedAt: string;
+  projectId?: string;
+  documentId?: string;
+  revisionId?: string;
+  source: "document" | "report_photo" | "other";
+}
+
+export interface SaveFileMetadataInput {
+  key: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  body: Buffer;
+  uploadedBy: string;
+  projectId?: string;
+  documentId?: string;
+  revisionId?: string;
+  source: FileMetadataRecord["source"];
+}
+
+export async function saveFileMetadata(input: SaveFileMetadataInput): Promise<FileMetadataRecord | null> {
+  const runtime = await getMongoRuntime();
+  const collection = requireCollectionInProduction(
+    runtime?.dbs.administrator.collection<FileMetadataRecord>("files") ?? null,
+  );
+  if (!collection) return null;
+
+  const record: FileMetadataRecord = {
+    _id: input.key,
+    key: input.key,
+    fileName: input.fileName,
+    contentType: input.contentType || "application/octet-stream",
+    size: input.size,
+    sha256: createHash("sha256").update(input.body).digest("hex"),
+    storageDriver: storageDriver(),
+    uploadedBy: input.uploadedBy,
+    uploadedAt: new Date().toISOString(),
+    ...(input.projectId ? { projectId: input.projectId } : {}),
+    ...(input.documentId ? { documentId: input.documentId } : {}),
+    ...(input.revisionId ? { revisionId: input.revisionId } : {}),
+    source: input.source,
+  };
+
+  await collection.updateOne({ _id: record._id }, { $set: record }, { upsert: true });
+  return record;
 }
 
 export function storageKeyForDocument(projectId: string, documentId: string, fileName: string): string {

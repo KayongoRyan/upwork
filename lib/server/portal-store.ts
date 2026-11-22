@@ -390,6 +390,21 @@ const COLLECTION_VALIDATORS: Partial<Record<RecordCollection | "notifications", 
   }, ["id", "recipientId"]),
 };
 
+const FILES_VALIDATOR = objectSchema({
+  key: { bsonType: "string", minLength: 1 },
+  fileName: { bsonType: "string", minLength: 1 },
+  contentType: { bsonType: "string" },
+  size: { bsonType: ["int", "long", "double", "decimal"] },
+  sha256: { bsonType: "string" },
+  storageDriver: { bsonType: "string" },
+  uploadedBy: { bsonType: "string" },
+  uploadedAt: { bsonType: "string" },
+  projectId: { bsonType: "string" },
+  documentId: { bsonType: "string" },
+  revisionId: { bsonType: "string" },
+  source: { bsonType: "string" },
+}, ["_id", "key", "fileName", "contentType", "size", "storageDriver", "uploadedBy", "uploadedAt", "source"]);
+
 const UNIQUE_INDEXES: Array<{ portal: PortalKey; collection: string; keys: Record<string, 1>; name: string; collation?: { locale: string; strength: number } }> = [
   { portal: "administrator", collection: "users", keys: { email: 1 }, name: "uniq_users_email", collation: { locale: "en", strength: 2 } },
   { portal: "administrator", collection: "employees", keys: { employeeCode: 1 }, name: "uniq_employees_code" },
@@ -414,6 +429,9 @@ const RELATIONSHIP_INDEXES: Array<{ portal: PortalKey; collection: string; keys:
   { portal: "project_manager", collection: "notifications", keys: { recipientId: 1 }, name: "rel_notifications_recipientId" },
   { portal: "site_engineer", collection: "notifications", keys: { recipientId: 1 }, name: "rel_notifications_recipientId" },
   { portal: "quantity_surveyor", collection: "notifications", keys: { recipientId: 1 }, name: "rel_notifications_recipientId" },
+  { portal: "administrator", collection: "files", keys: { projectId: 1 }, name: "rel_files_projectId" },
+  { portal: "administrator", collection: "files", keys: { documentId: 1 }, name: "rel_files_documentId" },
+  { portal: "administrator", collection: "files", keys: { uploadedBy: 1 }, name: "rel_files_uploadedBy" },
 ];
 
 async function applyCollectionValidation(db: Db, collection: string, schema: JsonSchema): Promise<void> {
@@ -448,6 +466,8 @@ async function ensurePortalValidation(runtime: MongoRuntime): Promise<void> {
       await applyCollectionValidation(db, "monthlyActivity", objectSchema({ items: { bsonType: "array" } }, ["_id"]));
     }
   }
+
+  await applyCollectionValidation(runtime.dbs.administrator, "files", FILES_VALIDATOR);
 
   for (const index of UNIQUE_INDEXES) {
     const collection = runtime.dbs[index.portal].collection(index.collection);
