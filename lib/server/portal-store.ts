@@ -27,9 +27,11 @@ import { adminReducer, type AdminAction } from "@/lib/data/reducer";
 import { createSeedState } from "@/lib/mock-data/seed";
 import {
   getMongoRuntime,
+  isMongoConnectivityError,
   PersistenceError,
   portalDatabaseName,
   requirePersistenceInProduction,
+  resetMongoRuntime,
   type MongoRuntime,
 } from "@/lib/server/mongo";
 import { cpmisPortalIds, type CpmisPortalId } from "@/lib/portals";
@@ -567,6 +569,7 @@ async function applyNow(action: AdminAction): Promise<AdminState> {
     state = await ensureState();
   } catch (error) {
     console.error("[portal-store] Could not load the workspace before the action.", error);
+    if (isMongoConnectivityError(error)) await resetMongoRuntime(error);
     throw new PersistenceError(error);
   }
   const next = action.type === "reset" ? createSeedState() : adminReducer(state, action);
@@ -574,10 +577,29 @@ async function applyNow(action: AdminAction): Promise<AdminState> {
   // In production a missing database is a failed write, not a preview fallback.
   const runtime = requirePersistenceInProduction(await getMongoRuntime());
   if (runtime) {
+    const seedMarker = action.type === "reset";
     try {
-      await persistStateAtomically(runtime, state, next, { seedMarker: action.type === "reset" });
+      await persistStateAtomically(runtime, state, next, { seedMarker });
     } catch (error) {
       console.error("[portal-store] Could not persist the action.", error);
+      if (isMongoConnectivityError(error)) {
+        await resetMongoRuntime(error);
+        const recovered = requirePersistenceInProduction(await getMongoRuntime());
+        if (recovered) {
+          try {
+            await persistStateAtomically(recovered, state, next, { seedMarker });
+            store.__cpmisPortalState = next;
+            return next;
+          } catch (retryError) {
+            console.error("[portal-store] Retry after reconnect failed.", retryError);
+            if (isMongoConnectivityError(retryError)) await resetMongoRuntime(retryError);
+            store.__cpmisPortalReady = false;
+            store.__cpmisPortalState = undefined;
+            store.__cpmisPortalMemory = false;
+            throw new PersistenceError(retryError);
+          }
+        }
+      }
       // Drop the cached state so the next read reflects what the database
       // actually holds instead of a change that was never committed.
       store.__cpmisPortalReady = false;
