@@ -4,6 +4,8 @@ import { config } from "./config.js";
 import { closeDb, connectDb, mongoStartupHelp } from "./db.js";
 import { requestContext } from "./middleware/requestContext.js";
 import { requireDb } from "./middleware/requireDb.js";
+import { cpmisRouter } from "./routes/cpmis.ts";
+import { cpmisRemainingRouter } from "./routes/cpmis-remaining.ts";
 import { healthRouter } from "./routes/health.js";
 import { inquiriesRouter } from "./routes/inquiries.js";
 import { notificationsRouter } from "./routes/notifications.js";
@@ -34,6 +36,8 @@ app.get("/", (_req, res) => {
 app.use("/api/v1/health", healthRouter);
 app.use("/api/v1/inquiries", requireDb, inquiriesRouter);
 app.use("/api/v1/notifications", requireDb, notificationsRouter);
+app.use("/api/v1/cpmis", requireDb, cpmisRouter);
+app.use("/api/v1/cpmis", requireDb, cpmisRemainingRouter);
 
 app.use((req, res) => {
   res.status(404).json({

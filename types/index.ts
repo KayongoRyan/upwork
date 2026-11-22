@@ -163,7 +163,9 @@ export interface ReportPhoto {
   name: string;
   type: string;
   size: number;
-  dataUrl: string;
+  /** Legacy base64 data URL; new uploads store `fileKey` in object storage. */
+  dataUrl?: string;
+  fileKey?: string;
 }
 
 export type CostReportStatus = "pending" | "submitted";
