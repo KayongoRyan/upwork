@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",
-    "test:integration": "vitest run tests/integration"
+    "test:integration": "vitest run tests/integration",
+    "backup:mongo": "node backend/scripts/backup-mongo.mjs",
+    "restore:mongo": "node backend/scripts/restore-mongo.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^7.0.3",

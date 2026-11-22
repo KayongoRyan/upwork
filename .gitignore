@@ -27,6 +27,9 @@ backend/node_modules
 # local object storage uploads
 data/uploads/
 
+# backup artifacts (may contain sensitive data dumps)
+backups/
+
 # misc
 .DS_Store
 *.pem
