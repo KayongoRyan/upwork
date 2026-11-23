@@ -29,9 +29,21 @@ function parseOr400<T>(schema: z.ZodType<T>, body: unknown, req: Request, res: R
   return parsed.data;
 }
 
+function isDuplicateKeyError(error: unknown): boolean {
+  const e: any = error;
+  const detail: any = e?.detail;
+  const code = e?.code ?? detail?.code;
+  if (code === 11000) return true;
+  const msg = String(e?.message ?? detail?.message ?? "");
+  return /E11000|duplicate key/i.test(msg);
+}
+
 function actionErrorResult(error: unknown, req: Request): { status: number; body: any } {
   if (error && typeof error === "object" && "name" in error && (error as any).name === "PortalActionError") {
     return { status: 403, body: { ok: false, error: "forbidden", message: "You are not authorized to perform this action.", requestId: req.requestId, apiVersion: req.app.locals?.apiVersion ?? "v1" } };
+  }
+  if (isDuplicateKeyError(error)) {
+    return { status: 409, body: { ok: false, error: "conflict", message: "A record with the same unique value already exists.", requestId: req.requestId, apiVersion: req.app.locals?.apiVersion ?? "v1" } };
   }
   if (error instanceof PersistenceError) {
     return { status: 503, body: { ok: false, error: "persistence-failed", requestId: req.requestId, apiVersion: req.app.locals?.apiVersion ?? "v1" } };
@@ -155,8 +167,13 @@ businessRouter.patch("/users/:id", async (req: Request, res: Response) => {
   if (!state) return;
   const existing = state.users.find((u) => u.id === id);
   if (!existing) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  const nextEmail = String(parsed.email ?? existing.email).toLowerCase();
+  if (nextEmail !== existing.email.toLowerCase() && state.users.some((u) => u.id !== id && u.email.toLowerCase() === nextEmail)) {
+    return apiError(res, 409, "conflict", { message: "That email is already registered.", requestId: req.requestId });
+  }
   const input = { ...existing, ...parsed, projectId: parsed.projectId ?? existing.projectId };
   const result = await withAction(req, res, "administrator", auth.session, { type: "update-user", id, input, stamp: stamp(auth.session) });
+  if (res.headersSent) return result;
   if (input.status !== "active") await destroySessionsForUser(id);
   return result;
 });
@@ -235,6 +252,10 @@ businessRouter.patch("/employees/:id", async (req: Request, res: Response) => {
   if (!existing) return apiError(res, 404, "not-found", { requestId: req.requestId });
   const parsed = parseOr400(employeeSchema.partial(), req.body ?? {}, req, res);
   if (!parsed) return;
+  const nextCode = String(parsed.employeeCode ?? existing.employeeCode).toLowerCase();
+  if (nextCode !== existing.employeeCode.toLowerCase() && state.employees.some((e) => e.id !== id && e.employeeCode.toLowerCase() === nextCode)) {
+    return apiError(res, 409, "conflict", { message: "That employee ID is already in use.", requestId: req.requestId });
+  }
   return withAction(req, res, "administrator", auth.session, { type: "update-employee", id, input: { ...existing, ...parsed }, stamp: stamp(auth.session) });
 });
 
