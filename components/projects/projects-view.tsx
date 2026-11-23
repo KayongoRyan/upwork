@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
@@ -34,14 +34,27 @@ export function ProjectsView() {
   const status = params.get("status") ?? "all";
   const [formError, setFormError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [projects, setProjects] = useState<Project[]>(data.projects);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
     setViewId(focus);
   }
 
+  const reloadProjects = useCallback(async () => {
+    try {
+      const res = await fetch("/api/cpmis/business/projects", { cache: "no-store" });
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; items?: Project[] } | null;
+      if (res.ok && body?.ok && Array.isArray(body.items)) setProjects(body.items);
+    } catch {
+      /* keep current rows; portal state remains fallback */
+    }
+  }, []);
+
+  useEffect(() => { void reloadProjects(); }, [reloadProjects]);
+
   const managers = data.users.filter((user) => user.role === "project_manager");
   const table = usePagedRows({
-    rows: data.projects,
+    rows: projects,
     filterKey: status,
     filter: (project) => status === "all" || project.status === status,
     search: (project, query) => {
@@ -62,18 +75,31 @@ export function ProjectsView() {
     initialSort: { key: "name", dir: "asc" },
   });
 
-  const viewing = data.projects.find((project) => project.id === viewId) ?? null;
+  const viewing = projects.find((project) => project.id === viewId) ?? null;
 
   async function save(values: ProjectFormValues) {
-    const result = editor === "new" ? data.createProject(values) : editor ? data.updateProject(editor.id, values) : { ok: false as const, error: "Nothing to save." };
-    if (!result.ok) {
-      setFormError(result.error);
-      return;
-    }
-    if (result.saved && !(await result.saved)) return;
-    toast.success(editor === "new" ? "Project created in this preview." : "Project updated in this preview.");
-    setEditor(null);
+    if (editor === null) { setFormError("Nothing to save."); return; }
     setFormError(null);
+    const isNew = editor === "new";
+    const url = isNew ? "/api/cpmis/business/projects" : `/api/cpmis/business/projects/${encodeURIComponent(editor.id)}`;
+    const method = isNew ? "POST" : "PATCH";
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "content-type": "application/json", "x-csrf-token": data.viewer?.csrfToken ?? "" },
+        body: JSON.stringify(values),
+      });
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+      if (!res.ok || !body?.ok) {
+        setFormError(body?.message ?? body?.error ?? (isNew ? "Could not create the project." : "Could not update the project."));
+        return;
+      }
+      toast.success(isNew ? "Project created." : "Project updated.");
+      setEditor(null);
+      await reloadProjects();
+    } catch {
+      setFormError(isNew ? "Could not create the project." : "Could not update the project.");
+    }
   }
 
   return (
@@ -263,10 +289,22 @@ export function ProjectsView() {
         onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
         onConfirm={async () => {
           if (!pendingDelete) return;
-          const saved = data.deleteProject(pendingDelete.id);
-          if (saved && !(await saved)) return;
-          toast.success("Project deleted from this preview.");
-          setPendingDelete(null);
+          try {
+            const res = await fetch(`/api/cpmis/business/projects/${encodeURIComponent(pendingDelete.id)}`, {
+              method: "DELETE",
+              headers: { "x-csrf-token": data.viewer?.csrfToken ?? "" },
+            });
+            const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+            if (!res.ok || !body?.ok) {
+              toast.error(body?.message ?? body?.error ?? "Could not delete the project.");
+              return;
+            }
+            toast.success("Project deleted.");
+            setPendingDelete(null);
+            await reloadProjects();
+          } catch {
+            toast.error("Could not delete the project.");
+          }
         }}
       />
     </div>

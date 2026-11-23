@@ -128,4 +128,69 @@ describe("business API", () => {
     const res = await request(app()).post("/api/v1/cpmis/business/site-reports/r1/decide").send({ decision: "approved", note: "ok" });
     expect(res.status).toBe(403);
   });
+
+  it("lists projects for authenticated user with project scope", async () => {
+    h.currentSession.value = pmSession;
+    const res = await request(app()).get("/api/v1/cpmis/business/projects");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].id).toBe("p1");
+  });
+
+  it("scopes project listing for site engineer to assigned project", async () => {
+    h.currentSession.value = seSession;
+    const res = await request(app()).get("/api/v1/cpmis/business/projects");
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].id).toBe("p1");
+  });
+
+  it("rejects project update from non-admin", async () => {
+    h.currentSession.value = pmSession;
+    const res = await request(app()).patch("/api/v1/cpmis/business/projects/p1").send({ name: "Updated" });
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects invalid project update payload", async () => {
+    const res = await request(app()).patch("/api/v1/cpmis/business/projects/p1").send({ budget: -1 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("validation-failed");
+  });
+
+  it("returns 404 for updating unknown project", async () => {
+    const res = await request(app()).patch("/api/v1/cpmis/business/projects/missing").send({ name: "Updated Name" });
+    expect(res.status).toBe(404);
+  });
+
+  it("allows admin to update project via business API", async () => {
+    const res = await request(app()).patch("/api/v1/cpmis/business/projects/p1").send({ name: "Updated Name" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(h.applyPortalAction).toHaveBeenCalled();
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("update-project");
+    expect((h.applyPortalAction as any).mock.calls[0][1].id).toBe("p1");
+  });
+
+  it("rejects project deletion from non-admin", async () => {
+    h.currentSession.value = pmSession;
+    const res = await request(app()).delete("/api/v1/cpmis/business/projects/p1");
+    expect(res.status).toBe(403);
+  });
+
+  it("returns forbidden when delete action is not authorized by portal rules", async () => {
+    h.applyPortalAction.mockRejectedValueOnce(Object.assign(new Error("not allowed"), { name: "PortalActionError" }));
+    const res = await request(app()).delete("/api/v1/cpmis/business/projects/missing");
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe("forbidden");
+  });
+
+  it("allows admin to delete project via business API", async () => {
+    const res = await request(app()).delete("/api/v1/cpmis/business/projects/p1");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(h.applyPortalAction).toHaveBeenCalled();
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("delete-project");
+    expect((h.applyPortalAction as any).mock.calls[0][1].id).toBe("p1");
+  });
 });
