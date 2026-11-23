@@ -35,6 +35,7 @@ const corsOrigins = parseCsv(
 );
 
 const apiKey = process.env.VERTEXA_API_KEY?.trim() || process.env.API_KEY?.trim() || (isProduction ? "" : "dev-vertexa-api-key");
+const internalServiceKey = process.env.INTERNAL_SERVICE_KEY?.trim() || (isProduction ? "" : "dev-internal-service-key");
 
 export const config = {
   nodeEnv,
@@ -48,6 +49,11 @@ export const config = {
   corsOrigins,
   /** Shared secret for admin routes. BFF sends it as X-API-Key or Bearer token. */
   apiKey,
+  internalService: {
+    url: (process.env.INTERNAL_SERVICE_URL?.trim() || "http://127.0.0.1:4010").replace(/\/+$/, ""),
+    key: internalServiceKey,
+    timeoutMs: parseNumber(process.env.INTERNAL_SERVICE_TIMEOUT_MS, 10_000),
+  },
   /** Public inquiry creation (POST /api/v1/inquiries). */
   inquiryRateLimit: {
     windowMs: parseNumber(process.env.INQUIRY_RATE_LIMIT_WINDOW_MS, 10 * 60 * 1000),
@@ -63,6 +69,7 @@ export function validateProductionConfig() {
   if (config.corsOrigins.length === 0) missing.push("CORS_ORIGINS");
   if (config.corsOrigins.some((o) => /localhost|127\.0\.0\.1/i.test(o))) missing.push("CORS_ORIGINS (must not include localhost in production)");
   if (parseBool(process.env.OTP_DEMO_FALLBACK, false)) missing.push("OTP_DEMO_FALLBACK must be false in production");
+  if (!config.internalService.key) missing.push("INTERNAL_SERVICE_KEY");
   return missing;
 }
 
