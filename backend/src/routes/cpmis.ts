@@ -69,7 +69,22 @@ cpmisRouter.post("/portal/:portal/actions", async (req: Request, res: Response) 
     if (secured.type === "create-user") {
       const pwd = "password" in secured ? (secured as any).password : undefined;
       if (typeof pwd === "string") {
-        await setUserPassword((secured as any).stamp.id, (secured as any).input.email, pwd);
+        try {
+          await setUserPassword((secured as any).stamp.id, (secured as any).input.email, pwd);
+        } catch (error) {
+          console.error("[cpmis] create-user credential persistence failed; rolling back user", error);
+          try { await removeUserCredential((secured as any).stamp.id); } catch (cleanupError) { console.error("[cpmis] create-user credential cleanup failed", cleanupError); }
+          try {
+            await applyPortalAction(auth.portal, {
+              type: "delete-user",
+              id: (secured as any).stamp.id,
+              stamp: { id: nextId("act"), at: new Date().toISOString(), notificationId: `ntf-${nextId("ntf")}`, actorId: auth.session.id, actorName: `${auth.session.firstName} ${auth.session.lastName}`, actorRole: auth.session.role },
+            } as any, auth.session);
+          } catch (rollbackError) {
+            console.error("[cpmis] create-user rollback failed", rollbackError);
+          }
+          return apiError(res, 503, "persistence-failed", { message: "The account could not be fully created. Please try again.", requestId: req.requestId });
+        }
       }
     }
     if (secured.type === "update-user" && (secured as any).input.status !== "active") {
