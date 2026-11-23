@@ -12,14 +12,12 @@ export function EmployeeForm({
   employee,
   projects,
   serverError,
-  csrfToken,
   onCancel,
   onSubmit,
 }: {
   employee?: Employee | null;
   projects: Project[];
   serverError?: string | null;
-  csrfToken?: string;
   onCancel: () => void;
   onSubmit: (values: EmployeeFormValues) => void;
 }) {
@@ -45,12 +43,9 @@ export function EmployeeForm({
   return (
     <form
       className="grid gap-4 sm:grid-cols-2"
-      action={employee ? undefined : "/api/employees"}
-      method={employee ? undefined : "post"}
       onSubmit={form.handleSubmit(onSubmit)}
       noValidate
     >
-      {!employee ? <input type="hidden" name="csrfToken" value={csrfToken ?? ""} /> : null}
       <Field label="Employee ID" htmlFor="employeeCode" error={errors.employeeCode?.message}>
         <Input id="employeeCode" {...form.register("employeeCode")} placeholder="EMP-1102" />
       </Field>
@@ -90,7 +85,7 @@ export function EmployeeForm({
       </Field>
       {serverError ? <p className="text-sm text-destructive sm:col-span-2">{serverError}</p> : null}
       <div className="flex justify-end gap-2 sm:col-span-2">
-        {employee ? <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button> : <Button asChild variant="outline"><a href="/admin/employees">Cancel</a></Button>}
+        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
         <Button type="submit">{employee ? "Save employee" : "Register employee"}</Button>
       </div>
     </form>

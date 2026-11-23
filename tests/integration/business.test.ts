@@ -264,4 +264,74 @@ describe("business API", () => {
     expect(h.applyPortalAction).toHaveBeenCalled();
     expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("delete-user");
   });
+
+  const validEmployee = {
+    employeeCode: "EMP-001",
+    firstName: "Jane",
+    lastName: "Doe",
+    position: "Engineer",
+    department: "Engineering",
+    phone: "0712345678",
+    email: "jane@example.com",
+    projectId: "p1",
+    status: "active",
+    hiredAt: "2026-01-10",
+  };
+
+  it("rejects employee listing for non-admin", async () => {
+    h.currentSession.value = pmSession;
+    const res = await request(app()).get("/api/v1/cpmis/business/employees");
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects employee registration with invalid payload", async () => {
+    const res = await request(app()).post("/api/v1/cpmis/business/employees").send({ employeeCode: "E" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("validation-failed");
+  });
+
+  it("rejects duplicate employee code on create", async () => {
+    (h.mockState.employees as any[]).push({ id: "e1", ...validEmployee });
+    const res = await request(app()).post("/api/v1/cpmis/business/employees").send(validEmployee);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("conflict");
+    h.mockState.employees = [];
+  });
+
+  it("registers employee via business API", async () => {
+    const res = await request(app()).post("/api/v1/cpmis/business/employees").send(validEmployee);
+    expect(res.status).toBe(201);
+    expect(res.body.ok).toBe(true);
+    expect(h.applyPortalAction).toHaveBeenCalled();
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("create-employee");
+  });
+
+  it("rejects employee update from non-admin", async () => {
+    h.currentSession.value = pmSession;
+    const res = await request(app()).patch("/api/v1/cpmis/business/employees/e1").send({ firstName: "Janet" });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for updating unknown employee", async () => {
+    const res = await request(app()).patch("/api/v1/cpmis/business/employees/missing").send({ firstName: "Janet" });
+    expect(res.status).toBe(404);
+  });
+
+  it("updates employee via business API", async () => {
+    (h.mockState.employees as any[]).push({ id: "e1", ...validEmployee });
+    const res = await request(app()).patch("/api/v1/cpmis/business/employees/e1").send({ firstName: "Janet" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(h.applyPortalAction).toHaveBeenCalled();
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("update-employee");
+    h.mockState.employees = [];
+  });
+
+  it("deletes employee via business API", async () => {
+    const res = await request(app()).delete("/api/v1/cpmis/business/employees/e1");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(h.applyPortalAction).toHaveBeenCalled();
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("delete-employee");
+  });
 });
