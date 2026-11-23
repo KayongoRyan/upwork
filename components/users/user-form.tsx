@@ -15,14 +15,12 @@ export function UserForm({
   user,
   projects,
   serverError,
-  csrfToken,
   onCancel,
   onSubmit,
 }: {
   user?: UserAccount | null;
   projects: Project[];
   serverError?: string | null;
-  csrfToken?: string;
   onCancel: () => void;
   onSubmit: (values: UserFormValues & { password?: string }) => void | Promise<void>;
 }) {
@@ -55,14 +53,11 @@ export function UserForm({
   return (
     <form
       className="grid gap-4 sm:grid-cols-2"
-      action={user ? undefined : "/api/users"}
-      method={user ? undefined : "post"}
       onSubmit={form.handleSubmit((values) => {
         onSubmit(values);
       })}
       noValidate
     >
-      {!user ? <input type="hidden" name="csrfToken" value={csrfToken ?? ""} /> : null}
       <Field label="First name" htmlFor="firstName" error={errors.firstName?.message}>
         <Input id="firstName" {...form.register("firstName")} />
       </Field>

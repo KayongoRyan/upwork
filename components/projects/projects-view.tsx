@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ProjectForm } from "@/components/projects/project-form";
@@ -24,6 +24,7 @@ import type { ProjectFormValues } from "@/lib/validations/schemas";
 
 export function ProjectsView() {
   const data = useAdmin();
+  const router = useRouter();
   const params = useSearchParams();
   const focus = params.get("focus");
   const create = params.get("create") === "1";
@@ -33,7 +34,6 @@ export function ProjectsView() {
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
   const status = params.get("status") ?? "all";
   const [formError, setFormError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const [projects, setProjects] = useState<Project[]>(data.projects);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
@@ -50,7 +50,19 @@ export function ProjectsView() {
     }
   }, []);
 
-  useEffect(() => { void reloadProjects(); }, [reloadProjects]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/cpmis/business/projects", { cache: "no-store" });
+        const body = (await res.json().catch(() => null)) as { ok?: boolean; items?: Project[] } | null;
+        if (!cancelled && res.ok && body?.ok && Array.isArray(body.items)) setProjects(body.items);
+      } catch {
+        /* keep current rows; portal state remains fallback */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const managers = data.users.filter((user) => user.role === "project_manager");
   const table = usePagedRows({
@@ -107,16 +119,16 @@ export function ProjectsView() {
       <PageHeader
         title="Projects"
         description="Register and maintain the construction portfolio. Changes stay in this browser session."
-        actions={<Button asChild><a href="/admin/projects?create=1"><Plus />Create project</a></Button>}
+        actions={<Button asChild><Link href="/admin/projects?create=1"><Plus />Create project</Link></Button>}
       />
-      {create && !saved ? (
+      {create ? (
         <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
           <h2 className="text-base font-semibold">Create project</h2>
-          <p className="mt-1 mb-4 text-sm text-black/55">Saved in this preview only. Budget figures are demonstration data.</p>
+          <p className="mt-1 mb-4 text-sm text-black/55">Create a project record in the system.</p>
           <ProjectForm
             managers={managers}
             serverError={formError ?? params.get("error")}
-            onCancel={() => { window.location.assign("/admin/projects"); }}
+            onCancel={() => { router.push("/admin/projects"); }}
             onSubmit={async (values) => {
               setFormError(null);
               try {
@@ -134,7 +146,8 @@ export function ProjectsView() {
                   return;
                 }
                 toast.success("Project created.");
-                window.location.assign("/admin/projects");
+                router.push("/admin/projects");
+                await reloadProjects();
               } catch {
                 setFormError("Could not create the project.");
               }
