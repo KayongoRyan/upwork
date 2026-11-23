@@ -49,6 +49,9 @@ Configure via repo-root `.env` and/or `backend/.env`. See [../.env.example](../.
 | `STORAGE_LOCAL_DIR` | `data/uploads` | Local document storage path |
 | `INQUIRY_RATE_LIMIT_WINDOW_MS` | `600000` | Public inquiry rate-limit window |
 | `INQUIRY_RATE_LIMIT_MAX` | `20` | Max public inquiry creates per IP/window |
+| `INTERNAL_SERVICE_URL` | `http://127.0.0.1:4010` | Internal FastAPI service base URL |
+| `INTERNAL_SERVICE_KEY` | dev default outside prod | Shared secret for Express-to-Python internal calls; required in production |
+| `INTERNAL_SERVICE_TIMEOUT_MS` | `10000` | Internal service request timeout |
 
 Production config validation fails fast for missing `MONGODB_URI`, missing API key, missing/non-local CORS origins, and `OTP_DEMO_FALLBACK=true`.
 
@@ -91,6 +94,13 @@ Business mutating endpoints require a valid portal session and CSRF token (`x-cs
 - **Persistence**: MongoDB-backed portal stores; production fails closed on unavailable DB reads/writes. Multi-document portal writes use queue + session transaction with standalone fallback.
 - **Validation**: request validation returns 4xx JSON envelopes; DB duplicate-key errors map to 409 conflicts where applicable.
 - **Logging**: structured JSON logs with request IDs; global error handler sanitizes 5xx responses.
+
+## Internal Python service
+
+The FastAPI internal service in `backend/internal_service` provides health/readiness and worker coordination/job processing primitives. Express-to-Python calls use `backend/src/lib/internalServiceClient.js` and send `X-Internal-Service-Key`.
+
+- Service docs: [internal_service/README.md](internal_service/README.md)
+- Job schemas/lifecycle contract: [../docs/job-processing-contract.md](../docs/job-processing-contract.md)
 
 ## BFF and contracts
 
