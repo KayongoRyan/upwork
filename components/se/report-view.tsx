@@ -17,6 +17,7 @@ export function SeReport() {
 
   return (
     <form action="/api/se/reports" method="post" encType="multipart/form-data">
+      <input type="hidden" name="csrfToken" value={data.viewer?.csrfToken ?? ""} />
       <PageHeader
         title="Daily report"
         description={project ? `${project.code} · ${project.name}. This shift is filed with your project manager.` : "No project assigned."}

@@ -425,6 +425,7 @@ export function usePm() {
   const ids = new Set(projects.map((project) => project.id));
   return {
     actor,
+    viewer: data.viewer,
     projects,
     tasks: data.tasks.filter((task) => ids.has(task.projectId)),
     reports: data.reports.filter((report) => ids.has(report.projectId)),
@@ -479,6 +480,7 @@ export function useSiteEngineer() {
 
   return {
     actor,
+    viewer: data.viewer,
     project: projects[0] ?? null,
     tasks,
     reports,
@@ -531,6 +533,7 @@ export function useQuantitySurveyor() {
 
   return {
     actor,
+    viewer: data.viewer,
     project,
     lines,
     notices,

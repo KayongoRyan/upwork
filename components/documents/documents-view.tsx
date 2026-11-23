@@ -18,11 +18,10 @@ import {
 } from "@/lib/documents";
 import { roleLabel, userRoles } from "@/lib/labels";
 import { formatDateTime, fullName } from "@/lib/utils";
-import type { DocumentCategory, DocumentRevision, ProjectDocument, RevisionStatus, UserRole } from "@/types";
+import type { DocumentCategory, DocumentRevision, ProjectDocument, UserRole } from "@/types";
 
 const selectClass = "h-10 w-full rounded-lg border border-input bg-white px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25";
 const categories = Object.keys(documentCategoryLabel) as DocumentCategory[];
-const MAX_BYTES = 512 * 1024;
 
 export function DocumentsView() {
   const data = useAdmin();
@@ -38,7 +37,6 @@ export function DocumentsView() {
   const [category, setCategory] = useState<DocumentCategory | "all">("all");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(requestedDoc);
-  const [saved, setSaved] = useState(false);
   if (requested !== seen) {
     setSeen(requested);
     if (requested && data.projects.some((item) => item.id === requested)) setProjectId(requested);
@@ -78,30 +76,19 @@ export function DocumentsView() {
           </>
         }
       />
-      {register && !saved ? (
+      {register ? (
         <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
           <h2 className="text-base font-semibold">Register document</h2>
           <p className="mt-1 mb-4 text-sm text-black/55">The first file is Rev 01. Leave it in review unless it is ready to build from.</p>
           <RegisterForm
             projects={data.projects}
             users={data.users}
-            uploaderId={data.viewer?.id ?? ""}
+            csrfToken={data.viewer?.csrfToken ?? ""}
             serverError={params.get("error")}
-            onSubmit={async (document, revision) => {
-              const result = data.registerDocument(document, revision);
-              if (!result.ok) {
-                toast.error(result.error);
-                return;
-              }
-              if (result.saved && !(await result.saved)) return;
-              toast.success(revision.status === "approved" ? "Document issued as Rev 01." : "Document registered. Rev 01 is not issued.");
-              setSaved(true);
-              window.history.replaceState(null, "", "/admin/documents");
-            }}
           />
         </section>
       ) : null}
-      {revise && !register && !saved ? (
+      {revise && !register ? (
         <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
           <h2 className="text-base font-semibold">Upload revision</h2>
           <p className="mt-1 mb-4 text-sm text-black/55">The new file stays in review. The issued revision does not change until you issue this one.</p>
@@ -110,20 +97,8 @@ export function DocumentsView() {
               key={revise}
               documents={documents}
               initialId={documents.some((item) => item.id === revise) ? revise : documents[0].id}
-              uploaderId={data.viewer?.id ?? ""}
+              csrfToken={data.viewer?.csrfToken ?? ""}
               serverError={params.get("error")}
-              onSubmit={async (documentId, revision) => {
-                const result = data.reviseDocument(documentId, revision);
-                if (!result.ok) {
-                  toast.error(result.error);
-                  return;
-                }
-                if (result.saved && !(await result.saved)) return;
-                toast.success("Revision uploaded. It is not issued.");
-                setSaved(true);
-                setOpenId(documentId);
-                window.history.replaceState(null, "", `/admin/documents?doc=${documentId}`);
-              }}
             />
           )}
         </section>
@@ -337,53 +312,22 @@ function AccessEditor({ access, onSave }: { access: UserRole[]; onSave: (access:
 function RegisterForm({
   projects,
   users,
-  uploaderId,
+  csrfToken,
   serverError,
-  onSubmit,
 }: {
   projects: { id: string; code: string; name: string }[];
   users: { id: string; firstName: string; lastName: string }[];
-  uploaderId: string;
+  csrfToken: string;
   serverError?: string | null;
-  onSubmit: (document: Omit<ProjectDocument, "id" | "revisions">, revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt">) => void;
 }) {
-  const [busy, setBusy] = useState(false);
-
   return (
     <form
       className="grid gap-3"
       action="/api/documents"
       method="post"
       encType="multipart/form-data"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const file = data.get("file");
-        if (!(file instanceof File) || file.size === 0) {
-          toast.error("Choose a file.");
-          return;
-        }
-        setBusy(true);
-        const access = data.getAll("access").filter((value): value is UserRole => typeof value === "string");
-        readUpload(file)
-          .then((upload) => {
-            onSubmit(
-              {
-                projectId: String(data.get("projectId") ?? ""),
-                number: String(data.get("number") ?? ""),
-                title: String(data.get("title") ?? ""),
-                category: String(data.get("category") ?? "drawing") as DocumentCategory,
-                discipline: String(data.get("discipline") ?? "General"),
-                ownerId: String(data.get("ownerId") ?? ""),
-                access,
-              },
-              { ...upload, note: String(data.get("note") ?? "").trim(), status: String(data.get("status") ?? "in_review") as RevisionStatus, uploadedBy: uploaderId },
-            );
-          })
-          .catch((error: Error) => toast.error(error.message))
-          .finally(() => setBusy(false));
-      }}
     >
+      <input type="hidden" name="csrfToken" value={csrfToken} />
       {serverError ? <p className="text-sm text-destructive">{serverError}</p> : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1"><Label>Number</Label><Input name="number" placeholder="DWG-KGL-015" required /></label>
@@ -419,6 +363,7 @@ function RegisterForm({
       </div>
       <label className="grid gap-1"><Label>Revision note</Label><Textarea name="note" /></label>
       <div className="flex flex-wrap gap-3">
+        <input type="hidden" name="access" value="administrator" />
         {userRoles.map((role) => (
           <label key={role} className="flex items-center gap-1.5 text-xs">
             <input type="checkbox" name="access" value={role} defaultChecked disabled={role === "administrator"} />
@@ -428,7 +373,7 @@ function RegisterForm({
       </div>
       <div className="flex justify-end gap-2">
         <Button asChild variant="outline"><a href="/admin/documents">Cancel</a></Button>
-        <Button type="submit" disabled={busy}>{busy ? "Reading file" : "Register"}</Button>
+        <Button type="submit">Register</Button>
       </div>
     </form>
   );
@@ -437,17 +382,14 @@ function RegisterForm({
 function ReviseForm({
   documents,
   initialId,
-  uploaderId,
+  csrfToken,
   serverError,
-  onSubmit,
 }: {
   documents: ProjectDocument[];
   initialId: string;
-  uploaderId: string;
+  csrfToken: string;
   serverError?: string | null;
-  onSubmit: (documentId: string, revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt" | "status">) => void;
 }) {
-  const [busy, setBusy] = useState(false);
   const current = documents.find((item) => item.id === initialId);
   const issued = current ? issuedRevision(current) : null;
   return (
@@ -456,21 +398,8 @@ function ReviseForm({
       action="/api/documents/revise"
       method="post"
       encType="multipart/form-data"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        const file = data.get("file");
-        if (!(file instanceof File) || file.size === 0) {
-          toast.error("Choose a file.");
-          return;
-        }
-        setBusy(true);
-        readUpload(file)
-          .then((upload) => onSubmit(String(data.get("documentId") ?? initialId), { ...upload, note: String(data.get("note") ?? "").trim(), uploadedBy: uploaderId }))
-          .catch((error: Error) => toast.error(error.message))
-          .finally(() => setBusy(false));
-      }}
     >
+      <input type="hidden" name="csrfToken" value={csrfToken} />
       {serverError ? <p className="text-sm text-destructive">{serverError}</p> : null}
       <label className="grid gap-1">
         <Label>Document</Label>
@@ -485,7 +414,7 @@ function ReviseForm({
       <label className="grid gap-1"><Label>What changed</Label><Textarea name="note" /></label>
       <div className="flex justify-end gap-2">
         <Button asChild variant="outline"><a href="/admin/documents">Cancel</a></Button>
-        <Button type="submit" disabled={busy}>{busy ? "Reading file" : "Upload as in review"}</Button>
+        <Button type="submit">Upload as in review</Button>
       </div>
     </form>
   );
@@ -503,16 +432,6 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="mt-1 text-2xl font-semibold">{value}</p>
     </div>
   );
-}
-
-function readUpload(file: File) {
-  if (file.size > MAX_BYTES) return Promise.reject(new Error("Keep the preview file under 512 KB."));
-  return new Promise<{ fileName: string; fileType: string; size: number; dataUrl: string }>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({ fileName: file.name, fileType: file.type || "application/octet-stream", size: file.size, dataUrl: String(reader.result) });
-    reader.onerror = () => reject(new Error("Could not read that file."));
-    reader.readAsDataURL(file);
-  });
 }
 
 function downloadRevision(item: ProjectDocument, revision: DocumentRevision) {

@@ -67,6 +67,7 @@ function SubmitForm() {
   const data = usePm();
   return (
     <form className="grid gap-3 rounded-[22px] border border-black/5 bg-card p-4 md:grid-cols-2" action="/api/pm/reports" method="post">
+      <input type="hidden" name="csrfToken" value={data.viewer?.csrfToken ?? ""} />
       <div className="md:col-span-2">
         <h2 className="text-sm font-semibold">Submit report</h2>
         <p className="mt-1 text-xs text-muted-foreground">This goes to the administrator for review. You get a notice when it has been sent.</p>
@@ -124,12 +125,14 @@ function ReportCard({ report }: { report: EngineerReport }) {
       <ManagerNotes notes={data.comments.filter((item) => item.kind === "report" && item.workId === report.id)} />
       {report.status === "submitted" ? (
         <form className="mt-3" action="/api/pm/reports/open" method="post">
+          <input type="hidden" name="csrfToken" value={data.viewer?.csrfToken ?? ""} />
           <input type="hidden" name="id" value={report.id} />
           <Button type="submit">Start review</Button>
         </form>
       ) : null}
       {report.status === "in_review" ? (
         <form className="mt-3 grid gap-2" action="/api/pm/reports/decide" method="post">
+          <input type="hidden" name="csrfToken" value={data.viewer?.csrfToken ?? ""} />
           <input type="hidden" name="id" value={report.id} />
           <Field label="Comment" htmlFor={`note-${report.id}`} hint={`Sent to ${sender}`}>
             <Textarea id={`note-${report.id}`} name="note" required minLength={3} placeholder={`Comment for ${sender}`} />

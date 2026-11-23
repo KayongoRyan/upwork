@@ -45,7 +45,13 @@ export function clearSessionCookieOnExpress(res: Response, portal: PortalKey) {
 export function verifyCsrfToken(req: Request, session: SessionUser, bodyToken?: string | null) {
   const method = req.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return null;
-  const provided = (req.get("x-csrf-token") ?? bodyToken ?? "").toString();
+  // Native HTML forms cannot set x-csrf-token, so they post the per-session
+  // token as a hidden field. Read it centrally so every form route accepts it.
+  const bodyValue = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+    ? (req.body as { csrfToken?: unknown }).csrfToken
+    : undefined;
+  const bodyField = typeof bodyValue === "string" ? bodyValue : "";
+  const provided = (req.get("x-csrf-token") ?? bodyToken ?? bodyField ?? "").toString();
   if (!provided || !session.csrfToken) {
     return { status: 403, body: { ok: false, error: "Invalid CSRF token." } };
   }

@@ -71,6 +71,7 @@ export function PmCosts() {
                 <p className="mt-3 text-sm text-black/55">Not submitted yet.</p>
               )}
               <form id={`bill-${project.id}`} className="mt-4" action="/api/pm/costs/edit" method="post">
+                <input type="hidden" name="csrfToken" value={data.viewer?.csrfToken ?? ""} />
                 <input type="hidden" name="projectId" value={project.id} />
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">

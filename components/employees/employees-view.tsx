@@ -98,6 +98,7 @@ export function EmployeesView() {
           <EmployeeForm
             projects={data.projects}
             serverError={formError ?? params.get("error")}
+            csrfToken={data.viewer?.csrfToken ?? ""}
             onCancel={() => { window.location.assign("/admin/employees"); }}
             onSubmit={(values) => {
               const result = data.createEmployee(values);
@@ -174,7 +175,7 @@ export function EmployeesView() {
       <Dialog open={editor !== null} onOpenChange={(open) => { if (!open) setEditor(null); }}>
         {editor !== null ? (
           <DialogContent className="sm:max-w-2xl" title={editor === "new" ? "Register employee" : "Edit employee"} description="Workforce record only. This does not create a login.">
-            <EmployeeForm employee={editor === "new" ? null : editor} projects={data.projects} serverError={formError} onCancel={() => setEditor(null)} onSubmit={save} />
+            <EmployeeForm employee={editor === "new" ? null : editor} projects={data.projects} serverError={formError} csrfToken={data.viewer?.csrfToken ?? ""} onCancel={() => setEditor(null)} onSubmit={save} />
           </DialogContent>
         ) : null}
       </Dialog>

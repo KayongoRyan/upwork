@@ -98,11 +98,18 @@ export function UsersView() {
           <UserForm
             projects={data.projects}
             serverError={formError ?? params.get("error")}
+            csrfToken={data.viewer?.csrfToken ?? ""}
             onCancel={() => { router.push("/admin/users"); }}
             onSubmit={async (values) => {
-              const body = new FormData();
-              Object.entries(values).forEach(([key, value]) => body.append(key, String(value ?? "")));
-              const res = await fetch("/api/users", { method: "POST", body, headers: { "x-csrf-token": data.viewer?.csrfToken ?? "" } });
+              // Express form routes parse urlencoded bodies. Sending multipart
+              // here left req.body empty and the account was never created.
+              const body = new URLSearchParams();
+              Object.entries(values).forEach(([key, value]) => body.set(key, String(value ?? "")));
+              const res = await fetch("/api/users", {
+                method: "POST",
+                body,
+                headers: { "content-type": "application/x-www-form-urlencoded", "x-csrf-token": data.viewer?.csrfToken ?? "" },
+              });
               if (res.redirected) { router.push(res.url); router.refresh(); return; }
               if (!res.ok) { setFormError("Could not add the user."); return; }
               router.push("/admin/users");
@@ -172,7 +179,7 @@ export function UsersView() {
       <Dialog open={editor !== null} onOpenChange={(open) => { if (!open) setEditor(null); }}>
         {editor ? (
           <DialogContent className="sm:max-w-2xl" title="Edit user" description="This updates the account details. It does not change the password.">
-            <UserForm user={editor} projects={data.projects} serverError={formError} onCancel={() => setEditor(null)} onSubmit={save} />
+            <UserForm user={editor} projects={data.projects} serverError={formError} csrfToken={data.viewer?.csrfToken ?? ""} onCancel={() => setEditor(null)} onSubmit={save} />
           </DialogContent>
         ) : null}
       </Dialog>

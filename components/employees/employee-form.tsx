@@ -12,12 +12,14 @@ export function EmployeeForm({
   employee,
   projects,
   serverError,
+  csrfToken,
   onCancel,
   onSubmit,
 }: {
   employee?: Employee | null;
   projects: Project[];
   serverError?: string | null;
+  csrfToken?: string;
   onCancel: () => void;
   onSubmit: (values: EmployeeFormValues) => void;
 }) {
@@ -48,6 +50,7 @@ export function EmployeeForm({
       onSubmit={form.handleSubmit(onSubmit)}
       noValidate
     >
+      {!employee ? <input type="hidden" name="csrfToken" value={csrfToken ?? ""} /> : null}
       <Field label="Employee ID" htmlFor="employeeCode" error={errors.employeeCode?.message}>
         <Input id="employeeCode" {...form.register("employeeCode")} placeholder="EMP-1102" />
       </Field>
