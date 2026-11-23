@@ -10,6 +10,7 @@ import { apiError } from "../lib/api-response";
 import { requireAnySession, requireSession } from "../lib/session";
 import { canAccessProject, isAdmin } from "../lib/rbac";
 import { verifyCsrfToken, setUserPassword, removeUserCredential, destroySessionsForUser } from "../lib/auth-bridge";
+import { withIdempotency } from "../lib/idempotency";
 import { logger } from "../lib/logger";
 
 export const businessRouter = Router();
@@ -28,25 +29,35 @@ function parseOr400<T>(schema: z.ZodType<T>, body: unknown, req: Request, res: R
   return parsed.data;
 }
 
-function handleActionError(error: unknown, req: Request, res: Response) {
+function actionErrorResult(error: unknown, req: Request): { status: number; body: any } {
   if (error && typeof error === "object" && "name" in error && (error as any).name === "PortalActionError") {
-    return apiError(res, 403, "forbidden", { message: "You are not authorized to perform this action.", requestId: req.requestId });
+    return { status: 403, body: { ok: false, error: "forbidden", message: "You are not authorized to perform this action.", requestId: req.requestId, apiVersion: req.app.locals?.apiVersion ?? "v1" } };
   }
   if (error instanceof PersistenceError) {
-    return apiError(res, 503, "persistence-failed", { requestId: req.requestId });
+    return { status: 503, body: { ok: false, error: "persistence-failed", requestId: req.requestId, apiVersion: req.app.locals?.apiVersion ?? "v1" } };
   }
   logger.error("business.action_failed", error, { requestId: req.requestId, path: req.originalUrl, method: req.method });
-  return apiError(res, 500, "action-failed", { requestId: req.requestId });
+  return { status: 500, body: { ok: false, error: "action-failed", requestId: req.requestId, apiVersion: req.app.locals?.apiVersion ?? "v1" } };
+}
+
+function handleActionError(error: unknown, req: Request, res: Response) {
+  const result = actionErrorResult(error, req);
+  return res.status(result.status).json(result.body);
+}
+
+async function runAction(req: Request, portal: any, session: any, action: any, status = 200): Promise<{ status: number; body: any }> {
+  try {
+    const state = await applyPortalAction(portal, action, session);
+    return { status, body: { ok: true, state } };
+  } catch (error) {
+    return actionErrorResult(error, req);
+  }
 }
 
 async function withAction(req: Request, res: Response, portal: any, session: any, action: any, status = 200) {
-  try {
-    const state = await applyPortalAction(portal, action, session);
-    res.setHeader("cache-control", "no-store");
-    return res.status(status).json({ ok: true, state });
-  } catch (error) {
-    return handleActionError(error, req, res);
-  }
+  const result = await runAction(req, portal, session, action, status);
+  res.setHeader("cache-control", "no-store");
+  return res.status(result.status).json(result.body);
 }
 
 async function ensureProjectAccess(req: Request, res: Response, session: any, projectId: string, state?: any) {
@@ -107,35 +118,29 @@ businessRouter.post("/users", async (req: Request, res: Response) => {
   const schema = userSchema.extend({ password: z.string().min(8).max(200) });
   const parsed = parseOr400(schema, req.body ?? {}, req, res);
   if (!parsed) return;
-  const state = await readStateOr503(req, res);
-  if (!state) return;
-  if (state.users.some((u) => u.email.toLowerCase() === parsed.email.toLowerCase())) {
-    return apiError(res, 409, "conflict", { message: "That email is already registered.", requestId: req.requestId });
-  }
-  const st = stamp(auth.session);
-  try {
-    await applyPortalAction("administrator", { type: "create-user", input: parsed, stamp: st } as any, auth.session);
-  } catch (error) {
-    return handleActionError(error, req, res);
-  }
-  try {
-    await setUserPassword(st.id, parsed.email, parsed.password);
-    res.setHeader("cache-control", "no-store");
-    res.status(201).json({ ok: true, id: st.id });
-  } catch (error) {
-    logger.error("business.user_create_credential_failed", error, { requestId: req.requestId, userId: st.id, email: parsed.email });
+  return withIdempotency(req, res, `business:users:create:${auth.session.id}`, parsed, async () => {
+    let state;
+    try { state = await readState(); } catch (error) { if (error instanceof PersistenceError) return { status: 503, body: { ok: false, error: "persistence-failed", requestId: req.requestId, apiVersion: "v1" } }; throw error; }
+    if (state.users.some((u) => u.email.toLowerCase() === parsed.email.toLowerCase())) {
+      return { status: 409, body: { ok: false, error: "conflict", message: "That email is already registered.", requestId: req.requestId, apiVersion: "v1" } };
+    }
+    const st = stamp(auth.session);
     try {
-      await removeUserCredential(st.id);
-    } catch (cleanupError) {
-      logger.error("business.user_create_credential_cleanup_failed", cleanupError, { requestId: req.requestId, userId: st.id });
+      await applyPortalAction("administrator", { type: "create-user", input: parsed, stamp: st } as any, auth.session);
+    } catch (error) {
+      return actionErrorResult(error, req);
     }
     try {
-      await applyPortalAction("administrator", { type: "delete-user", id: st.id, stamp: stamp(auth.session) } as any, auth.session);
-    } catch (rollbackError) {
-      logger.error("business.user_create_rollback_failed", rollbackError, { requestId: req.requestId, userId: st.id });
+      await setUserPassword(st.id, parsed.email, parsed.password);
+      res.setHeader("cache-control", "no-store");
+      return { status: 201, body: { ok: true, id: st.id } };
+    } catch (error) {
+      logger.error("business.user_create_credential_failed", error, { requestId: req.requestId, userId: st.id, email: parsed.email });
+      try { await removeUserCredential(st.id); } catch (cleanupError) { logger.error("business.user_create_credential_cleanup_failed", cleanupError, { requestId: req.requestId, userId: st.id }); }
+      try { await applyPortalAction("administrator", { type: "delete-user", id: st.id, stamp: stamp(auth.session) } as any, auth.session); } catch (rollbackError) { logger.error("business.user_create_rollback_failed", rollbackError, { requestId: req.requestId, userId: st.id }); }
+      return { status: 503, body: { ok: false, error: "persistence-failed", message: "The account could not be fully created. Please try again.", requestId: req.requestId, apiVersion: "v1" } };
     }
-    return apiError(res, 503, "persistence-failed", { message: "The account could not be fully created. Please try again.", requestId: req.requestId });
-  }
+  });
 });
 
 businessRouter.patch("/users/:id", async (req: Request, res: Response) => {
@@ -207,12 +212,15 @@ businessRouter.post("/employees", async (req: Request, res: Response) => {
   if (csrfError) return res.status(csrfError.status).json(csrfError.body);
   const parsed = parseOr400(employeeSchema, req.body ?? {}, req, res);
   if (!parsed) return;
-  const state = await readStateOr503(req, res);
-  if (!state) return;
-  if (state.employees.some((e) => e.employeeCode.toLowerCase() === parsed.employeeCode.toLowerCase())) {
-    return apiError(res, 409, "conflict", { message: "That employee ID is already in use.", requestId: req.requestId });
-  }
-  return withAction(req, res, "administrator", auth.session, { type: "create-employee", input: parsed, stamp: stamp(auth.session) }, 201);
+  return withIdempotency(req, res, `business:employees:create:${auth.session.id}`, parsed, async () => {
+    let state;
+    try { state = await readState(); } catch (error) { if (error instanceof PersistenceError) return { status: 503, body: { ok: false, error: "persistence-failed", requestId: req.requestId, apiVersion: "v1" } }; throw error; }
+    if (state.employees.some((e) => e.employeeCode.toLowerCase() === parsed.employeeCode.toLowerCase())) {
+      return { status: 409, body: { ok: false, error: "conflict", message: "That employee ID is already in use.", requestId: req.requestId, apiVersion: "v1" } };
+    }
+    res.setHeader("cache-control", "no-store");
+    return runAction(req, "administrator", auth.session, { type: "create-employee", input: parsed, stamp: stamp(auth.session) }, 201);
+  });
 });
 
 businessRouter.patch("/employees/:id", async (req: Request, res: Response) => {
@@ -256,7 +264,10 @@ businessRouter.post("/projects", async (req: Request, res: Response) => {
   if (csrfError) return res.status(csrfError.status).json(csrfError.body);
   const parsed = parseOr400(projectSchema, req.body ?? {}, req, res);
   if (!parsed) return;
-  return withAction(req, res, "administrator", auth.session, { type: "create-project", input: parsed, stamp: stamp(auth.session) }, 201);
+  return withIdempotency(req, res, `business:projects:create:${auth.session.id}`, parsed, async () => {
+    res.setHeader("cache-control", "no-store");
+    return runAction(req, "administrator", auth.session, { type: "create-project", input: parsed, stamp: stamp(auth.session) }, 201);
+  });
 });
 
 businessRouter.patch("/projects/:id", async (req: Request, res: Response) => {
@@ -333,7 +344,7 @@ businessRouter.post("/tasks", async (req: Request, res: Response) => {
   if (!(await ensureProjectAccess(req, res, auth.session, parsed.projectId))) return;
   const portal = portalForSession(auth.session);
   if (portal !== "administrator" && portal !== "project_manager") return apiError(res, 403, "forbidden", { requestId: req.requestId });
-  return withAction(req, res, portal, auth.session, { type: "create-task", input: parsed, stamp: stamp(auth.session) }, 201);
+  return withIdempotency(req, res, `business:tasks:create:${auth.session.id}`, parsed, async () => { res.setHeader("cache-control", "no-store"); return runAction(req, portal, auth.session, { type: "create-task", input: parsed, stamp: stamp(auth.session) }, 201); });
 });
 
 businessRouter.post("/tasks/:id/status", async (req: Request, res: Response) => {
@@ -449,7 +460,7 @@ businessRouter.post("/site-reports", async (req: Request, res: Response) => {
   if (!parsed) return;
   if (!(await ensureProjectAccess(req, res, auth.session, parsed.projectId))) return;
   if (portal === "site_engineer" && parsed.engineerId !== auth.session.id) return apiError(res, 403, "forbidden", { message: "Site engineers can only submit their own reports.", requestId: req.requestId });
-  return withAction(req, res, portal, auth.session, { type: "submit-report", input: { ...parsed, photos: parsed.photos ?? [] }, photos: parsed.photos ?? [], toAdmin: parsed.toAdmin ?? (portal === "project_manager"), stamp: stamp(auth.session) }, 201);
+  return withIdempotency(req, res, `business:site-reports:create:${auth.session.id}`, parsed, async () => { res.setHeader("cache-control", "no-store"); return runAction(req, portal, auth.session, { type: "submit-report", input: { ...parsed, photos: parsed.photos ?? [] }, photos: parsed.photos ?? [], toAdmin: parsed.toAdmin ?? (portal === "project_manager"), stamp: stamp(auth.session) }, 201); });
 });
 
 businessRouter.patch("/site-reports/:id/resubmit", async (req: Request, res: Response) => {
@@ -548,7 +559,7 @@ businessRouter.post("/boq", async (req: Request, res: Response) => {
   if (!(await ensureProjectAccess(req, res, auth.session, parsed.projectId))) return;
   const input = parseBoq(parsed as any);
   if (!input) return apiError(res, 400, "validation-failed", { message: "Invalid BOQ line.", requestId: req.requestId });
-  return withAction(req, res, "quantity_surveyor", auth.session, { type: "create-boq", surveyorId: auth.session.id, input, stamp: stamp(auth.session) }, 201);
+  return withIdempotency(req, res, `business:boq:create:${auth.session.id}`, parsed, async () => { res.setHeader("cache-control", "no-store"); return runAction(req, "quantity_surveyor", auth.session, { type: "create-boq", surveyorId: auth.session.id, input, stamp: stamp(auth.session) }, 201); });
 });
 
 businessRouter.patch("/boq/:id", async (req: Request, res: Response) => {
@@ -633,7 +644,7 @@ businessRouter.post("/cost-reports/send", async (req: Request, res: Response) =>
   if (!body) return;
   const surveyorId = body.surveyorId ?? auth.session.id;
   if (surveyorId !== auth.session.id) return apiError(res, 403, "forbidden", { requestId: req.requestId });
-  return withAction(req, res, "quantity_surveyor", auth.session, { type: "send-cost-report", surveyorId, stamp: stamp(auth.session) }, 201);
+  return withIdempotency(req, res, `business:cost-reports:send:${auth.session.id}`, body, async () => { res.setHeader("cache-control", "no-store"); return runAction(req, "quantity_surveyor", auth.session, { type: "send-cost-report", surveyorId, stamp: stamp(auth.session) }, 201); });
 });
 
 businessRouter.post("/cost-reports/submit", async (req: Request, res: Response) => {
@@ -644,7 +655,7 @@ businessRouter.post("/cost-reports/submit", async (req: Request, res: Response) 
   const body = parseOr400(z.object({ projectId: z.string().min(1), surveyorId: z.string().min(1) }), req.body ?? {}, req, res);
   if (!body) return;
   if (!(await ensureProjectAccess(req, res, auth.session, body.projectId))) return;
-  return withAction(req, res, "project_manager", auth.session, { type: "submit-cost-report", projectId: body.projectId, surveyorId: body.surveyorId, stamp: stamp(auth.session) }, 201);
+  return withIdempotency(req, res, `business:cost-reports:submit:${auth.session.id}`, body, async () => { res.setHeader("cache-control", "no-store"); return runAction(req, "project_manager", auth.session, { type: "submit-cost-report", projectId: body.projectId, surveyorId: body.surveyorId, stamp: stamp(auth.session) }, 201); });
 });
 
 businessRouter.patch("/cost-reports/revise-bill", async (req: Request, res: Response) => {

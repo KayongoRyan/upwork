@@ -33,7 +33,11 @@ const h = vi.hoisted(() => {
 
 vi.mock("@/lib/server/portal-store", () => ({ applyPortalAction: h.applyPortalAction }));
 vi.mock("@/lib/server/memory", () => ({ readState: h.readState }));
-vi.mock("@/lib/server/mongo", () => ({ PersistenceError: class PersistenceError extends Error { name = "PersistenceError"; } }));
+vi.mock("@/lib/server/mongo", () => ({
+  PersistenceError: class PersistenceError extends Error { name = "PersistenceError"; },
+  getMongoRuntime: vi.fn(async () => null),
+  requireCollectionInProduction: <T,>(v: T | null) => v,
+}));
 vi.mock("../../backend/src/lib/session", () => ({
   requireAnySession: vi.fn(async (_req: any, res: any) => {
     if (!h.currentSession.value) { res.status(401).json({ ok: false, error: "auth-required" }); return null; }
