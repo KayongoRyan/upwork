@@ -1,95 +1,115 @@
-# Vertexa backend (Express + MongoDB)
+# Vertexa CPMIS / Express API
 
-HTTP API separated from the Next.js frontend. Dependencies are installed **once at the repo root** (no separate `backend/node_modules`) to save disk space.
+Express is the API authority for CPMIS and the public Vertexa inquiry/notification APIs. Next.js route handlers under `app/api/**` are thin BFF proxies that forward requests to this service.
 
-## Disk full / failed `backend/npm install`
+## Install and run
 
-If you saw `ENOSPC: no space left on device`:
-
-1. Delete the broken partial install: `Remove-Item -Recurse -Force backend\node_modules` (if it exists).
-2. Free space on `C:` — e.g. empty Recycle Bin, remove unused large files, delete `\.next` if you can rebuild (`Remove-Item -Recurse -Force .next`).
-3. Optional: `npm cache clean --force` (from repo root).
-4. From **repo root**: `npm install` (installs frontend + backend packages together).
-
-## Setup
+Dependencies are installed **once at the repo root** (no separate `backend/node_modules`).
 
 ```bash
-# from c:\dev\upwork
+# from repo root (c:\dev\upwork)
 npm install
-copy backend\env.example backend\.env
-npm run dev:backend
+copy .env.example .env   # or configure backend/.env as needed
+npm run dev:backend      # tsx watch backend/src/index.js
 ```
 
-Default API: **http://localhost:4000**
+Default API: `http://localhost:4000`
 
-The Express service owns the public site's inquiries and notifications in
-`MONGODB_DB` (default `vertexa_cpmis`). The CPMIS portals keep their workspace in
-separate databases (`vertexa_admin`, `vertexa_pm`, `vertexa_se`, `vertexa_qs`), which
-the Next.js app manages directly — see the root [`README.md`](../README.md#per-portal-databases).
+Useful scripts (repo root):
 
-## Environment (`backend/.env`)
+```bash
+npm run dev:backend      # watch Express API
+npm run test             # Vitest
+npm run test:unit
+npm run test:integration
+npm run backup:mongo
+npm run restore:mongo
+```
 
-| Variable | Default | Description |
-|----------|---------|-------------|
+## Environment
+
+Configure via repo-root `.env` and/or `backend/.env`. See [../.env.example](../.env.example) for the full template.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `NODE_ENV` | `development` | `production` enables fail-fast config validation |
 | `PORT` | `4000` | HTTP port |
-| `MONGODB_URI` | `mongodb://127.0.0.1:27017` | MongoDB connection string |
-| `MONGODB_DB` | `vertexa_cpmis` | Database name |
-| `CORS_ORIGINS` | `http://localhost:3030`, `http://localhost:3000`, … | Allowed browser origins |
-| `VERTEXA_API_KEY` | `dev-vertexa-api-key` (non-production) | Shared secret for admin routes; **required in production** |
-| `INQUIRY_RATE_LIMIT_WINDOW_MS` | `600000` | Rate-limit window for public inquiry creation |
-| `INQUIRY_RATE_LIMIT_MAX` | `20` | Max public inquiry creates per IP per window |
+| `HOST` | `0.0.0.0`/platform default | Listen host, if configured |
+| `TRUST_PROXY` | `false` | Set when behind a trusted reverse proxy |
+| `MONGODB_URI` | `mongodb://127.0.0.1:27017` | MongoDB connection |
+| `MONGODB_DB_ADMIN/PM/SE/QS` | `vertexa_admin/pm/se/qs` | Per-portal CPMIS databases |
+| `MONGODB_DB` | `vertexa_cpmis` | Legacy/shared DB for inquiries/notifications |
+| `CORS_ORIGINS` | localhost dev origins | Comma-separated; production requires explicit non-localhost origins |
+| `VERTEXA_API_KEY` / `API_KEY` | dev default outside prod | Shared admin/BFF key; required in production |
+| `VERTEXA_API_URL` / `CPMIS_API_URL` | `http://localhost:4000` in dev | Used by Next.js BFF proxies; required in production |
+| `DEMO_PASSWORD_*` | seeded demo passwords | Override in real deployments |
+| `AT_USERNAME`, `AT_API_KEY`, `AT_FROM` | sandbox/empty | Africa's Talking SMS for signup OTP |
+| `OTP_DEMO_FALLBACK` | `false` | Temporary demo OTP fallback; must be `false` in production |
+| `STORAGE_DRIVER` | `local` | Document object storage driver |
+| `STORAGE_LOCAL_DIR` | `data/uploads` | Local document storage path |
+| `INQUIRY_RATE_LIMIT_WINDOW_MS` | `600000` | Public inquiry rate-limit window |
+| `INQUIRY_RATE_LIMIT_MAX` | `20` | Max public inquiry creates per IP/window |
 
-## Security and observability
+Production config validation fails fast for missing `MONGODB_URI`, missing API key, missing/non-local CORS origins, and `OTP_DEMO_FALLBACK=true`.
 
-- **Request ID**: every request gets an `X-Request-Id` response header (echoes `X-Request-Id` when provided) and an access log line `[requestId] METHOD path status durationMs`. JSON error responses include `requestId`.
-- **API version**: versioned under `/api/v1`; responses include `X-API-Version` and JSON errors include `apiVersion`. `GET /api/v1` returns resource discovery.
-- **Admin auth**: `GET /api/v1/inquiries`, `GET /api/v1/inquiries/:id`, `PATCH /api/v1/inquiries/:id`, and all `/api/v1/notifications*` routes require `X-API-Key: <VERTEXA_API_KEY>` or `Authorization: Bearer <VERTEXA_API_KEY>`. Missing/invalid key → `401 { ok:false, error:"unauthorized" }`. Unconfigured key → `503 { ok:false, error:"admin_auth_not_configured" }`.
-- **Public create**: `POST /api/v1/inquiries` remains accessible without admin auth but is rate-limited per client IP. Limit exceeded → `429 { ok:false, error:"rate_limited", retryAfter }` with `Retry-After`/`RateLimit-*` headers.
+## API surface
 
-## API contracts
+All API routes are versioned under `/api/v1`. Responses include `X-API-Version: v1`; JSON errors include `apiVersion` and `requestId`.
 
-- **JSON error envelope**: `{ ok: false, error: string, message?: string, details?: unknown, requestId?: string, apiVersion: "v1" }`. `error` is a stable machine code; `message` is human-readable when present. Compatibility fields may be included where needed (e.g. `hint`, `action`, `portal`).
-- **JSON success envelope**: JSON success responses include `ok: true`. Action/session endpoints may add fields such as `redirectTo`, `user`, `items`, or `challengeId`.
-- **Resource responses**: for backward compatibility, some endpoints return a raw resource body (e.g. CPMIS portal state/actions return scoped `AdminState`).
-- **Non-JSON responses**: form workflows may return `303` redirects; file/report endpoints may return binary/CSV/PDF with appropriate content headers.
-- **Request validation**: invalid requests return `4xx` with the JSON error envelope; unexpected failures return `500 server_error` with `requestId` and `apiVersion`.
-
-## Endpoints
+### Root/discovery
 
 | Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/v1/health` | public | API + Mongo ping |
-| POST | `/api/v1/inquiries` | public (rate-limited) | Create inquiry + notifications |
-| GET | `/api/v1/inquiries` | admin key | List inquiries (`status`, `search`, `limit`) |
-| GET | `/api/v1/inquiries/:id` | admin key | Get one inquiry |
-| PATCH | `/api/v1/inquiries/:id` | admin key | Update status/recipient/project and append note |
-| GET | `/api/v1/notifications?recipientId=<user-id>` | admin key | PM inbox |
-| GET | `/api/v1/notifications?audience=admin` | admin key | Admin inbox |
-| PATCH | `/api/v1/notifications/:id/read` | admin key | Mark read |
+|---|---|---|---|
+| GET | `/` | public | Service metadata |
+| GET | `/api/v1` | public | Resource discovery |
+| GET | `/api/v1/health` | public | API + Mongo health |
 
-Successful inquiry/notification responses include `ok: true` with `items` or `inquiry`/record payloads.
+### Public Vertexa APIs
 
-### Examples
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/api/v1/inquiries` | public, rate-limited | Create inquiry + notifications |
+| GET/PATCH | `/api/v1/inquiries*` | admin API key | Inquiry inbox/detail/update |
+| GET/PATCH | `/api/v1/notifications*` | admin API key | Admin/PM notifications |
+
+### CPMIS APIs
+
+| Area | Base path | Notes |
+|---|---|---|
+| Auth/session/signup | `/api/v1/cpmis/auth/*` | Sign-in, sign-out, session, OTP signup; per-portal HttpOnly session cookies, CSRF |
+| Portal state/actions | `/api/v1/cpmis/portal/:portal/*` | Session-scoped state and portal actions |
+| Business JSON APIs | `/api/v1/cpmis/business/*` | Users, employees, projects/assignments, tasks, site reports, BOQ, cost reports, progress/report workflows |
+| Legacy/compat routes | `/api/v1/cpmis/*` | Remaining form/redirect/file handlers used by BFF proxies; see `docs/api-contract-map.md` |
+
+Business mutating endpoints require a valid portal session and CSRF token (`x-csrf-token` header or body `csrfToken`). Idempotency-Key is supported on selected business create POSTs.
+
+## Security and behavior
+
+- **Auth**: email+password credentials in `vertexa_admin.credentials`; per-portal opaque session tokens hashed in MongoDB; 12h TTL; invalidation on sign-out/password/credential changes/deactivation.
+- **CSRF**: timing-safe token validation and same-origin checks for mutating session-authenticated requests.
+- **RBAC/project access**: portal role allowlists, project ownership/assignment checks, scoped state responses.
+- **Persistence**: MongoDB-backed portal stores; production fails closed on unavailable DB reads/writes. Multi-document portal writes use queue + session transaction with standalone fallback.
+- **Validation**: request validation returns 4xx JSON envelopes; DB duplicate-key errors map to 409 conflicts where applicable.
+- **Logging**: structured JSON logs with request IDs; global error handler sanitizes 5xx responses.
+
+## BFF and contracts
+
+Next.js BFF routes forward cookies, CSRF, content type, origin, forwarded IP/host/proto, and Set-Cookie to Express. Browser/BFF/Express mappings are documented in [../docs/api-contract-map.md](../docs/api-contract-map.md).
+
+## Backups and recovery
+
+MongoDB backup/restore scripts and object-storage backup guidance are in [../docs/backup-recovery.md](../docs/backup-recovery.md).
 
 ```bash
-# Public inquiry create (no admin key)
-curl -i -s -X POST http://localhost:4000/api/v1/inquiries \
-  -H "Content-Type: application/json" \
-  -d "{\"scope\":\"project-inquiry\",\"service\":\"custom-homes\",\"name\":\"Claudine Uwase\",\"email\":\"c@example.com\",\"phone\":\"0788123456\",\"location\":\"Kigali\",\"message\":\"Project description at least ten chars.\"}"
-
-# Admin list (requires key)
-curl -i -s http://localhost:4000/api/v1/inquiries \
-  -H "X-API-Key: dev-vertexa-api-key"
+npm run backup:mongo
+npm run restore:mongo -- --confirm RESTORE --drop
 ```
 
-MongoDB must be running locally (or use Atlas in `MONGODB_URI`).
+Destructive restore requires explicit confirmation.
 
-## Frontend BFF
+## Troubleshooting
 
-The Next.js app talks to this API server-side and forwards the admin key from `VERTEXA_API_KEY` (development defaults to `dev-vertexa-api-key` when unset; must match the backend).
-
-- **Public inquiry create**: `/api/vertexa/inquiries` validates browser form submissions, forwards JSON to `POST {VERTEXA_API_URL}/api/v1/inquiries`, and redirects with `?saved=1` or `?error=<code>` (`rate_limited`, `unavailable`, structured `invalid-*`, etc.). When called with a JSON request/accept, it returns JSON `{ ok, error|inquiry }` with the same structured codes.
-- **Admin inquiry ops**: `GET/PATCH /api/vertexa/inquiries` and `GET/PATCH /api/vertexa/inquiries/:id` proxy the authenticated admin inquiry routes.
-- **Notifications**: `GET/PATCH /api/vertexa/notifications` proxies the authenticated notification routes (read-through + mark-read/mark-all for admin-audience notices). The root layout seeds initial notices server-side and the provider polls every 10 seconds; the demo workspace still renders if the API is unavailable.
-
-Development defaults `VERTEXA_API_URL` to `http://localhost:4000`. If the API is not running in development (`ECONNREFUSED`), public inquiry create falls back to the in-memory store so the site keeps working, and logs a warning. Timeouts/5xx are reported as `unavailable` rather than retried, because the API may already have stored the inquiry. The BFF resolves an active project manager from the live CPMIS roster and sends that account id as `recipientId`; when the roster has no active project manager only the administrator notice is created and the lead stays unassigned for triage.
+- **Disk full / `ENOSPC` during install**: remove broken `backend/node_modules` if present, free disk space, optionally `npm cache clean --force`, then rerun `npm install` from repo root.
+- **Mongo unavailable**: verify `MONGODB_URI` and that MongoDB is running/reachable. Development may use limited in-memory fallbacks for some flows; production should fail closed.
+- **BFF 503/upstream unavailable**: ensure Express is running and `VERTEXA_API_URL`/`CPMIS_API_URL` points to it.
+- **CORS/CSRF failures**: confirm `CORS_ORIGINS`, request Origin, portal session cookie, and `x-csrf-token`/`csrfToken`.
