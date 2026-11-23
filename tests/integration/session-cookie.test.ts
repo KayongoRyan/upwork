@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import express from "express";
 import request from "supertest";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({ get: () => undefined, set: () => {}, delete: () => {} })),
 }));
@@ -35,8 +35,8 @@ async function loadApp() {
   vi.resetModules();
   resetGlobals();
   const { requestContext } = await import("../../backend/src/middleware/requestContext.js");
-  const { cpmisRouter } = await import("../../backend/src/routes/cpmis.ts");
-  const { businessRouter } = await import("../../backend/src/routes/business.ts");
+  const { cpmisRouter } = await import("../../backend/src/routes/cpmis.js");
+  const { businessRouter } = await import("../../backend/src/routes/business.js");
   const { getMongoRuntime } = await import("../../lib/server/mongo");
   const auth = await import("../../lib/server/auth");
   const portalStore = await import("../../lib/server/portal-store");
