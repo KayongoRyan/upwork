@@ -115,11 +115,26 @@ businessRouter.post("/users", async (req: Request, res: Response) => {
   const st = stamp(auth.session);
   try {
     await applyPortalAction("administrator", { type: "create-user", input: parsed, stamp: st } as any, auth.session);
+  } catch (error) {
+    return handleActionError(error, req, res);
+  }
+  try {
     await setUserPassword(st.id, parsed.email, parsed.password);
     res.setHeader("cache-control", "no-store");
     res.status(201).json({ ok: true, id: st.id });
   } catch (error) {
-    return handleActionError(error, req, res);
+    logger.error("business.user_create_credential_failed", error, { requestId: req.requestId, userId: st.id, email: parsed.email });
+    try {
+      await removeUserCredential(st.id);
+    } catch (cleanupError) {
+      logger.error("business.user_create_credential_cleanup_failed", cleanupError, { requestId: req.requestId, userId: st.id });
+    }
+    try {
+      await applyPortalAction("administrator", { type: "delete-user", id: st.id, stamp: stamp(auth.session) } as any, auth.session);
+    } catch (rollbackError) {
+      logger.error("business.user_create_rollback_failed", rollbackError, { requestId: req.requestId, userId: st.id });
+    }
+    return apiError(res, 503, "persistence-failed", { message: "The account could not be fully created. Please try again.", requestId: req.requestId });
   }
 });
 

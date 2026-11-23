@@ -2,6 +2,7 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setUserPassword, removeUserCredential } from "../../backend/src/lib/auth-bridge";
 
 const h = vi.hoisted(() => {
   const mockState = {
@@ -74,6 +75,10 @@ describe("business API", () => {
     h.readState.mockClear();
     h.readState.mockResolvedValue(h.mockState);
     h.applyPortalAction.mockResolvedValue(h.mockState);
+    (setUserPassword as any).mockClear();
+    (removeUserCredential as any).mockClear();
+    (setUserPassword as any).mockResolvedValue(undefined);
+    (removeUserCredential as any).mockResolvedValue(undefined);
   });
 
   it("requires admin session for listing users", async () => {
@@ -333,5 +338,18 @@ describe("business API", () => {
     expect(res.body.ok).toBe(true);
     expect(h.applyPortalAction).toHaveBeenCalled();
     expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("delete-employee");
+  });
+
+  it("rolls back user creation when credential persistence fails", async () => {
+    (setUserPassword as any).mockRejectedValueOnce(new Error("db down"));
+    const res = await request(app()).post("/api/v1/cpmis/business/users").send({
+      firstName: "New", lastName: "User", email: "new2@x.com", phone: "0712345678",
+      role: "site_engineer", projectId: "p1", status: "active", password: "Password123!",
+    });
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe("persistence-failed");
+    expect(h.applyPortalAction).toHaveBeenCalled();
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("create-user");
+    expect((h.applyPortalAction as any).mock.calls.some((c: any[]) => c[1]?.type === "delete-user")).toBe(true);
   });
 });

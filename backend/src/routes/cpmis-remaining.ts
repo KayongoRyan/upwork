@@ -24,6 +24,7 @@ import {
   portalHome,
   PORTAL_ROLE,
   setUserPasswordHash,
+  removeUserCredential,
 } from "@/lib/server/auth";
 import { createSignupOtp, normalizeSignupEmail, normalizeSignupPhone, verifySignupOtp } from "@/lib/server/otp";
 import { verifyCsrfToken, applySessionCookieToExpress } from "../lib/auth-bridge";
@@ -88,7 +89,14 @@ cpmisRemainingRouter.post("/users", async (req: Request, res: Response) => {
   return persistOrRedirect(
     async () => {
       await applyPortalAction("administrator", { type: "create-user", input: parsed.data, stamp: stamp(auth.session, id) } as any, auth.session);
-      await setUserPassword(id, parsed.data.email, password);
+      try {
+        await setUserPassword(id, parsed.data.email, password);
+      } catch (error) {
+        console.error("[cpmis] legacy create-user credential persistence failed; rolling back user", error);
+        try { await removeUserCredential(id); } catch (cleanupError) { console.error("[cpmis] legacy create-user credential cleanup failed", cleanupError); }
+        try { await applyPortalAction("administrator", { type: "delete-user", id, stamp: stamp(auth.session) } as any, auth.session); } catch (rollbackError) { console.error("[cpmis] legacy create-user rollback failed", rollbackError); }
+        throw error instanceof PersistenceError ? error : new PersistenceError(error);
+      }
       return redirect(res, "/admin/users");
     },
     () => redirect(res, "/admin/users", { add: "1", error: "The account could not be saved. Try again." }),
@@ -752,7 +760,14 @@ cpmisRemainingRouter.post("/auth/signup/verify-otp", async (req: Request, res: R
     } as UserAccount;
 
     await applyPortalAction("administrator", { type: "create-user", input: { firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone, role: user.role, projectId: "unassigned", status: "active" }, stamp: { id, at: new Date().toISOString(), notificationId: `ntf-${id}` } } as any);
-    await setUserPasswordHash(id, user.email, verified.challenge.passwordHash);
+    try {
+      await setUserPasswordHash(id, user.email, verified.challenge.passwordHash);
+    } catch (error) {
+      console.error("[cpmis] signup credential persistence failed; rolling back user", error);
+      try { await removeUserCredential(id); } catch (cleanupError) { console.error("[cpmis] signup credential cleanup failed", cleanupError); }
+      try { await applyPortalAction("administrator", { type: "delete-user", id, stamp: { id: nextId("act"), at: new Date().toISOString(), notificationId: `ntf-${nextId("ntf")}` } } as any); } catch (rollbackError) { console.error("[cpmis] signup user rollback failed", rollbackError); }
+      throw error instanceof PersistenceError ? error : new PersistenceError(error);
+    }
 
     const session = await createSessionForUser(portal as PortalKey, { ...user, id });
     applySessionCookieToExpress(res, portal as PortalKey, session.token);
