@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, Pencil, Plus, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { EmployeeForm } from "@/components/employees/employee-form";
@@ -24,6 +25,7 @@ import type { Employee } from "@/types";
 
 export function EmployeesView() {
   const data = useAdmin();
+  const router = useRouter();
   const params = useSearchParams();
   const focus = params.get("focus");
   const register = params.get("register") === "1";
@@ -36,14 +38,38 @@ export function EmployeesView() {
   const [department, setDepartment] = useState("all");
   const [status, setStatus] = useState("all");
   const [formError, setFormError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>(data.employees);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
     setViewId(focus);
   }
 
+  const reloadEmployees = useCallback(async () => {
+    try {
+      const res = await fetch("/api/cpmis/business/employees", { cache: "no-store" });
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; items?: Employee[] } | null;
+      if (res.ok && body?.ok && Array.isArray(body.items)) setEmployees(body.items);
+    } catch {
+      /* keep current rows; portal state remains fallback */
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/cpmis/business/employees", { cache: "no-store" });
+        const body = (await res.json().catch(() => null)) as { ok?: boolean; items?: Employee[] } | null;
+        if (!cancelled && res.ok && body?.ok && Array.isArray(body.items)) setEmployees(body.items);
+      } catch {
+        /* keep current rows; portal state remains fallback */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const table = usePagedRows({
-    rows: data.employees,
+    rows: employees,
     filterKey: `${department}|${status}`,
     filter: (employee) => (department === "all" || employee.department === department) && (status === "all" || employee.status === status),
     search: (employee, query) => `${fullName(employee)} ${employee.employeeCode} ${employee.position} ${employee.phone}`.toLowerCase().includes(query),
@@ -58,30 +84,53 @@ export function EmployeesView() {
     },
     initialSort: { key: "code", dir: "asc" },
   });
-  const viewing = data.employees.find((employee) => employee.id === viewId) ?? null;
+  const viewing = employees.find((employee) => employee.id === viewId) ?? null;
+  const csrfToken = data.viewer?.csrfToken ?? "";
 
   async function save(values: EmployeeFormValues) {
-    const result = editor === "new" ? data.createEmployee(values) : editor ? data.updateEmployee(editor.id, values) : { ok: false as const, error: "Nothing to save." };
-    if (!result.ok) {
-      setFormError(result.error);
-      return;
-    }
-    if (result.saved && !(await result.saved)) return;
-    toast.success(editor === "new" ? "Employee registered in this preview." : "Employee updated in this preview.");
-    setEditor(null);
+    if (editor === null) { setFormError("Nothing to save."); return; }
     setFormError(null);
+    const isNew = editor === "new";
+    const url = isNew ? "/api/cpmis/business/employees" : `/api/cpmis/business/employees/${encodeURIComponent(editor.id)}`;
+    const method = isNew ? "POST" : "PATCH";
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+        body: JSON.stringify(values),
+      });
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+      if (!res.ok || !body?.ok) {
+        setFormError(body?.message ?? body?.error ?? (isNew ? "Could not register the employee." : "Could not update the employee."));
+        return;
+      }
+      toast.success(isNew ? "Employee registered." : "Employee updated.");
+      setEditor(null);
+      await reloadEmployees();
+    } catch {
+      setFormError(isNew ? "Could not register the employee." : "Could not update the employee.");
+    }
   }
 
   async function saveAssignment() {
     if (!assigning) return;
-    const result = data.updateEmployee(assigning.id, { ...assigning, projectId: assignProject });
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+    try {
+      const res = await fetch(`/api/cpmis/business/employees/${encodeURIComponent(assigning.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+        body: JSON.stringify({ projectId: assignProject }),
+      });
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+      if (!res.ok || !body?.ok) {
+        toast.error(body?.message ?? body?.error ?? "Could not update project assignment.");
+        return;
+      }
+      toast.success("Project assignment updated.");
+      setAssigning(null);
+      await reloadEmployees();
+    } catch {
+      toast.error("Could not update project assignment.");
     }
-    if (result.saved && !(await result.saved)) return;
-    toast.success("Project assignment updated.");
-    setAssigning(null);
   }
 
   return (
@@ -89,27 +138,35 @@ export function EmployeesView() {
       <PageHeader
         title="Employees"
         description="Company workforce. These records are separate from application user accounts."
-        actions={<Button asChild><a href="/admin/employees?register=1"><Plus />Register employee</a></Button>}
+        actions={<Button asChild><Link href="/admin/employees?register=1"><Plus />Register employee</Link></Button>}
       />
-      {register && !saved ? (
+      {register ? (
         <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
           <h2 className="text-base font-semibold">Register employee</h2>
           <p className="mt-1 mb-4 text-sm text-black/55">Workforce record only. This does not create a login.</p>
           <EmployeeForm
             projects={data.projects}
             serverError={formError ?? params.get("error")}
-            csrfToken={data.viewer?.csrfToken ?? ""}
-            onCancel={() => { window.location.assign("/admin/employees"); }}
-            onSubmit={(values) => {
-              const result = data.createEmployee(values);
-              if (!result.ok) {
-                setFormError(result.error);
-                return;
-              }
-              toast.success("Employee registered in this preview.");
+            onCancel={() => { router.push("/admin/employees"); }}
+            onSubmit={async (values) => {
               setFormError(null);
-              setSaved(true);
-              window.history.replaceState(null, "", "/admin/employees");
+              try {
+                const res = await fetch("/api/cpmis/business/employees", {
+                  method: "POST",
+                  headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+                  body: JSON.stringify(values),
+                });
+                const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+                if (!res.ok || !body?.ok) {
+                  setFormError(body?.message ?? body?.error ?? "Could not register the employee.");
+                  return;
+                }
+                toast.success("Employee registered.");
+                router.push("/admin/employees");
+                await reloadEmployees();
+              } catch {
+                setFormError("Could not register the employee.");
+              }
             }}
           />
         </section>
@@ -175,7 +232,7 @@ export function EmployeesView() {
       <Dialog open={editor !== null} onOpenChange={(open) => { if (!open) setEditor(null); }}>
         {editor !== null ? (
           <DialogContent className="sm:max-w-2xl" title={editor === "new" ? "Register employee" : "Edit employee"} description="Workforce record only. This does not create a login.">
-            <EmployeeForm employee={editor === "new" ? null : editor} projects={data.projects} serverError={formError} csrfToken={data.viewer?.csrfToken ?? ""} onCancel={() => setEditor(null)} onSubmit={save} />
+            <EmployeeForm employee={editor === "new" ? null : editor} projects={data.projects} serverError={formError} onCancel={() => setEditor(null)} onSubmit={save} />
           </DialogContent>
         ) : null}
       </Dialog>
@@ -219,15 +276,27 @@ export function EmployeesView() {
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         title="Remove employee?"
-        body={pendingDelete ? `${fullName(pendingDelete)} will be removed from the workforce list in this preview.` : ""}
+        body={pendingDelete ? `${fullName(pendingDelete)} will be removed from the workforce list.` : ""}
         confirmLabel="Remove employee"
         onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
         onConfirm={async () => {
           if (!pendingDelete) return;
-          const saved = data.deleteEmployee(pendingDelete.id);
-          if (saved && !(await saved)) return;
-          toast.success("Employee removed from this preview.");
-          setPendingDelete(null);
+          try {
+            const res = await fetch(`/api/cpmis/business/employees/${encodeURIComponent(pendingDelete.id)}`, {
+              method: "DELETE",
+              headers: { "x-csrf-token": csrfToken },
+            });
+            const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+            if (!res.ok || !body?.ok) {
+              toast.error(body?.message ?? body?.error ?? "Could not remove the employee.");
+              return;
+            }
+            toast.success("Employee removed.");
+            setPendingDelete(null);
+            await reloadEmployees();
+          } catch {
+            toast.error("Could not remove the employee.");
+          }
         }}
       />
     </div>
