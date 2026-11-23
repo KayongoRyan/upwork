@@ -1,0 +1,2 @@
+﻿# Python dependencies for backend tooling/scripts.
+# Install: .venv\Scripts\activate; pip install -r requirements.txt
