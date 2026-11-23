@@ -12,14 +12,12 @@ export function ProjectForm({
   project,
   managers,
   serverError,
-  csrfToken,
   onCancel,
   onSubmit,
 }: {
   project?: Project | null;
   managers: UserAccount[];
   serverError?: string | null;
-  csrfToken?: string;
   onCancel: () => void;
   onSubmit: (values: ProjectFormValues) => void;
 }) {
@@ -60,12 +58,9 @@ export function ProjectForm({
   return (
     <form
       className="grid gap-4"
-      action={project ? undefined : "/api/projects"}
-      method={project ? undefined : "post"}
       onSubmit={form.handleSubmit(onSubmit)}
       noValidate
     >
-      {!project ? <input type="hidden" name="csrfToken" value={csrfToken ?? ""} /> : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Project name" htmlFor="name" error={errors.name?.message}>
           <Input id="name" {...form.register("name")} />

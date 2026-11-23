@@ -20,7 +20,7 @@ Maps browser/frontend requests and server-side Next.js callers to BFF routes and
 | `lib/data/admin-store.tsx` dispatch | `/api/portal/:portal/actions` | `/api/v1/cpmis/portal/:portal/actions` | POST | JSON AdminAction body | Portal session cookie + `x-csrf-token` header | JSON scoped state; 403 action-not-allowed; 503 persistence-failed | aligned |
 | `components/users/user-form.tsx` create form | `/api/users` | `/api/v1/cpmis/users` | POST | `application/x-www-form-urlencoded` (hidden `csrfToken`) | Administrator session + CSRF | 303 redirect to `/admin/users` or add-user error query | aligned |
 | `components/users/users-view.tsx` client fetch edit | `/api/users` | `/api/v1/cpmis/users` | POST | `application/x-www-form-urlencoded` (`_method=patch`, fields, `csrfToken`) | Administrator session + CSRF | 303 redirect; fetch uses `redirect: manual` | aligned |
-| `components/projects/project-form.tsx` create form | `/api/projects` | `/api/v1/cpmis/projects` | POST | urlencoded form + `csrfToken` | Administrator session + CSRF | 303 redirect to project or create error query | aligned |
+| `components/projects/projects-view.tsx` create project | `/api/cpmis/business/projects` | `/api/v1/cpmis/business/projects` | POST | JSON `{...projectSchema}` + `x-csrf-token` header | Administrator session + CSRF | JSON `201 { ok: true, state }` (or error envelope) | aligned |
 | `components/employees/employee-form.tsx` create form | `/api/employees` | `/api/v1/cpmis/employees` | POST | urlencoded form + `csrfToken` | Administrator session + CSRF | 303 redirect to `/admin/employees` or error query | aligned |
 | `components/help/help-view.tsx` form | `/api/help` | `/api/v1/cpmis/help` | POST | urlencoded form + `csrfToken` | Administrator session + CSRF | 303 redirect with saved/error | aligned |
 | `components/notifications/portal-work.tsx` admin comment form | `/api/admin/comments` | `/api/v1/cpmis/admin/comments` | POST | urlencoded form + `csrfToken` | Administrator session + CSRF | 303 redirect to `/admin/notifications` with filters/hash | aligned |
@@ -52,7 +52,8 @@ Maps browser/frontend requests and server-side Next.js callers to BFF routes and
 |---|---|---|---|---|---|---|---|
 | None discovered | `/api/state` | `/api/v1/cpmis/state` | GET | none | Administrator session | JSON state | unused/reserved |
 | None discovered | `/api/auth/session?portal=` | `/api/v1/cpmis/auth/session/:portal` | GET | query `portal` | Portal session | JSON `{ok,user}` | unused/reserved |
-| None discovered (business API reserved for programmatic/BFF callers) | `/api/cpmis/business/[...path]` | `/api/v1/cpmis/business/:path*` | GET/POST/PATCH/PUT/DELETE | JSON or as provided; BFF forwards as JSON proxy | Endpoint-specific session/CSRF in Express business router | JSON responses; no browser UI currently wired | unused/reserved |
+| None discovered (replaced for project creation) | `/api/projects` | `/api/v1/cpmis/projects` | POST | urlencoded form + `csrfToken` | Administrator session + CSRF | 303 redirect | unused/legacy (browser create now uses business API) |
+| `components/projects/projects-view.tsx` (and future UI callers) | `/api/cpmis/business/[...path]` | `/api/v1/cpmis/business/:path*` | GET/POST/PATCH/PUT/DELETE | JSON; BFF forwards via `proxyCpmisJson` (includes `x-csrf-token`, cookies, forwarded host) | Endpoint-specific session/CSRF in Express business router | JSON responses; project creation now uses `POST /api/cpmis/business/projects` | aligned (partial adoption) |
 
 ## Server-Side / Non-Browser Callers
 
