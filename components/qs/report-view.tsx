@@ -28,6 +28,7 @@ export function QsReport() {
         actions={
           <>
           <form action="/api/qs/reports" method="post">
+            <input type="hidden" name="csrfToken" value={data.viewer?.csrfToken ?? ""} />
             <Button type="submit" disabled={!project || data.lines.length === 0} className="bg-[#ff5c22] text-white hover:bg-[#e64e18]">
               Send to project manager
             </Button>

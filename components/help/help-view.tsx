@@ -29,6 +29,7 @@ export function HelpView() {
       {error ? <p className="mt-4 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">{error}</p> : null}
       {saved ? <p className="mt-4 rounded-2xl bg-[#fff1eb] px-3 py-2 text-sm">Saved. It is in notifications and the activity log.</p> : null}
       <form className="mt-4 grid gap-4" action="/api/help" method="post">
+        <input type="hidden" name="csrfToken" value={data.viewer?.csrfToken ?? ""} />
         <Field label="Topic" htmlFor="support-topic">
           <select id="support-topic" name="topic" className={selectClass} defaultValue="data" required>
             {topics.map(([value, label]) => <option key={value} value={value}>{label}</option>)}

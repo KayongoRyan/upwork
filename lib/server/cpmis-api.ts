@@ -27,6 +27,13 @@ function forwardHeaders(request: Request, extra: Record<string, string> = {}, ad
   if (csrf) headers["x-csrf-token"] = csrf;
   const forwardedFor = request.headers.get("x-forwarded-for");
   if (forwardedFor) headers["x-forwarded-for"] = forwardedFor;
+  // Express compares the browser Origin host to x-forwarded-host. Without
+  // forwarding the public Next.js host, every pre-auth POST behind the BFF
+  // looks like a cross-origin request from localhost:4000.
+  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (forwardedHost) headers["x-forwarded-host"] = forwardedHost;
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  if (forwardedProto) headers["x-forwarded-proto"] = forwardedProto;
   const origin = request.headers.get("origin");
   if (origin) headers.origin = origin;
   const contentType = request.headers.get("content-type");
@@ -55,6 +62,7 @@ export async function proxyCpmisJson(request: Request, path: string, init?: { me
       method,
       headers,
       body,
+      redirect: "manual",
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
@@ -65,10 +73,10 @@ export async function proxyCpmisJson(request: Request, path: string, init?: { me
 
   const text = await upstream.text();
   const contentType = upstream.headers.get("content-type") ?? "application/json";
-  const response = new NextResponse(text, {
-    status: upstream.status,
-    headers: { "content-type": contentType, "cache-control": "no-store" },
-  });
+  const responseHeaders: Record<string, string> = { "content-type": contentType, "cache-control": "no-store" };
+  const location = upstream.headers.get("location");
+  if (location) responseHeaders.location = location;
+  const response = new NextResponse(text, { status: upstream.status, headers: responseHeaders });
   applySetCookies(upstream, response);
   return response;
 }
@@ -84,6 +92,9 @@ export async function proxyCpmisRaw(request: Request, path: string, init?: { met
       body: method !== "GET" && method !== "HEAD" ? request.body : undefined,
       // @ts-expect-error duplex required for streaming body in Node fetch
       duplex: "half",
+      // Express form routes answer with 303 redirects. Surface them to the
+      // browser instead of following them server-side to an API-host page.
+      redirect: "manual",
       cache: "no-store",
       signal: AbortSignal.timeout(30_000),
     });

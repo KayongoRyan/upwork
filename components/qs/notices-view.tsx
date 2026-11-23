@@ -30,12 +30,9 @@ export function QsNotices() {
                   <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{item.message}</p>
                   <p className="mt-2 text-xs text-muted-foreground">{item.senderName} · {formatDateTime(item.createdAt)}</p>
                 </div>
-                <form action="/api/notifications" method="post" className="shrink-0">
-                  <input type="hidden" name="id" value={item.id} />
-                  <input type="hidden" name="read" value={item.read ? "0" : "1"} />
-                  <input type="hidden" name="return" value="/qs/notices" />
-                  <Button type="submit" size="sm" variant="outline">{item.read ? "Mark unread" : "Mark as read"}</Button>
-                </form>
+                <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => data.markNotification(item.id, !item.read)}>
+                  {item.read ? "Mark unread" : "Mark as read"}
+                </Button>
               </div>
             </li>
           ))}

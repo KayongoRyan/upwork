@@ -282,6 +282,7 @@ function WorkRow({
   manager: string;
   comments: WorkComment[];
 }) {
+  const data = useAdmin();
   return (
     <li id={id} className="scroll-mt-28 py-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -297,6 +298,7 @@ function WorkRow({
         </p>
       ))}
       <form action="/api/admin/comments" method="post" className="mt-2 flex flex-wrap gap-2">
+        <input type="hidden" name="csrfToken" value={data.viewer?.csrfToken ?? ""} />
         <input type="hidden" name="portal" value={portal} />
         {type !== "all" ? <input type="hidden" name="type" value={type} /> : null}
         <input type="hidden" name="kind" value={kind} />

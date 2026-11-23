@@ -257,7 +257,7 @@ export function PmDashboard() {
                 );
               })}
             </div>
-            {showEventForm && pickedDay ? <EventForm period={period} day={pickedDay} error={eventError} /> : null}
+            {showEventForm && pickedDay ? <EventForm period={period} day={pickedDay} error={eventError} csrfToken={data.viewer?.csrfToken ?? ""} /> : null}
             <ul className="mt-3 space-y-1 text-xs text-black/55">
               {selectedTasks.length === 0 && selectedProjects.length === 0 && selectedEvents.length === 0 ? <li>Nothing is scheduled on {shortDate(selectedDay)}.</li> : null}
               {selectedEvents.map((event) => (
@@ -385,9 +385,10 @@ function Figure({ value, label }: { value: number; label: string }) {
   );
 }
 
-function EventForm({ period, day, error }: { period: Period; day: string; error: string | null }) {
+function EventForm({ period, day, error, csrfToken }: { period: Period; day: string; error: string | null; csrfToken: string }) {
   return (
     <form action="/api/pm/events" method="post" className="mt-3 grid gap-2 rounded-2xl bg-[#fff1eb] p-3">
+      <input type="hidden" name="csrfToken" value={csrfToken} />
       <input type="hidden" name="period" value={period} />
       <input type="hidden" name="date" value={day} />
       <p className="text-sm font-medium">{shortDate(day)}</p>

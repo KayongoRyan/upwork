@@ -90,6 +90,7 @@ export function ProjectsView() {
           <ProjectForm
             managers={managers}
             serverError={formError ?? params.get("error")}
+            csrfToken={data.viewer?.csrfToken ?? ""}
             onCancel={() => { window.location.assign("/admin/projects"); }}
             onSubmit={async (values) => {
               const result = data.createProject(values);
