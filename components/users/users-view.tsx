@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, Pencil, Plus, Power, Trash2 } from "lucide-react";
@@ -36,14 +36,39 @@ export function UsersView() {
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("all");
   const [formError, setFormError] = useState<string | null>(null);
+  const [users, setUsers] = useState<UserAccount[]>(data.users);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
     setViewId(focus);
   }
 
-  const counts = countRoles(data.users);
+  const reloadUsers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/cpmis/business/users", { cache: "no-store" });
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; items?: UserAccount[] } | null;
+      if (res.ok && body?.ok && Array.isArray(body.items)) setUsers(body.items);
+    } catch {
+      /* keep current rows; portal state remains fallback */
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/cpmis/business/users", { cache: "no-store" });
+        const body = (await res.json().catch(() => null)) as { ok?: boolean; items?: UserAccount[] } | null;
+        if (!cancelled && res.ok && body?.ok && Array.isArray(body.items)) setUsers(body.items);
+      } catch {
+        /* keep current rows; portal state remains fallback */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const counts = countRoles(users);
   const table = usePagedRows({
-    rows: data.users,
+    rows: users,
     filterKey: `${role}|${status}`,
     filter: (user) => (role === "all" || user.role === role) && (status === "all" || user.status === status),
     search: (user, query) => `${fullName(user)} ${user.email} ${user.phone}`.toLowerCase().includes(query),
@@ -58,30 +83,49 @@ export function UsersView() {
     },
     initialSort: { key: "name", dir: "asc" },
   });
-  const viewing = data.users.find((user) => user.id === viewId) ?? null;
+  const viewing = users.find((user) => user.id === viewId) ?? null;
+  const csrfToken = data.viewer?.csrfToken ?? "";
 
-  async function save(values: UserFormValues) {
+  async function save(values: UserFormValues & { password?: string }) {
     if (!editor) return;
-    const result = data.updateUser(editor.id, values);
-    if (!result.ok) {
-      setFormError(result.error);
-      return;
-    }
-    if (result.saved && !(await result.saved)) return;
-    toast.success("User updated.");
-    setEditor(null);
     setFormError(null);
+    try {
+      const res = await fetch(`/api/cpmis/business/users/${encodeURIComponent(editor.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+        body: JSON.stringify(values),
+      });
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+      if (!res.ok || !body?.ok) {
+        setFormError(body?.message ?? body?.error ?? "Could not update the user.");
+        return;
+      }
+      toast.success("User updated.");
+      setEditor(null);
+      await reloadUsers();
+    } catch {
+      setFormError("Could not update the user.");
+    }
   }
 
   async function toggleStatus(user: UserAccount) {
     const next = user.status === "active" ? "inactive" : "active";
-    const result = data.setUserStatus(user.id, next);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+    try {
+      const res = await fetch(`/api/cpmis/business/users/${encodeURIComponent(user.id)}/status`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+        body: JSON.stringify({ status: next }),
+      });
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+      if (!res.ok || !body?.ok) {
+        toast.error(body?.message ?? body?.error ?? "Could not update account status.");
+        return;
+      }
+      toast.success(next === "active" ? "Account activated." : "Account deactivated.");
+      await reloadUsers();
+    } catch {
+      toast.error("Could not update account status.");
     }
-    if (result.saved && !(await result.saved)) return;
-    toast.success(next === "active" ? "Account activated." : "Account deactivated.");
   }
 
   return (
@@ -98,22 +142,26 @@ export function UsersView() {
           <UserForm
             projects={data.projects}
             serverError={formError ?? params.get("error")}
-            csrfToken={data.viewer?.csrfToken ?? ""}
             onCancel={() => { router.push("/admin/users"); }}
             onSubmit={async (values) => {
-              // Express form routes parse urlencoded bodies. Sending multipart
-              // here left req.body empty and the account was never created.
-              const body = new URLSearchParams();
-              Object.entries(values).forEach(([key, value]) => body.set(key, String(value ?? "")));
-              const res = await fetch("/api/users", {
-                method: "POST",
-                body,
-                headers: { "content-type": "application/x-www-form-urlencoded", "x-csrf-token": data.viewer?.csrfToken ?? "" },
-              });
-              if (res.redirected) { router.push(res.url); router.refresh(); return; }
-              if (!res.ok) { setFormError("Could not add the user."); return; }
-              router.push("/admin/users");
-              router.refresh();
+              setFormError(null);
+              try {
+                const res = await fetch("/api/cpmis/business/users", {
+                  method: "POST",
+                  headers: { "content-type": "application/json", "x-csrf-token": csrfToken },
+                  body: JSON.stringify(values),
+                });
+                const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+                if (!res.ok || !body?.ok) {
+                  setFormError(body?.message ?? body?.error ?? "Could not add the user.");
+                  return;
+                }
+                toast.success("User created.");
+                router.push("/admin/users");
+                await reloadUsers();
+              } catch {
+                setFormError("Could not add the user.");
+              }
             }}
           />
         </section>
@@ -179,7 +227,7 @@ export function UsersView() {
       <Dialog open={editor !== null} onOpenChange={(open) => { if (!open) setEditor(null); }}>
         {editor ? (
           <DialogContent className="sm:max-w-2xl" title="Edit user" description="This updates the account details. It does not change the password.">
-            <UserForm user={editor} projects={data.projects} serverError={formError} csrfToken={data.viewer?.csrfToken ?? ""} onCancel={() => setEditor(null)} onSubmit={save} />
+            <UserForm user={editor} projects={data.projects} serverError={formError} onCancel={() => setEditor(null)} onSubmit={save} />
           </DialogContent>
         ) : null}
       </Dialog>
@@ -205,16 +253,27 @@ export function UsersView() {
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         title="Delete user?"
-        body={pendingDelete ? `${fullName(pendingDelete)} will be removed from this preview. Project managers still assigned to a project cannot be deleted.` : ""}
+        body={pendingDelete ? `${fullName(pendingDelete)} will be removed. Project managers still assigned to a project cannot be deleted.` : ""}
         confirmLabel="Delete user"
         onOpenChange={(open) => { if (!open) setPendingDelete(null); }}
         onConfirm={async () => {
           if (!pendingDelete) return;
-          const result = data.deleteUser(pendingDelete.id);
-          if (!result.ok) { toast.error(result.error); return; }
-          if (result.saved && !(await result.saved)) return;
-          toast.success("User deleted from this preview.");
-          setPendingDelete(null);
+          try {
+            const res = await fetch(`/api/cpmis/business/users/${encodeURIComponent(pendingDelete.id)}`, {
+              method: "DELETE",
+              headers: { "x-csrf-token": csrfToken },
+            });
+            const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+            if (!res.ok || !body?.ok) {
+              toast.error(body?.message ?? body?.error ?? "Could not delete the user.");
+              return;
+            }
+            toast.success("User deleted.");
+            setPendingDelete(null);
+            await reloadUsers();
+          } catch {
+            toast.error("Could not delete the user.");
+          }
         }}
       />
     </div>

@@ -193,4 +193,75 @@ describe("business API", () => {
     expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("delete-project");
     expect((h.applyPortalAction as any).mock.calls[0][1].id).toBe("p1");
   });
+
+  it("rejects user listing for non-admin", async () => {
+    h.currentSession.value = pmSession;
+    const res = await request(app()).get("/api/v1/cpmis/business/users");
+    expect(res.status).toBe(403);
+  });
+
+  it("rejects user creation with invalid payload", async () => {
+    const res = await request(app()).post("/api/v1/cpmis/business/users").send({ email: "bad" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("validation-failed");
+  });
+
+  it("rejects duplicate user email on create", async () => {
+    const res = await request(app()).post("/api/v1/cpmis/business/users").send({
+      firstName: "Alex", lastName: "Brown", email: "a@x.com", phone: "0712345678",
+      role: "site_engineer", projectId: "p1", status: "active", password: "Password123!",
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("conflict");
+  });
+
+  it("creates user via business API", async () => {
+    const res = await request(app()).post("/api/v1/cpmis/business/users").send({
+      firstName: "New", lastName: "User", email: "new@x.com", phone: "0712345678",
+      role: "site_engineer", projectId: "p1", status: "active", password: "Password123!",
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.ok).toBe(true);
+    expect(h.applyPortalAction).toHaveBeenCalled();
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("create-user");
+  });
+
+  it("rejects user update from non-admin", async () => {
+    h.currentSession.value = pmSession;
+    const res = await request(app()).patch("/api/v1/cpmis/business/users/u1").send({ firstName: "X" });
+    expect(res.status).toBe(403);
+  });
+
+  it("returns 404 for updating unknown user", async () => {
+    const res = await request(app()).patch("/api/v1/cpmis/business/users/missing").send({ firstName: "Alex" });
+    expect(res.status).toBe(404);
+  });
+
+  it("rejects invalid user status payload", async () => {
+    const res = await request(app()).patch("/api/v1/cpmis/business/users/u1/status").send({ status: "bogus" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("validation-failed");
+  });
+
+  it("updates user status via business API", async () => {
+    const res = await request(app()).patch("/api/v1/cpmis/business/users/u1/status").send({ status: "inactive" });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(h.applyPortalAction).toHaveBeenCalled();
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("set-user-status");
+  });
+
+  it("rejects user deletion from non-admin", async () => {
+    h.currentSession.value = pmSession;
+    const res = await request(app()).delete("/api/v1/cpmis/business/users/u1");
+    expect(res.status).toBe(403);
+  });
+
+  it("deletes user via business API", async () => {
+    const res = await request(app()).delete("/api/v1/cpmis/business/users/u1");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(h.applyPortalAction).toHaveBeenCalled();
+    expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("delete-user");
+  });
 });
