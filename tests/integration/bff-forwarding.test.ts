@@ -25,7 +25,7 @@ async function withUpstream(
 async function loadBff(baseUrl: string) {
   vi.resetModules();
   process.env.CPMIS_API_URL = baseUrl;
-  process.env.NODE_ENV = "test";
+  (process.env as any).NODE_ENV = "test";
   return await import("../../lib/server/cpmis-api");
 }
 
