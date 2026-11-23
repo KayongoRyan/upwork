@@ -90,19 +90,28 @@ export function ProjectsView() {
           <ProjectForm
             managers={managers}
             serverError={formError ?? params.get("error")}
-            csrfToken={data.viewer?.csrfToken ?? ""}
             onCancel={() => { window.location.assign("/admin/projects"); }}
             onSubmit={async (values) => {
-              const result = data.createProject(values);
-              if (!result.ok) {
-                setFormError(result.error);
-                return;
-              }
-              if (result.saved && !(await result.saved)) return;
-              toast.success("Project created in this preview.");
               setFormError(null);
-              setSaved(true);
-              window.history.replaceState(null, "", "/admin/projects");
+              try {
+                const res = await fetch("/api/cpmis/business/projects", {
+                  method: "POST",
+                  headers: {
+                    "content-type": "application/json",
+                    "x-csrf-token": data.viewer?.csrfToken ?? "",
+                  },
+                  body: JSON.stringify(values),
+                });
+                const body = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; message?: string } | null;
+                if (!res.ok || !body?.ok) {
+                  setFormError(body?.message ?? body?.error ?? "Could not create the project.");
+                  return;
+                }
+                toast.success("Project created.");
+                window.location.assign("/admin/projects");
+              } catch {
+                setFormError("Could not create the project.");
+              }
             }}
           />
         </section>
