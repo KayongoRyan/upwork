@@ -368,4 +368,34 @@ describe("business API", () => {
     expect(second.headers["idempotency-replayed"]).toBe("true");
     expect(h.applyPortalAction.mock.calls.length).toBe(callsAfterFirst);
   });
+
+  it("rejects duplicate email on user patch", async () => {
+    h.mockState.users = [
+      { id: "u1", firstName: "A", lastName: "One", email: "one@x.com", role: "site_engineer", status: "active", projectId: "p1" },
+      { id: "u2", firstName: "B", lastName: "Two", email: "two@x.com", role: "site_engineer", status: "active", projectId: "p1" },
+    ] as any;
+    const res = await request(app()).patch("/api/v1/cpmis/business/users/u1").send({ email: "two@x.com" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("conflict");
+    expect(h.applyPortalAction).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate employeeCode on employee patch", async () => {
+    h.mockState.employees = [
+      { id: "e1", employeeCode: "E001", firstName: "A", lastName: "One", discipline: "Civil", projectId: "p1", status: "active" },
+      { id: "e2", employeeCode: "E002", firstName: "B", lastName: "Two", discipline: "Civil", projectId: "p1", status: "active" },
+    ] as any;
+    const res = await request(app()).patch("/api/v1/cpmis/business/employees/e1").send({ employeeCode: "e002" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("conflict");
+    expect(h.applyPortalAction).not.toHaveBeenCalled();
+  });
+
+  it("maps DB duplicate-key persistence errors to 409 conflict", async () => {
+    h.applyPortalAction.mockRejectedValueOnce(Object.assign(new Error("E11000 duplicate key"), { name: "PersistenceError", detail: { code: 11000 } }));
+    h.mockState.employees = [{ id: "e1", employeeCode: "E001", firstName: "A", lastName: "One", discipline: "Civil", projectId: "p1", status: "active" }] as any;
+    const res = await request(app()).patch("/api/v1/cpmis/business/employees/e1").send({ firstName: "Alice" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("conflict");
+  });
 });

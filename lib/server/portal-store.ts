@@ -408,7 +408,7 @@ const FILES_VALIDATOR = objectSchema({
 
 const UNIQUE_INDEXES: Array<{ portal: PortalKey; collection: string; keys: Record<string, 1>; name: string; collation?: { locale: string; strength: number } }> = [
   { portal: "administrator", collection: "users", keys: { email: 1 }, name: "uniq_users_email", collation: { locale: "en", strength: 2 } },
-  { portal: "administrator", collection: "employees", keys: { employeeCode: 1 }, name: "uniq_employees_code" },
+  { portal: "administrator", collection: "employees", keys: { employeeCode: 1 }, name: "uniq_employees_code", collation: { locale: "en", strength: 2 } },
   { portal: "administrator", collection: "projects", keys: { code: 1 }, name: "uniq_projects_code" },
 ];
 
@@ -472,16 +472,28 @@ async function ensurePortalValidation(runtime: MongoRuntime): Promise<void> {
 
   for (const index of UNIQUE_INDEXES) {
     const collection = runtime.dbs[index.portal].collection(index.collection);
+    const opts = {
+      unique: true,
+      name: index.name,
+      ...(index.collation ? { collation: index.collation } : {}),
+    } as const;
     try {
-      await collection.createIndex(index.keys, {
-        unique: true,
-        name: index.name,
-        ...(index.collation ? { collation: index.collation } : {}),
-      });
+      await collection.createIndex(index.keys, opts);
     } catch (error) {
       const code = (error as { code?: number })?.code;
-      // IndexOptionsConflict/IndexKeySpecsConflict - existing index differs; leave as-is.
-      if (code === 85 || code === 86) continue;
+      if (code === 85 || code === 86) {
+        // Existing index differs (e.g. collation added). Recreate to match spec.
+        try {
+          await collection.dropIndex(index.name);
+          await collection.createIndex(index.keys, opts);
+          continue;
+        } catch (recreateError) {
+          const recreateCode = (recreateError as { code?: number })?.code;
+          // NamespaceNotFound or IndexNotFound - ignore and let next startup retry/create.
+          if (recreateCode === 26 || recreateCode === 27) continue;
+          throw recreateError;
+        }
+      }
       throw error;
     }
   }
