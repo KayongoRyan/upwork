@@ -30,6 +30,8 @@ vi.mock("@/lib/server/memory", () => ({
 }));
 vi.mock("@/lib/server/mongo", () => ({
   PersistenceError: class PersistenceError extends Error { name = "PersistenceError"; },
+  getMongoRuntime: vi.fn(async () => null),
+  requireCollectionInProduction: <T,>(v: T | null) => v,
 }));
 vi.mock("../../backend/src/lib/session", () => ({
   requireAnySession: vi.fn(async (_req: any, res: any) => {
@@ -351,5 +353,19 @@ describe("business API", () => {
     expect(h.applyPortalAction).toHaveBeenCalled();
     expect((h.applyPortalAction as any).mock.calls[0][1].type).toBe("create-user");
     expect((h.applyPortalAction as any).mock.calls.some((c: any[]) => c[1]?.type === "delete-user")).toBe(true);
+  });
+
+  it("replays duplicate create-user request with same idempotency key", async () => {
+    const payload = {
+      firstName: "Idem", lastName: "User", email: "idem@x.com", phone: "0712345678",
+      role: "site_engineer", projectId: "p1", status: "active", password: "Password123!",
+    };
+    const first = await request(app()).post("/api/v1/cpmis/business/users").set("Idempotency-Key", "k-user-1").send(payload);
+    expect(first.status).toBe(201);
+    const callsAfterFirst = h.applyPortalAction.mock.calls.length;
+    const second = await request(app()).post("/api/v1/cpmis/business/users").set("Idempotency-Key", "k-user-1").send(payload);
+    expect(second.status).toBe(201);
+    expect(second.headers["idempotency-replayed"]).toBe("true");
+    expect(h.applyPortalAction.mock.calls.length).toBe(callsAfterFirst);
   });
 });
