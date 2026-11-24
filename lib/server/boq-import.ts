@@ -1,6 +1,7 @@
 import { inflateRawSync } from "node:zlib";
 import { boqUnits, parseBoq } from "@/lib/boq";
 import type { BoqInput } from "@/types";
+import { extractPdfText } from "./invoice-extract";
 
 export interface ImportRow {
   rowNumber: number;
@@ -13,12 +14,13 @@ export interface ImportRow {
 
 export interface ImportPreview {
   fileName: string;
-  format: "xlsx" | "csv";
+  format: "xlsx" | "csv" | "pdf" | "txt";
   headers: string[];
   rows: ImportRow[];
   totalRows: number;
   validRows: number;
   invalidRows: number;
+  warnings?: string[];
 }
 
 const MAX_IMPORT_ROWS = 500;
@@ -229,18 +231,107 @@ function normalizeRows(rawRows: string[][]): { headers: string[]; records: Recor
   return { headers, records };
 }
 
+function splitByDelimiter(line: string, delimiter: "tab" | "pipe" | "semicolon" | "comma" | "spaces"): string[] {
+  if (delimiter === "tab") return line.split("\t").map((s) => s.trim());
+  if (delimiter === "pipe") return line.split("|").map((s) => s.trim()).filter((_, i, arr) => !(i === 0 && arr[0] === "") && !(i === arr.length - 1 && arr[arr.length - 1] === ""));
+  if (delimiter === "semicolon") return line.split(";").map((s) => s.trim());
+  if (delimiter === "comma") return parseCsv(line)[0]?.map((s) => s.trim()) ?? [line.trim()];
+  return line.split(/ {2,}/).map((s) => s.trim()).filter(Boolean);
+}
+
+function detectDelimiter(lines: string[]): "tab" | "pipe" | "semicolon" | "comma" | "spaces" {
+  const sample = lines.slice(0, 30);
+  const candidates: Array<"tab" | "pipe" | "semicolon" | "comma" | "spaces"> = ["tab", "pipe", "semicolon", "comma", "spaces"];
+  let best: "tab" | "pipe" | "semicolon" | "comma" | "spaces" = "spaces";
+  let bestScore = -1;
+  for (const d of candidates) {
+    const counts = sample.map((l) => splitByDelimiter(l, d).length).filter((n) => n > 1);
+    if (counts.length < 2) continue;
+    const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
+    const variance = counts.reduce((a, b) => a + Math.abs(b - avg), 0) / counts.length;
+    const score = counts.length * avg - variance * 5;
+    if (avg >= 3 && score > bestScore) { bestScore = score; best = d; }
+  }
+  return best;
+}
+
+function looksLikeBoqHeader(cells: string[]): boolean {
+  const joined = cells.map(normHeader).join(" ");
+  const hasDesc = /description|desc|itemdescription/.test(joined);
+  const hasQtyOrRate = /qty|quantity|rate|unitrate|amount|price/.test(joined);
+  const hasCodeOrUnit = /code|item|no|unit|uom/.test(joined);
+  return hasDesc && (hasQtyOrRate || hasCodeOrUnit);
+}
+
+function extractTableFromText(text: string): { rows: string[][]; warning?: string } {
+  const lines = text
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return { rows: [], warning: "No text content found to extract BOQ rows." };
+
+  const delimiter = detectDelimiter(lines);
+  const parsedLines = lines.map((l) => splitByDelimiter(l, delimiter));
+  let headerIdx = parsedLines.findIndex((cells) => looksLikeBoqHeader(cells));
+
+  // Fallback: look for a line with common BOQ words even if delimiter produced few cells
+  if (headerIdx < 0) {
+    for (let i = 0; i < Math.min(lines.length, 40); i++) {
+      const raw = lines[i]!.toLowerCase();
+      if ((raw.includes("description") || raw.includes("item")) && (raw.includes("qty") || raw.includes("quantity") || raw.includes("rate") || raw.includes("unit"))) {
+        // try to reparse this and following lines with spaces
+        headerIdx = i;
+        break;
+      }
+    }
+  }
+
+  if (headerIdx < 0) {
+    return { rows: [], warning: "Could not detect a BOQ table header (expected columns like Code, Description, Unit, Qty, Rate). Review the file or use the Excel/CSV template." };
+  }
+
+  const header = parsedLines[headerIdx] ?? [];
+  const dataRows = parsedLines.slice(headerIdx + 1).filter((cells) => {
+    if (cells.every((c) => c.trim() === "")) return false;
+    // skip obvious totals/footers
+    const joined = cells.join(" ").toLowerCase();
+    if (/^(grand total|total|subtotal|sub-total|vat|tax)\b/.test(joined) && cells.length <= 3) return false;
+    return true;
+  });
+
+  if (dataRows.length === 0) return { rows: [header], warning: "BOQ header detected but no data rows were extracted." };
+  return { rows: [header, ...dataRows], warning: delimiter === "spaces" ? "Table extracted from text using whitespace heuristics; review rows carefully." : undefined };
+}
+
 export function parseBoqImportFile(fileName: string, bytes: Buffer, projectId: string): ImportPreview {
   const lower = fileName.toLowerCase();
-  let format: "xlsx" | "csv";
+  let format: "xlsx" | "csv" | "pdf" | "txt";
   let rawRows: string[][];
+  const previewWarnings: string[] = [];
   if (lower.endsWith(".xlsx")) {
     format = "xlsx";
     rawRows = parseXlsx(bytes);
   } else if (lower.endsWith(".csv")) {
     format = "csv";
     rawRows = parseCsv(bytes.toString("utf8"));
+  } else if (lower.endsWith(".pdf")) {
+    format = "pdf";
+    const text = extractPdfText(bytes);
+    if (text.trim().length < 20) {
+      throw new Error("No readable text found in PDF. Scanned PDFs require OCR before BOQ table extraction.");
+    }
+    const extracted = extractTableFromText(text);
+    rawRows = extracted.rows;
+    if (extracted.warning) previewWarnings.push(extracted.warning);
+    previewWarnings.push("PDF BOQ extraction is best-effort; review every row before accepting.");
+  } else if (lower.endsWith(".txt")) {
+    format = "txt";
+    const extracted = extractTableFromText(bytes.toString("utf8"));
+    rawRows = extracted.rows;
+    if (extracted.warning) previewWarnings.push(extracted.warning);
   } else {
-    throw new Error("Unsupported file type. Upload a .xlsx or .csv file.");
+    throw new Error("Unsupported file type. Upload a .xlsx, .csv, .pdf, or .txt file.");
   }
 
   const { headers, records } = normalizeRows(rawRows);
@@ -320,5 +411,6 @@ export function parseBoqImportFile(fileName: string, bytes: Buffer, projectId: s
     totalRows: records.length,
     validRows,
     invalidRows: rows.filter((r) => r.rowNumber !== -1).length - validRows,
+    ...(previewWarnings.length > 0 ? { warnings: previewWarnings } : {}),
   };
 }

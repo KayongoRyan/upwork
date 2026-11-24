@@ -48,7 +48,7 @@ function decodePdfTextString(input: string): string {
   return out;
 }
 
-function extractPdfText(bytes: Buffer): string {
+export function extractPdfText(bytes: Buffer): string {
   const raw = bytes.toString("latin1");
   const chunks: string[] = [];
 

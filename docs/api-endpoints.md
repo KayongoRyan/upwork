@@ -130,7 +130,7 @@ All endpoints below require a valid portal session. Mutating endpoints require C
 |---|---|---:|---:|---|
 | GET | `/api/v1/cpmis/business/boq` | No | No | List BOQ items. |
 | GET | `/api/v1/cpmis/business/boq/export` | No | No | XLSX attachment (`boq-summary-*.xlsx`); query `projectId?`; Summary and BOQ Lines sheets; scoped to authorized projects. |
-| POST | `/api/v1/cpmis/business/boq/import/preview` | Yes | No | Multipart `file`, `projectId`, `csrfToken`; QS session. Parses .xlsx/.csv, returns validated preview rows (no DB writes). |
+| POST | `/api/v1/cpmis/business/boq/import/preview` | Yes | No | Multipart `file`, `projectId`, `csrfToken`; QS session. Parses .xlsx/.csv/.pdf/.txt, extracts BOQ tables, returns validated preview rows (no DB writes). PDF/TXT extraction is best-effort. |
 | POST | `/api/v1/cpmis/business/boq/import/accept` | Yes | Yes | JSON `{ projectId, rows[] }`; QS session. Server revalidates selected rows and creates BOQ lines via batch action. |
 | POST | `/api/v1/cpmis/business/boq` | Yes | Yes | Create BOQ item; QS/assignment checks. |
 | PATCH | `/api/v1/cpmis/business/boq/:id` | Yes | No | Update BOQ item. |
