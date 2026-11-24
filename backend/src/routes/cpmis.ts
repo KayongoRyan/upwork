@@ -3,6 +3,7 @@ import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import type { AdminAction } from "@/lib/data/reducer";
 import { readValidatedUploadFile } from "@/lib/server/file-validation";
+import { extractInvoiceMetadata } from "@/lib/server/invoice-extract";
 import { putObject, saveFileMetadata, storageKeyForDocument } from "@/lib/server/storage";
 import { nextId } from "@/lib/utils";
 import {
@@ -286,6 +287,26 @@ cpmisRouter.post("/documents/revise", upload.single("file"), async (req: Request
     if (error instanceof PersistenceError) return res.redirect(303, back + encodeURIComponent("The revision could not be saved. Try again."));
     console.error("[cpmis] document revise failed", error);
     return res.redirect(303, back + encodeURIComponent("The revision could not be saved. Try again."));
+  }
+});
+
+cpmisRouter.post("/documents/extract-invoice", upload.single("file"), async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const file = req.file;
+  if (!file) return apiError(res, 400, "validation-failed", { message: "Choose a document file to extract invoice metadata.", requestId: req.requestId });
+  const fileObj = new File([new Uint8Array(file.buffer)], file.originalname || "upload", { type: file.mimetype || "application/octet-stream" });
+  const validated = await readValidatedUploadFile(fileObj);
+  if (!validated.ok) return apiError(res, 400, "validation-failed", { message: validated.error, requestId: req.requestId });
+  try {
+    const extraction = extractInvoiceMetadata(validated.value.fileName, validated.value.contentType, validated.value.bytes);
+    res.setHeader("cache-control", "no-store");
+    return res.json({ ok: true, extraction });
+  } catch (error) {
+    console.error("[cpmis] invoice extraction failed", error);
+    return apiError(res, 500, "extraction-failed", { message: "Invoice metadata extraction failed.", requestId: req.requestId });
   }
 });
 

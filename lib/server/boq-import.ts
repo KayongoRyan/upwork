@@ -263,11 +263,10 @@ export function parseBoqImportFile(fileName: string, bytes: Buffer, projectId: s
       if (key === "code" || key === "description" || key === "unit") {
         candidate[key] = value;
       } else {
-        if (value === "") {
-          candidate[key] = 0;
-        } else {
-          candidate[key] = parseNumber(value);
-        }
+        const num = value === "" ? 0 : parseNumber(value);
+        if (key === "estimatedQty") candidate.estimatedQty = num;
+        else if (key === "actualQty") candidate.actualQty = num;
+        else if (key === "unitRate") candidate.unitRate = num;
       }
     });
 
@@ -283,7 +282,7 @@ export function parseBoqImportFile(fileName: string, bytes: Buffer, projectId: s
     if (!mapped.includes("unitRate")) errors.push("Missing Unit Rate column mapping.");
 
     if (typeof candidate.unit === "string") candidate.unit = candidate.unit.toLowerCase();
-    if (!boqUnits.includes(candidate.unit)) errors.push(`Invalid unit "${candidate.unit}". Allowed: ${boqUnits.join(", ")}.`);
+    if (!(boqUnits as readonly string[]).includes(candidate.unit)) errors.push(`Invalid unit "${candidate.unit}". Allowed: ${boqUnits.join(", ")}.`);
     for (const n of ["estimatedQty", "actualQty", "unitRate"] as const) {
       if (!Number.isFinite(candidate[n])) errors.push(`${n} must be a valid number.`);
       else if (candidate[n] < 0) errors.push(`${n} cannot be negative.`);
