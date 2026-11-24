@@ -157,6 +157,7 @@ These routes remain for compatibility, form workflows, file downloads, or legacy
 | POST | `/api/v1/cpmis/admin/comments` | Admin session | Yes | Form/urlencoded + `csrfToken` | 303 redirect | Active admin comment workflow. |
 | POST | `/api/v1/cpmis/notifications` | Admin session | Yes | Form/urlencoded + `csrfToken` | 303 redirect | Legacy/admin-only; QS mark-read uses portal action. |
 | GET | `/api/v1/cpmis/reports` | Admin session | No | Query params as needed | CSV/file response | Admin report export. |
+| GET | `/api/v1/cpmis/reports/workbook` | Admin session | No | Query `from,to,project` | XLSX workbook attachment | Project financial workbook export. |
 | POST | `/api/v1/cpmis/pm/reports` | PM session | Yes | Form + `csrfToken` | 303 redirect | Active form workflow. |
 | POST | `/api/v1/cpmis/pm/reports/open` | PM session | Yes | Form + `csrfToken` | 303 redirect | Active form workflow. |
 | POST | `/api/v1/cpmis/pm/reports/decide` | PM session | Yes | Form + `csrfToken` | 303 redirect | Active form workflow. |
@@ -193,6 +194,7 @@ These routes live under `app/api/**/route.ts`. They forward to Express and shoul
 | `/api/admin/comments` | POST | `/api/v1/cpmis/admin/comments` | Admin session + CSRF. |
 | `/api/notifications` | POST | `/api/v1/cpmis/notifications` | Admin session + CSRF; legacy/admin-only. |
 | `/api/reports` | GET | `/api/v1/cpmis/reports` | Admin session. |
+| `/api/reports/workbook` | GET | `/api/v1/cpmis/reports/workbook` | Admin session; XLSX workbook. |
 | `/api/pm/reports` | POST | `/api/v1/cpmis/pm/reports` | PM session + CSRF. |
 | `/api/pm/reports/open` | POST | `/api/v1/cpmis/pm/reports/open` | PM session + CSRF. |
 | `/api/pm/reports/decide` | POST | `/api/v1/cpmis/pm/reports/decide` | PM session + CSRF. |
