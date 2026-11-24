@@ -444,6 +444,12 @@ type InvoiceFields = {
   notes: string;
 };
 
+type InvoiceValidation = {
+  errors: string[];
+  warnings: string[];
+  fieldErrors: Partial<Record<keyof InvoiceFields, string>>;
+};
+
 type InvoiceExtraction = {
   fileName: string;
   fileType: string;
@@ -451,6 +457,7 @@ type InvoiceExtraction = {
   confidence: "low" | "medium" | "high";
   warnings: string[];
   fields: Record<string, unknown>;
+  validation?: InvoiceValidation;
   rawTextPreview: string;
 };
 
@@ -469,6 +476,72 @@ function toEditableFields(fields: Record<string, unknown> | undefined): InvoiceF
     projectReference: str(fields?.projectReference),
     notes: str(fields?.notes),
   };
+}
+
+const KNOWN_CURRENCIES = new Set(["RWF", "USD", "EUR", "GBP", "KES", "UGX", "TZS", "FRW", "ZAR", "NGN", "CAD", "AUD"]);
+
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.toISOString().slice(0, 10) === value;
+}
+
+function validateInvoiceFields(fields: InvoiceFields): InvoiceValidation {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const fieldErrors: Partial<Record<keyof InvoiceFields, string>> = {};
+  const addError = (field: keyof InvoiceFields, message: string) => { fieldErrors[field] = message; errors.push(message); };
+
+  if (fields.invoiceNumber.trim().length > 64) addError("invoiceNumber", "Invoice number is too long.");
+  if (fields.vendorName.trim().length > 120) addError("vendorName", "Vendor name is too long.");
+
+  for (const key of ["invoiceDate", "dueDate"] as const) {
+    const value = fields[key].trim();
+    if (!value) continue;
+    if (!isValidIsoDate(value)) addError(key, `${key === "invoiceDate" ? "Invoice date" : "Due date"} must be a valid YYYY-MM-DD date.`);
+    else {
+      const year = Number(value.slice(0, 4));
+      if (year < 2000 || year > 2100) addError(key, `${key === "invoiceDate" ? "Invoice date" : "Due date"} is outside the supported year range.`);
+    }
+  }
+  if (fields.invoiceDate.trim() && fields.dueDate.trim() && isValidIsoDate(fields.invoiceDate.trim()) && isValidIsoDate(fields.dueDate.trim()) && fields.dueDate.trim() < fields.invoiceDate.trim()) {
+    addError("dueDate", "Due date cannot be before invoice date.");
+  }
+
+  const currency = fields.currency.trim().toUpperCase();
+  if (currency) {
+    if (!/^[A-Z]{3}$/.test(currency)) addError("currency", "Currency must be a 3-letter code.");
+    else if (!KNOWN_CURRENCIES.has(currency)) warnings.push(`Currency "${currency}" is not in the common currency list; verify it.`);
+  }
+
+  const amount = (key: "subtotal" | "tax" | "total") => {
+    const raw = fields[key].trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) { addError(key, `${key[0]!.toUpperCase() + key.slice(1)} must be a valid number.`); return null; }
+    if (n < 0) { addError(key, `${key[0]!.toUpperCase() + key.slice(1)} cannot be negative.`); return null; }
+    if (Math.abs(n) > 1_000_000_000_000) { addError(key, `${key[0]!.toUpperCase() + key.slice(1)} is unreasonably large.`); return null; }
+    return n;
+  };
+  const subtotal = amount("subtotal");
+  const tax = amount("tax");
+  const total = amount("total");
+
+  if (subtotal !== null && tax !== null && total !== null) {
+    const expected = subtotal + tax;
+    const diff = Math.abs(expected - total);
+    const tolerance = Math.max(1, Math.abs(total) * 0.01);
+    if (diff > tolerance) warnings.push(`Total (${total}) does not match subtotal + tax (${expected}); verify amounts.`);
+  }
+  if (total !== null && subtotal !== null && total < subtotal) warnings.push("Total is less than subtotal; verify tax/discount handling.");
+
+  if (!fields.invoiceNumber.trim()) warnings.push("Invoice number is missing.");
+  if (!fields.vendorName.trim()) warnings.push("Vendor name is missing.");
+  if (!fields.invoiceDate.trim()) warnings.push("Invoice date is missing.");
+  if (!fields.total.trim()) warnings.push("Total amount is missing.");
+
+  return { errors, warnings, fieldErrors };
 }
 
 function ExtractInvoicePanel({ csrfToken }: { csrfToken: string }) {
@@ -520,12 +593,15 @@ function ExtractInvoicePanel({ csrfToken }: { csrfToken: string }) {
     setFields((current) => ({ ...current, [key]: value }));
   }
 
+  const validation = extraction ? validateInvoiceFields(fields) : null;
+
   function acceptedPayload() {
     return {
       acceptedAt: new Date().toISOString(),
       sourceFile: extraction ? { fileName: extraction.fileName, fileType: extraction.fileType } : null,
       confidence: extraction?.confidence ?? "low",
-      warnings: extraction?.warnings ?? [],
+      extractionWarnings: extraction?.warnings ?? [],
+      validation,
       fields: {
         ...fields,
         subtotal: fields.subtotal === "" ? null : Number(fields.subtotal),
@@ -555,6 +631,10 @@ function ExtractInvoicePanel({ csrfToken }: { csrfToken: string }) {
   }
 
   function acceptMetadata() {
+    if (validation && validation.errors.length > 0) {
+      toast.error("Fix validation errors before accepting.");
+      return;
+    }
     setAccepted(true);
     toast.success("Invoice metadata accepted for this review. Copy or download the JSON if you need to store it.");
   }
@@ -599,24 +679,42 @@ function ExtractInvoicePanel({ csrfToken }: { csrfToken: string }) {
 
           {extraction.warnings.length > 0 ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              <p className="font-medium">Review warnings</p>
+              <p className="font-medium">Extraction warnings</p>
               <ul className="mt-1 list-disc pl-5">
                 {extraction.warnings.map((w, i) => <li key={i}>{w}</li>)}
               </ul>
             </div>
           ) : null}
 
+          {validation && validation.errors.length > 0 ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              <p className="font-medium">Validation errors</p>
+              <ul className="mt-1 list-disc pl-5">
+                {validation.errors.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </div>
+          ) : null}
+
+          {validation && validation.warnings.length > 0 ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <p className="font-medium">Validation warnings</p>
+              <ul className="mt-1 list-disc pl-5">
+                {validation.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </div>
+          ) : null}
+
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1"><Label>Invoice number</Label><Input value={fields.invoiceNumber} onChange={(e) => updateField("invoiceNumber", e.target.value)} /></label>
-            <label className="grid gap-1"><Label>Vendor / supplier</Label><Input value={fields.vendorName} onChange={(e) => updateField("vendorName", e.target.value)} /></label>
-            <label className="grid gap-1"><Label>Invoice date</Label><Input type="date" value={fields.invoiceDate} onChange={(e) => updateField("invoiceDate", e.target.value)} /></label>
-            <label className="grid gap-1"><Label>Due date</Label><Input type="date" value={fields.dueDate} onChange={(e) => updateField("dueDate", e.target.value)} /></label>
-            <label className="grid gap-1"><Label>Currency</Label><Input value={fields.currency} onChange={(e) => updateField("currency", e.target.value)} placeholder="RWF, USD..." /></label>
-            <label className="grid gap-1"><Label>PO number</Label><Input value={fields.poNumber} onChange={(e) => updateField("poNumber", e.target.value)} /></label>
-            <label className="grid gap-1"><Label>Subtotal</Label><Input type="number" step="0.01" value={fields.subtotal} onChange={(e) => updateField("subtotal", e.target.value)} /></label>
-            <label className="grid gap-1"><Label>Tax / VAT</Label><Input type="number" step="0.01" value={fields.tax} onChange={(e) => updateField("tax", e.target.value)} /></label>
-            <label className="grid gap-1"><Label>Total</Label><Input type="number" step="0.01" value={fields.total} onChange={(e) => updateField("total", e.target.value)} /></label>
-            <label className="grid gap-1"><Label>Project reference</Label><Input value={fields.projectReference} onChange={(e) => updateField("projectReference", e.target.value)} /></label>
+            <label className="grid gap-1"><Label>Invoice number</Label><Input value={fields.invoiceNumber} onChange={(e) => updateField("invoiceNumber", e.target.value)} />{validation?.fieldErrors.invoiceNumber ? <p className="text-xs text-destructive">{validation.fieldErrors.invoiceNumber}</p> : null}</label>
+            <label className="grid gap-1"><Label>Vendor / supplier</Label><Input value={fields.vendorName} onChange={(e) => updateField("vendorName", e.target.value)} />{validation?.fieldErrors.vendorName ? <p className="text-xs text-destructive">{validation.fieldErrors.vendorName}</p> : null}</label>
+            <label className="grid gap-1"><Label>Invoice date</Label><Input type="date" value={fields.invoiceDate} onChange={(e) => updateField("invoiceDate", e.target.value)} />{validation?.fieldErrors.invoiceDate ? <p className="text-xs text-destructive">{validation.fieldErrors.invoiceDate}</p> : null}</label>
+            <label className="grid gap-1"><Label>Due date</Label><Input type="date" value={fields.dueDate} onChange={(e) => updateField("dueDate", e.target.value)} />{validation?.fieldErrors.dueDate ? <p className="text-xs text-destructive">{validation.fieldErrors.dueDate}</p> : null}</label>
+            <label className="grid gap-1"><Label>Currency</Label><Input value={fields.currency} onChange={(e) => updateField("currency", e.target.value)} placeholder="RWF, USD..." />{validation?.fieldErrors.currency ? <p className="text-xs text-destructive">{validation.fieldErrors.currency}</p> : null}</label>
+            <label className="grid gap-1"><Label>PO number</Label><Input value={fields.poNumber} onChange={(e) => updateField("poNumber", e.target.value)} />{validation?.fieldErrors.poNumber ? <p className="text-xs text-destructive">{validation.fieldErrors.poNumber}</p> : null}</label>
+            <label className="grid gap-1"><Label>Subtotal</Label><Input type="number" step="0.01" value={fields.subtotal} onChange={(e) => updateField("subtotal", e.target.value)} />{validation?.fieldErrors.subtotal ? <p className="text-xs text-destructive">{validation.fieldErrors.subtotal}</p> : null}</label>
+            <label className="grid gap-1"><Label>Tax / VAT</Label><Input type="number" step="0.01" value={fields.tax} onChange={(e) => updateField("tax", e.target.value)} />{validation?.fieldErrors.tax ? <p className="text-xs text-destructive">{validation.fieldErrors.tax}</p> : null}</label>
+            <label className="grid gap-1"><Label>Total</Label><Input type="number" step="0.01" value={fields.total} onChange={(e) => updateField("total", e.target.value)} />{validation?.fieldErrors.total ? <p className="text-xs text-destructive">{validation.fieldErrors.total}</p> : null}</label>
+            <label className="grid gap-1"><Label>Project reference</Label><Input value={fields.projectReference} onChange={(e) => updateField("projectReference", e.target.value)} />{validation?.fieldErrors.projectReference ? <p className="text-xs text-destructive">{validation.fieldErrors.projectReference}</p> : null}</label>
           </div>
           <label className="grid gap-1"><Label>Notes</Label><Textarea value={fields.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Review notes or corrections..." /></label>
 
@@ -626,7 +724,7 @@ function ExtractInvoicePanel({ csrfToken }: { csrfToken: string }) {
           </details>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" onClick={acceptMetadata}>Accept metadata</Button>
+            <Button type="button" onClick={acceptMetadata} disabled={!!validation && validation.errors.length > 0}>Accept metadata</Button>
             <Button type="button" variant="outline" onClick={copyJson}><Copy className="h-4 w-4" />Copy JSON</Button>
             <Button type="button" variant="outline" onClick={downloadJson}><Download className="h-4 w-4" />Download JSON</Button>
             {accepted ? <span className="inline-flex items-center gap-1 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" />Accepted for review</span> : null}
