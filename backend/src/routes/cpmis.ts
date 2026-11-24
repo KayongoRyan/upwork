@@ -291,8 +291,11 @@ cpmisRouter.post("/documents/revise", upload.single("file"), async (req: Request
 });
 
 cpmisRouter.post("/documents/extract-invoice", upload.single("file"), async (req: Request, res: Response) => {
-  const auth = await requireSession(req, res, "administrator");
+  const auth = await requireAnySession(req, res);
   if (!auth) return;
+  if (auth.session.role !== "administrator" && auth.session.role !== "quantity_surveyor") {
+    return apiError(res, 403, "forbidden", { message: "Only administrators and quantity surveyors can extract invoice metadata.", requestId: req.requestId });
+  }
   const csrfError = verifyCsrfToken(req, auth.session);
   if (csrfError) return res.status(csrfError.status).json(csrfError.body);
   const file = req.file;
