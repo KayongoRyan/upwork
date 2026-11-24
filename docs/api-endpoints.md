@@ -164,6 +164,7 @@ These routes remain for compatibility, form workflows, file downloads, or legacy
 | GET | `/api/v1/cpmis/reports/workbook` | Admin session | No | Query `from,to,project` | XLSX workbook attachment | Project financial workbook export. |
 | GET | `/api/v1/cpmis/reports/monthly-progress` | Admin session | No | Query `month=YYYY-MM,project` | XLSX workbook attachment | Monthly progress report export. |
 | GET | `/api/v1/cpmis/reports/analytics` | Admin, PM, or QS session | No | Query `projectId` or `project` (optional) | JSON `{ ok, generatedAt, scope, portfolio, deviations, projects }` | Dashboard-ready project analytics: planned vs actual progress, BOQ planned vs actual measurements, cost/schedule deviations, insights. Scoped by role (PM own projects, QS assigned project). |
+| GET | `/api/v1/cpmis/reports/predictive` | Admin, PM, or QS session | No | Query `projectId` or `project` (optional) | JSON `{ ok, generatedAt, scope, model, evaluation, limitations, forecasts }` | Baseline predictive analytics from historical project records. Delay and cost-overrun forecasts with confidence indicators, drivers, data quality, LOOCV evaluation metrics, and clearly stated limitations. Scoped by role. |
 | POST | `/api/v1/cpmis/pm/reports` | PM session | Yes | Form + `csrfToken` | 303 redirect | Active form workflow. |
 | POST | `/api/v1/cpmis/pm/reports/open` | PM session | Yes | Form + `csrfToken` | 303 redirect | Active form workflow. |
 | POST | `/api/v1/cpmis/pm/reports/decide` | PM session | Yes | Form + `csrfToken` | 303 redirect | Active form workflow. |
@@ -204,6 +205,7 @@ These routes live under `app/api/**/route.ts`. They forward to Express and shoul
 | `/api/reports/workbook` | GET | `/api/v1/cpmis/reports/workbook` | Admin session; XLSX workbook. |
 | `/api/reports/monthly-progress` | GET | `/api/v1/cpmis/reports/monthly-progress` | Admin session; XLSX monthly progress report. |
 | `/api/reports/analytics` | GET | `/api/v1/cpmis/reports/analytics` | Admin/PM/QS session; JSON dashboard-ready project analytics. |
+| `/api/reports/predictive` | GET | `/api/v1/cpmis/reports/predictive` | Admin/PM/QS session; JSON predictive forecasts with confidence/limitations/evaluation. |
 | `/api/pm/reports` | POST | `/api/v1/cpmis/pm/reports` | PM session + CSRF. |
 | `/api/pm/reports/open` | POST | `/api/v1/cpmis/pm/reports/open` | PM session + CSRF. |
 | `/api/pm/reports/decide` | POST | `/api/v1/cpmis/pm/reports/decide` | PM session + CSRF. |
