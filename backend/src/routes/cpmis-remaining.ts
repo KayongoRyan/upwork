@@ -446,6 +446,129 @@ cpmisRemainingRouter.get("/reports/workbook", async (req: Request, res: Response
   return res.status(200).send(workbook);
 });
 
+cpmisRemainingRouter.get("/reports/monthly-progress", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const monthRaw = String(req.query.month ?? new Date().toISOString().slice(0, 7));
+  const monthMatch = /^(\d{4})-(\d{2})$/.exec(monthRaw);
+  if (!monthMatch) return apiError(res, 400, "validation-failed", { message: "month must be YYYY-MM.", requestId: req.requestId });
+  const year = Number(monthMatch[1]);
+  const monthIndex = Number(monthMatch[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return apiError(res, 400, "validation-failed", { message: "month must be YYYY-MM.", requestId: req.requestId });
+  const monthStart = new Date(Date.UTC(year, monthIndex, 1));
+  const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 0, 23, 59, 59, 999));
+  const from = monthStart.toISOString().slice(0, 10);
+  const to = monthEnd.toISOString().slice(0, 10);
+  const projectId = String(req.query.project ?? "all");
+  const state = await readState();
+  const projects = state.projects.filter((project) => {
+    if (projectId !== "all" && project.id !== projectId) return false;
+    return overlapsRange(project, from, to);
+  });
+  const ids = new Set(projects.map((project) => project.id));
+  const usersById = new Map(state.users.map((u) => [u.id, u]));
+
+  const inMonth = (value?: string | null) => {
+    if (!value) return false;
+    const t = Date.parse(value);
+    return Number.isFinite(t) && t >= monthStart.getTime() && t <= monthEnd.getTime();
+  };
+
+  const summaryRows: (string | number)[][] = [
+    ["CPMIS Monthly Progress Report"],
+    ["Generated At", new Date().toISOString()],
+    ["Month", monthRaw],
+    ["Period Start", from],
+    ["Period End", to],
+    ["Project Filter", projectId === "all" ? "All projects" : (projects[0]?.code ?? projectId)],
+    [],
+    ["Metric", "Value"],
+    ["Projects Included", projects.length],
+    ["Total Tasks", state.tasks.filter((t) => ids.has(t.projectId)).length],
+    ["Tasks Completed", state.tasks.filter((t) => ids.has(t.projectId) && t.status === "done").length],
+    ["Site Reports In Month", state.reports.filter((r) => ids.has(r.projectId) && inMonth(r.submittedAt ?? r.periodEnd ?? r.periodStart)).length],
+    ["Progress Marks In Month", (state.progressMarks ?? []).filter((m) => ids.has(m.projectId) && inMonth(m.recordedAt)).length],
+  ];
+
+  const projectRows: (string | number)[][] = [[
+    "Code", "Name", "Manager", "Status", "Current Progress %", "Budget (RWF)", "Spent (RWF)", "BOQ Estimated (RWF)", "BOQ Actual (RWF)", "BOQ Variance (RWF)",
+    "Tasks Total", "Tasks Done", "Tasks Open", "Task Completion %", "Site Reports (Month)", "Approved Reports (Month)", "Pending Review Reports (Month)", "Rejected Reports (Month)", "Progress Marks (Month)", "Latest Progress Mark %", "Latest Progress Note"
+  ]];
+  for (const project of projects) {
+    const manager = usersById.get(project.managerId);
+    const projectTasks = state.tasks.filter((t) => t.projectId === project.id);
+    const doneTasks = projectTasks.filter((t) => t.status === "done").length;
+    const openTasks = projectTasks.length - doneTasks;
+    const taskCompletion = projectTasks.length > 0 ? Math.round((doneTasks / projectTasks.length) * 10000) / 100 : 0;
+    const monthReports = state.reports.filter((r) => r.projectId === project.id && inMonth(r.submittedAt ?? r.periodEnd ?? r.periodStart));
+    const approved = monthReports.filter((r) => r.status === "approved").length;
+    const pending = monthReports.filter((r) => r.status === "submitted" || r.status === "in_review").length;
+    const rejected = monthReports.filter((r) => r.status === "rejected").length;
+    const marks = (state.progressMarks ?? []).filter((m) => m.projectId === project.id && inMonth(m.recordedAt)).sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt));
+    const latestMark = marks[0];
+    const estimate = estimateFor(state.boq, project.id);
+    const actual = expenditureFor(state.boq, project.id);
+    projectRows.push([
+      project.code,
+      project.name,
+      manager ? `${manager.firstName} ${manager.lastName}` : "Unassigned",
+      project.status,
+      project.progress,
+      project.budget,
+      project.spent,
+      estimate,
+      actual,
+      actual - estimate,
+      projectTasks.length,
+      doneTasks,
+      openTasks,
+      taskCompletion,
+      monthReports.length,
+      approved,
+      pending,
+      rejected,
+      marks.length,
+      latestMark?.progress ?? "",
+      latestMark?.note ?? "",
+    ]);
+  }
+
+  const taskRows: (string | number)[][] = [[
+    "Project Code", "Project", "Task", "Assignee", "Priority", "Status", "Due Date", "Progress %", "Completed In Month"
+  ]];
+  for (const task of state.tasks.filter((t) => ids.has(t.projectId))) {
+    const project = projects.find((p) => p.id === task.projectId);
+    const completedInMonth = task.status === "done" && inMonth((task as any).completedAt ?? task.dueDate);
+    taskRows.push([project?.code ?? "", project?.name ?? "", task.title, task.assignee ?? "", (task as any).priority ?? "", task.status, task.dueDate, task.progress, completedInMonth ? "Yes" : "No"]);
+  }
+
+  const reportRows: (string | number)[][] = [[
+    "Project Code", "Project", "Report ID", "Engineer", "Period Start", "Period End", "Submitted At", "Status", "Progress %", "Summary", "Issues"
+  ]];
+  for (const report of state.reports.filter((r) => ids.has(r.projectId) && inMonth(r.submittedAt ?? r.periodEnd ?? r.periodStart)).sort((a, b) => Date.parse(b.submittedAt ?? b.periodEnd) - Date.parse(a.submittedAt ?? a.periodEnd))) {
+    const project = projects.find((p) => p.id === report.projectId);
+    const engineer = usersById.get(report.engineerId);
+    reportRows.push([
+      project?.code ?? "", project?.name ?? "", report.id,
+      engineer ? `${engineer.firstName} ${engineer.lastName}` : report.engineerId,
+      report.periodStart, report.periodEnd, report.submittedAt ?? "", report.status, report.progress,
+      report.summary ?? "", report.issues ?? "",
+    ]);
+  }
+
+  const workbook = createXlsx([
+    { name: "Summary", rows: summaryRows },
+    { name: "Project Progress", rows: projectRows },
+    { name: "Tasks", rows: taskRows },
+    { name: "Site Reports", rows: reportRows },
+  ]);
+  const stampName = projectId === "all" ? "all" : (projects[0]?.code ?? projectId);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="monthly-progress-${monthRaw}-${stampName}.xlsx"`);
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(200).send(workbook);
+});
+
 // --- pm reports ---
 cpmisRemainingRouter.post("/pm/reports", async (req: Request, res: Response) => {
   const auth = await requireSession(req, res, "project_manager");
