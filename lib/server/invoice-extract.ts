@@ -14,6 +14,12 @@ export interface InvoiceMetadata {
   notes: string | null;
 }
 
+export interface InvoiceFieldValidation {
+  errors: string[];
+  warnings: string[];
+  fieldErrors: Partial<Record<keyof InvoiceMetadata, string>>;
+}
+
 export interface InvoiceExtractionResult {
   fileName: string;
   fileType: string;
@@ -21,6 +27,7 @@ export interface InvoiceExtractionResult {
   confidence: "low" | "medium" | "high";
   warnings: string[];
   fields: InvoiceMetadata;
+  validation: InvoiceFieldValidation;
   rawTextPreview: string;
 }
 
@@ -181,6 +188,86 @@ function detectVendor(text: string): string | null {
   return null;
 }
 
+const KNOWN_CURRENCIES = new Set(["RWF", "USD", "EUR", "GBP", "KES", "UGX", "TZS", "FRW", "ZAR", "NGN", "CAD", "AUD"]);
+
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.toISOString().slice(0, 10) === value;
+}
+
+export function validateInvoiceMetadata(fields: InvoiceMetadata): InvoiceFieldValidation {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const fieldErrors: Partial<Record<keyof InvoiceMetadata, string>> = {};
+
+  const addError = (field: keyof InvoiceMetadata, message: string) => {
+    fieldErrors[field] = message;
+    errors.push(message);
+  };
+
+  if (fields.invoiceNumber !== null) {
+    const v = fields.invoiceNumber.trim();
+    if (!v) addError("invoiceNumber", "Invoice number cannot be empty.");
+    else if (v.length > 64) addError("invoiceNumber", "Invoice number is too long.");
+  }
+
+  if (fields.vendorName !== null) {
+    const v = fields.vendorName.trim();
+    if (!v) addError("vendorName", "Vendor name cannot be empty.");
+    else if (v.length > 120) addError("vendorName", "Vendor name is too long.");
+  }
+
+  for (const key of ["invoiceDate", "dueDate"] as const) {
+    const value = fields[key];
+    if (value === null) continue;
+    if (!isValidIsoDate(value)) {
+      addError(key, `${key === "invoiceDate" ? "Invoice date" : "Due date"} must be a valid YYYY-MM-DD date.`);
+      continue;
+    }
+    const year = Number(value.slice(0, 4));
+    if (year < 2000 || year > 2100) addError(key, `${key === "invoiceDate" ? "Invoice date" : "Due date"} is outside the supported year range.`);
+  }
+  if (fields.invoiceDate && fields.dueDate && isValidIsoDate(fields.invoiceDate) && isValidIsoDate(fields.dueDate) && fields.dueDate < fields.invoiceDate) {
+    addError("dueDate", "Due date cannot be before invoice date.");
+  }
+
+  if (fields.currency !== null) {
+    const v = fields.currency.trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(v)) addError("currency", "Currency must be a 3-letter code.");
+    else if (!KNOWN_CURRENCIES.has(v)) warnings.push(`Currency "${v}" is not in the common currency list; verify it.`);
+  }
+
+  for (const key of ["subtotal", "tax", "total"] as const) {
+    const value = fields[key];
+    if (value === null) continue;
+    if (!Number.isFinite(value)) addError(key, `${key[0]!.toUpperCase() + key.slice(1)} must be a valid number.`);
+    else if (value < 0) addError(key, `${key[0]!.toUpperCase() + key.slice(1)} cannot be negative.`);
+    else if (Math.abs(value) > 1_000_000_000_000) addError(key, `${key[0]!.toUpperCase() + key.slice(1)} is unreasonably large.`);
+  }
+
+  if (fields.subtotal !== null && fields.tax !== null && fields.total !== null) {
+    const expected = Number(fields.subtotal) + Number(fields.tax);
+    const diff = Math.abs(expected - Number(fields.total));
+    const tolerance = Math.max(1, Math.abs(Number(fields.total)) * 0.01);
+    if (diff > tolerance) {
+      warnings.push(`Total (${fields.total}) does not match subtotal + tax (${expected}); verify amounts.`);
+    }
+  }
+
+  if (fields.total !== null && fields.subtotal !== null && fields.total < fields.subtotal) {
+    warnings.push("Total is less than subtotal; verify tax/discount handling.");
+  }
+
+  if (!fields.invoiceNumber) warnings.push("Invoice number is missing.");
+  if (!fields.vendorName) warnings.push("Vendor name is missing.");
+  if (!fields.invoiceDate) warnings.push("Invoice date is missing.");
+  if (fields.total === null) warnings.push("Total amount is missing.");
+
+  return { errors, warnings, fieldErrors };
+}
+
 export function extractInvoiceMetadata(fileName: string, fileType: string, bytes: Buffer): InvoiceExtractionResult {
   const lower = fileName.toLowerCase();
   const warnings: string[] = [];
@@ -220,6 +307,8 @@ export function extractInvoiceMetadata(fileName: string, fileType: string, bytes
     notes: null,
   };
 
+  const validation = validateInvoiceMetadata(fields);
+
   const present = Object.values(fields).filter((v) => v !== null && v !== "").length;
   let confidence: "low" | "medium" | "high" = "low";
   if (textExtracted && present >= 5) confidence = "high";
@@ -237,6 +326,7 @@ export function extractInvoiceMetadata(fileName: string, fileType: string, bytes
     confidence,
     warnings,
     fields,
+    validation,
     rawTextPreview: text.slice(0, 4000),
   };
 }
