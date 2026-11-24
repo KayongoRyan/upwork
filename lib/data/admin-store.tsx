@@ -426,6 +426,7 @@ export function usePm() {
   return {
     actor,
     viewer: data.viewer,
+    settings: data.settings,
     projects,
     tasks: data.tasks.filter((task) => ids.has(task.projectId)),
     reports: data.reports.filter((report) => ids.has(report.projectId)),

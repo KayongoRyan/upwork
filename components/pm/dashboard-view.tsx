@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { CalendarDays, ChevronLeft, ChevronRight, FolderKanban, ListTodo, Plus, TriangleAlert, Users } from "lucide-react";
 import { PmProgressChart } from "@/components/pm/progress-chart";
 import { PriorityBadge, ProjectStatusBadge } from "@/components/shared/status-badge";
+import { ProjectAnalyticsPanel } from "@/components/shared/project-analytics-panel";
 import { Button } from "@/components/ui/button";
 import { usePm } from "@/lib/data/admin-store";
 import { DEMO_TODAY, cn, daysUntil, formatDate, fullName, initials } from "@/lib/utils";
@@ -100,6 +101,8 @@ export function PmDashboard() {
       </div>
 
       <PmProgressChart projects={data.projects} marks={data.progressMarks} />
+
+      <ProjectAnalyticsPanel currency={data.settings?.currency ?? "RWF"} />
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.85fr)]">
         <div className="space-y-4">
