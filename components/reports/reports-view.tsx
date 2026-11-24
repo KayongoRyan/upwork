@@ -1,6 +1,6 @@
 "use client";
 
-import { Children, useMemo } from "react";
+import { Children, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Download } from "lucide-react";
 import { MonthlyActivityChart } from "@/components/dashboard/monthly-activity-chart";
@@ -47,6 +47,22 @@ export function ReportsView() {
   const exportQuery = new URLSearchParams({ from, to });
   if (projectId !== "all") exportQuery.set("project", projectId);
 
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const q = new URLSearchParams();
+    if (projectId !== "all") q.set("projectId", projectId);
+    fetch(`/api/reports/analytics${q.toString() ? `?${q.toString()}` : ""}`, { credentials: "same-origin", cache: "no-store" })
+      .then(async (res) => {
+        const json = await res.json().catch(() => null);
+        if (!res.ok || !json?.ok) throw new Error(json?.message || json?.error || "Could not load analytics.");
+        if (!cancelled) { setAnalytics(json); setAnalyticsError(null); }
+      })
+      .catch((err) => { if (!cancelled) setAnalyticsError(err instanceof Error ? err.message : "Could not load analytics."); });
+    return () => { cancelled = true; };
+  }, [projectId]);
+
   return (
     <div>
       <PageHeader
@@ -87,6 +103,108 @@ export function ReportsView() {
       </form>
       {chosen ? <ProjectRecord project={chosen} manager={data.managerName(chosen)} currency={data.settings.currency} tasks={data.tasks.filter((task) => task.projectId === chosen.id)} people={[...data.users.filter((user) => user.projectId === chosen.id || user.id === chosen.managerId).map((user) => `${user.firstName} ${user.lastName} · ${user.role.replaceAll("_", " ")}`), ...data.employees.filter((employee) => employee.projectId === chosen.id).map((employee) => `${employee.firstName} ${employee.lastName} · ${employee.position}`)]} documents={(data.documents ?? []).filter((item) => item.projectId === chosen.id).map((item) => `${item.number} · ${item.title}`)} reports={data.reports.filter((report) => report.projectId === chosen.id).map((report) => ({ id: report.id, summary: report.summary, status: report.status, at: report.submittedAt }))} /> : null}
       {invalidRange ? <p className="mb-4 text-sm text-destructive">The start of the range must be on or before the end.</p> : null}
+
+      <section className="mb-4 rounded-[22px] border border-black/5 bg-card p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">Project analytics</h2>
+            <p className="mt-1 text-sm text-black/55">Real project records: progress vs planned, BOQ measurements, cost and schedule deviations.</p>
+          </div>
+          {analytics?.generatedAt ? <p className="text-xs text-black/40">Generated {new Date(analytics.generatedAt).toLocaleString()}</p> : null}
+        </div>
+        {analyticsError ? <p className="mt-3 text-sm text-destructive">{analyticsError}</p> : null}
+        {!analytics && !analyticsError ? <p className="mt-3 text-sm text-black/45">Loading analytics...</p> : null}
+        {analytics ? (
+          <div className="mt-4 grid gap-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Summary label="Avg actual progress" value={`${analytics.portfolio.averageProgress}%`} />
+              <Summary label="Avg planned progress" value={analytics.portfolio.averagePlannedProgress === null ? "—" : `${analytics.portfolio.averagePlannedProgress}%`} />
+              <Summary label="Cost variance" value={formatMoney(analytics.portfolio.totalCostVariance, data.settings.currency)} />
+              <Summary label="Measurement variance" value={formatMoney(analytics.portfolio.totalMeasurementVariance, data.settings.currency)} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Summary label="Projects at risk" value={String(analytics.portfolio.atRiskProjects)} />
+              <Summary label="Behind schedule" value={String(analytics.portfolio.delayedProjects)} />
+              <Summary label="Overdue tasks" value={String(analytics.portfolio.overdueTasks)} />
+              <Summary label="Budget utilization" value={analytics.portfolio.totalBudget ? `${Math.round((analytics.portfolio.totalSpent / analytics.portfolio.totalBudget) * 100)}%` : "—"} />
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-3">
+              <div className="rounded-xl border border-black/5 bg-light-gray/30 p-3">
+                <h3 className="text-sm font-semibold">Cost deviations</h3>
+                <ul className="mt-2 space-y-2 text-sm">
+                  {(analytics.deviations.costOverruns ?? []).length === 0 ? <li className="text-black/45">No cost overruns detected.</li> : analytics.deviations.costOverruns.map((d: any) => (
+                    <li key={d.projectId} className="flex justify-between gap-3"><span>{d.code}</span><span className="tabular-nums text-accent">{formatMoney(d.varianceAmount, data.settings.currency)}</span></li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-xl border border-black/5 bg-light-gray/30 p-3">
+                <h3 className="text-sm font-semibold">Schedule deviations</h3>
+                <ul className="mt-2 space-y-2 text-sm">
+                  {(analytics.deviations.scheduleBehind ?? []).length === 0 ? <li className="text-black/45">No schedule deviations detected.</li> : analytics.deviations.scheduleBehind.map((d: any) => (
+                    <li key={d.projectId} className="flex justify-between gap-3"><span>{d.code}</span><span className="tabular-nums text-accent">{d.deviationPercent === null ? d.status : `${d.deviationPercent}% vs plan`}</span></li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-xl border border-black/5 bg-light-gray/30 p-3">
+                <h3 className="text-sm font-semibold">Measurement variances</h3>
+                <ul className="mt-2 space-y-2 text-sm">
+                  {(analytics.deviations.measurementOverruns ?? []).length === 0 ? <li className="text-black/45">No measurement overruns detected.</li> : analytics.deviations.measurementOverruns.map((d: any) => (
+                    <li key={d.projectId} className="flex justify-between gap-3"><span>{d.code}</span><span className="tabular-nums text-accent">{formatMoney(d.varianceAmount, data.settings.currency)}</span></li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-black/5">
+              <table className="w-full min-w-[980px] text-left text-sm">
+                <thead className="bg-black/[0.02] text-xs text-black/40">
+                  <tr>
+                    <th className="px-3 py-2">Project</th>
+                    <th className="px-3 py-2">Actual</th>
+                    <th className="px-3 py-2">Planned</th>
+                    <th className="px-3 py-2">Progress dev.</th>
+                    <th className="px-3 py-2">Budget</th>
+                    <th className="px-3 py-2">Spent</th>
+                    <th className="px-3 py-2">Cost dev.</th>
+                    <th className="px-3 py-2">BOQ est.</th>
+                    <th className="px-3 py-2">BOQ actual</th>
+                    <th className="px-3 py-2">Schedule</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analytics.projects.map((p: any) => (
+                    <tr key={p.projectId} className="border-t border-black/5">
+                      <td className="px-3 py-2"><p className="font-medium">{p.code}</p><p className="text-xs text-black/45">{p.name}</p></td>
+                      <td className="px-3 py-2 tabular-nums">{p.progress.actualPercent}%</td>
+                      <td className="px-3 py-2 tabular-nums">{p.progress.plannedPercent === null ? "—" : `${p.progress.plannedPercent}%`}</td>
+                      <td className={`px-3 py-2 tabular-nums ${(p.progress.deviationPercent ?? 0) < 0 ? "text-accent" : "text-emerald-700"}`}>{p.progress.deviationPercent === null ? "—" : `${p.progress.deviationPercent}%`}</td>
+                      <td className="px-3 py-2 tabular-nums">{formatMoney(p.cost.budget, data.settings.currency)}</td>
+                      <td className="px-3 py-2 tabular-nums">{formatMoney(p.cost.spent, data.settings.currency)}</td>
+                      <td className={`px-3 py-2 tabular-nums ${p.cost.varianceAmount > 0 ? "text-accent" : "text-emerald-700"}`}>{formatMoney(p.cost.varianceAmount, data.settings.currency)}</td>
+                      <td className="px-3 py-2 tabular-nums">{formatMoney(p.measurements.estimatedAmount, data.settings.currency)}</td>
+                      <td className="px-3 py-2 tabular-nums">{formatMoney(p.measurements.actualAmount, data.settings.currency)}</td>
+                      <td className="px-3 py-2"><span className={`inline-flex rounded-full px-2 py-0.5 text-xs ${p.schedule.status === "behind_schedule" ? "bg-red-50 text-red-700" : p.schedule.status === "at_risk" ? "bg-amber-50 text-amber-700" : p.schedule.status === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>{String(p.schedule.status).replaceAll("_", " ")}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              {analytics.projects.slice(0, 6).map((p: any) => (
+                <div key={p.projectId} className="rounded-xl border border-black/5 bg-light-gray/30 p-3">
+                  <p className="text-sm font-medium">{p.code} · {p.name}</p>
+                  <ul className="mt-2 list-disc pl-5 text-xs text-black/60">
+                    {p.insights.map((insight: string, i: number) => <li key={i}>{insight}</li>)}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       {chosen ? null : <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Summary label="Projects in range" value={String(counts.total)} />

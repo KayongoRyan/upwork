@@ -4,7 +4,7 @@ import multer from "multer";
 import { z } from "zod";
 import { billLines, sameBill, estimateFor, expenditureFor, lineActual, lineEstimate } from "@/lib/boq";
 import { isManagerFieldNotice } from "@/lib/notices";
-import { nextId, fullName, buildCsv } from "@/lib/utils";
+import { nextId, fullName, buildCsv, formatMoney } from "@/lib/utils";
 import { overlapsRange } from "@/lib/metrics";
 import { readValidatedUploadFile } from "@/lib/server/file-validation";
 import { readCostEdits } from "@/lib/server/cost-lines";
@@ -29,7 +29,7 @@ import {
 } from "@/lib/server/auth";
 import { createSignupOtp, normalizeSignupEmail, normalizeSignupPhone, verifySignupOtp } from "@/lib/server/otp";
 import { verifyCsrfToken, applySessionCookieToExpress } from "../lib/auth-bridge";
-import { requireSession } from "../lib/session";
+import { requireAnySession, requireSession } from "../lib/session";
 import { userSchema, projectSchema, employeeSchema, engineerReportSchema } from "@/lib/validations/schemas";
 import { isVertexaNotificationId, markAllVertexaNotificationsRead, markVertexaNotificationRead } from "@/lib/server/vertexa-api";
 import type { AdminState, AppNotification, ReportPhoto, UserAccount, WorkKind } from "@/types";
@@ -352,6 +352,161 @@ cpmisRemainingRouter.get("/reports", async (req: Request, res: Response) => {
   res.setHeader("Content-Disposition", `attachment; filename="cpmis-${stampName}.csv"`);
   res.setHeader("Cache-Control", "no-store");
   return res.status(200).send(csv);
+});
+
+function clamp(n: number, min: number, max: number) { return Math.min(max, Math.max(min, n)); }
+
+function daysBetween(a: string | Date, b: string | Date) {
+  const da = new Date(a).getTime();
+  const db = new Date(b).getTime();
+  if (!Number.isFinite(da) || !Number.isFinite(db)) return null;
+  return Math.round((db - da) / 86400000);
+}
+
+function plannedProgress(startDate: string, endDate: string, now = new Date()) {
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  const t = now.getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  if (t <= start) return 0;
+  if (t >= end) return 100;
+  return clamp(((t - start) / (end - start)) * 100, 0, 100);
+}
+
+cpmisRemainingRouter.get("/reports/analytics", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  const role = auth.session.role;
+  if (!["administrator", "project_manager", "quantity_surveyor"].includes(role)) {
+    return apiError(res, 403, "forbidden", { message: "You do not have access to project analytics.", requestId: req.requestId });
+  }
+
+  const projectId = String(req.query.projectId ?? req.query.project ?? "all");
+  const state = await readState();
+  const now = new Date();
+
+  let projects = state.projects as any[];
+  if (role === "project_manager") projects = projects.filter((p) => p.managerId === auth.session.id);
+  if (role === "quantity_surveyor") projects = projects.filter((p) => p.id === auth.session.projectId);
+  if (projectId !== "all") projects = projects.filter((p) => p.id === projectId);
+
+  const tasks = (state.tasks as any[]).filter((t) => projects.some((p) => p.id === t.projectId));
+  const boq = (state.boq as any[]).filter((b) => projects.some((p) => p.id === b.projectId));
+
+  const projectMetrics = projects.map((project) => {
+    const projectTasks = tasks.filter((t) => t.projectId === project.id);
+    const projectBoq = boq.filter((b) => b.projectId === project.id);
+    const completedTasks = projectTasks.filter((t) => t.status === "completed").length;
+    const overdueTasks = projectTasks.filter((t) => t.status !== "completed" && t.dueDate && new Date(t.dueDate).getTime() < now.getTime()).length;
+    const inProgressTasks = projectTasks.filter((t) => t.status === "in_progress").length;
+
+    const planned = plannedProgress(project.startDate, project.expectedEndDate, now);
+    const actualProgress = Number(project.progress ?? 0);
+    const progressDeviation = planned === null ? null : Number((actualProgress - planned).toFixed(2));
+    const scheduleDays = daysBetween(now, project.expectedEndDate);
+    const scheduleStatus = project.status === "completed"
+      ? "completed"
+      : scheduleDays === null
+        ? "unknown"
+        : scheduleDays < 0
+          ? "behind_schedule"
+          : progressDeviation !== null && progressDeviation < -10
+            ? "at_risk"
+            : "on_track";
+
+    const boqEstimated = projectBoq.reduce((sum, item) => sum + lineEstimate(item), 0);
+    const boqActual = projectBoq.reduce((sum, item) => sum + lineActual(item), 0);
+    const measurementVariance = boqActual - boqEstimated;
+    const measurementVariancePct = boqEstimated === 0 ? null : Number(((measurementVariance / boqEstimated) * 100).toFixed(2));
+
+    const budget = Number(project.budget ?? 0);
+    const spent = Number(project.spent ?? 0);
+    const costVariance = spent - budget;
+    const costVariancePct = budget === 0 ? null : Number(((costVariance / budget) * 100).toFixed(2));
+
+    const insights: string[] = [];
+    if (progressDeviation !== null && progressDeviation <= -15) insights.push(`Progress is ${Math.abs(progressDeviation).toFixed(1)}% behind planned schedule.`);
+    if (progressDeviation !== null && progressDeviation >= 10) insights.push(`Progress is ${progressDeviation.toFixed(1)}% ahead of planned schedule.`);
+    if (scheduleDays !== null && scheduleDays < 0 && project.status !== "completed") insights.push(`Project is ${Math.abs(scheduleDays)} day(s) past expected completion.`);
+    if (overdueTasks > 0) insights.push(`${overdueTasks} task(s) are overdue.`);
+    if (costVariance > 0) insights.push(`Spent is ${formatMoney(costVariance, "RWF")} over budget.`);
+    if (measurementVariance > 0) insights.push(`Actual BOQ measurements exceed estimate by ${formatMoney(measurementVariance, "RWF")}.`);
+    if (budget > 0 && spent / budget >= 0.9 && project.status !== "completed") insights.push("Budget utilization is at or above 90%.");
+    if (insights.length === 0) insights.push("No major deviation detected from current records.");
+
+    return {
+      projectId: project.id,
+      code: project.code,
+      name: project.name,
+      status: project.status,
+      managerId: project.managerId,
+      startDate: project.startDate,
+      expectedEndDate: project.expectedEndDate,
+      progress: {
+        actualPercent: actualProgress,
+        plannedPercent: planned === null ? null : Number(planned.toFixed(2)),
+        deviationPercent: progressDeviation,
+        completedTasks,
+        inProgressTasks,
+        overdueTasks,
+        totalTasks: projectTasks.length,
+        taskCompletionPercent: projectTasks.length === 0 ? null : Number(((completedTasks / projectTasks.length) * 100).toFixed(2)),
+      },
+      measurements: {
+        boqLineCount: projectBoq.length,
+        estimatedAmount: boqEstimated,
+        actualAmount: boqActual,
+        varianceAmount: measurementVariance,
+        variancePercent: measurementVariancePct,
+      },
+      cost: {
+        budget,
+        spent,
+        varianceAmount: costVariance,
+        variancePercent: costVariancePct,
+        utilizationPercent: budget === 0 ? null : Number(((spent / budget) * 100).toFixed(2)),
+      },
+      schedule: {
+        daysToExpectedEnd: scheduleDays,
+        status: scheduleStatus,
+        overdueTasks,
+      },
+      insights,
+    };
+  });
+
+  const portfolio = {
+    projectCount: projectMetrics.length,
+    activeProjects: projectMetrics.filter((p) => p.status === "active").length,
+    completedProjects: projectMetrics.filter((p) => p.status === "completed").length,
+    delayedProjects: projectMetrics.filter((p) => p.status === "delayed" || p.schedule.status === "behind_schedule").length,
+    atRiskProjects: projectMetrics.filter((p) => p.schedule.status === "at_risk").length,
+    averageProgress: projectMetrics.length === 0 ? 0 : Number((projectMetrics.reduce((s, p) => s + p.progress.actualPercent, 0) / projectMetrics.length).toFixed(2)),
+    averagePlannedProgress: (() => { const vals = projectMetrics.map((p) => p.progress.plannedPercent).filter((v): v is number => v !== null); return vals.length ? Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)) : null; })(),
+    totalBudget: projectMetrics.reduce((s, p) => s + p.cost.budget, 0),
+    totalSpent: projectMetrics.reduce((s, p) => s + p.cost.spent, 0),
+    totalCostVariance: projectMetrics.reduce((s, p) => s + p.cost.varianceAmount, 0),
+    totalEstimatedMeasurement: projectMetrics.reduce((s, p) => s + p.measurements.estimatedAmount, 0),
+    totalActualMeasurement: projectMetrics.reduce((s, p) => s + p.measurements.actualAmount, 0),
+    totalMeasurementVariance: projectMetrics.reduce((s, p) => s + p.measurements.varianceAmount, 0),
+    overdueTasks: projectMetrics.reduce((s, p) => s + p.progress.overdueTasks, 0),
+  };
+
+  const deviations = {
+    costOverruns: projectMetrics.filter((p) => p.cost.varianceAmount > 0).map((p) => ({ projectId: p.projectId, code: p.code, name: p.name, varianceAmount: p.cost.varianceAmount, variancePercent: p.cost.variancePercent })),
+    scheduleBehind: projectMetrics.filter((p) => (p.progress.deviationPercent ?? 0) < 0 || p.schedule.status === "behind_schedule").map((p) => ({ projectId: p.projectId, code: p.code, name: p.name, deviationPercent: p.progress.deviationPercent, daysToExpectedEnd: p.schedule.daysToExpectedEnd, status: p.schedule.status })),
+    measurementOverruns: projectMetrics.filter((p) => p.measurements.varianceAmount > 0).map((p) => ({ projectId: p.projectId, code: p.code, name: p.name, varianceAmount: p.measurements.varianceAmount, variancePercent: p.measurements.variancePercent })),
+  };
+
+  res.setHeader("cache-control", "no-store");
+  return res.json({
+    ok: true,
+    generatedAt: now.toISOString(),
+    scope: { role, projectId },
+    portfolio,
+    deviations,
+    projects: projectMetrics,
+  });
 });
 
 cpmisRemainingRouter.get("/reports/workbook", async (req: Request, res: Response) => {
