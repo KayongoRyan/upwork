@@ -65,7 +65,7 @@ This document lists the HTTP endpoints exposed by the Express API (canonical aut
 |---|---|---|---|---|---|---|
 | POST | `/api/v1/cpmis/documents` | Admin session | Yes | `multipart/form-data`: `file`, metadata fields, `csrfToken` | JSON/redirect per caller | Uploads to object storage; metadata in MongoDB; file validation enforced. |
 | POST | `/api/v1/cpmis/documents/revise` | Admin session | Yes | `multipart/form-data`: `file`, `fileId`, metadata, `csrfToken` | JSON/redirect per caller | Appends revision; preserves history. |
-| POST | `/api/v1/cpmis/documents/extract-invoice` | Admin session | Yes | `multipart/form-data`: `file`, `csrfToken` | JSON `{ ok, extraction }` | Best-effort invoice metadata extraction (no DB write). Returns confidence, warnings, editable fields, raw text preview; scanned/image OCR not available. |
+| POST | `/api/v1/cpmis/documents/extract-invoice` | Admin or QS session | Yes | `multipart/form-data`: `file`, `csrfToken` | JSON `{ ok, extraction }` | Best-effort invoice metadata extraction (no DB write). Returns confidence, warnings, editable fields, validation, raw text preview; scanned/image OCR not available. |
 | GET | `/api/v1/cpmis/documents/file` | Authorized session | No | Query identifying file/version | Binary stream with content headers | Authenticated/authorized download; supports legacy dataUrl fallback. |
 
 ### CPMIS Business APIs (JSON)
@@ -190,7 +190,7 @@ These routes live under `app/api/**/route.ts`. They forward to Express and shoul
 | `/api/cpmis/business/[...path]` | GET,POST,PATCH,PUT,DELETE | `/api/v1/cpmis/business/:path` | Session cookie + CSRF for mutating requests. |
 | `/api/documents` | POST | `/api/v1/cpmis/documents` | Admin session + CSRF; multipart. |
 | `/api/documents/revise` | POST | `/api/v1/cpmis/documents/revise` | Admin session + CSRF; multipart. |
-| `/api/documents/extract-invoice` | POST | `/api/v1/cpmis/documents/extract-invoice` | Admin session + CSRF; multipart; no DB write. |
+| `/api/documents/extract-invoice` | POST | `/api/v1/cpmis/documents/extract-invoice` | Admin or QS session + CSRF; multipart; no DB write. |
 | `/api/documents/file` | GET | `/api/v1/cpmis/documents/file` | Authorized session. |
 | `/api/state` | GET | `/api/v1/cpmis/state` | Admin session; reserved/unused. |
 | `/api/users` | POST | `/api/v1/cpmis/users` | Admin session + CSRF; legacy form. |

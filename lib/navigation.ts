@@ -251,6 +251,13 @@ export const qsNavItems: NavItem[] = [
     description: "Estimated quantities, measured quantities, and unit rates.",
   },
   {
+    href: "/qs/documents",
+    label: "Document extraction",
+    icon: Files,
+    section: "Main",
+    description: "Upload documents and review extracted invoice data before accepting.",
+  },
+  {
     href: "/qs/expenditure",
     label: "Expenditure",
     icon: Wallet,
