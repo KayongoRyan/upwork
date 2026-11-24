@@ -27,11 +27,18 @@ cd backend
 | `INTERNAL_SERVICE_HOST` | `127.0.0.1` | Bind host for `python -m internal_service` |
 | `INTERNAL_SERVICE_PORT` | `4010` | Bind port |
 | `INTERNAL_SERVICE_KEY` | empty | Shared secret required by non-health endpoints when set |
+| `INTERNAL_SERVICE_MONGODB_URI` | falls back to `MONGODB_URI` | MongoDB connection for persistent internal coordination state (**required**) |
+| `INTERNAL_SERVICE_MONGODB_DB` | `vertexa_internal` | MongoDB database for internal service state (separate from portal business-state reducer) |
+| `INTERNAL_SERVICE_MONGODB_CONNECT_TIMEOUT_MS` | `5000` | Mongo connect/select timeout |
 | `WORKER_HEARTBEAT_TTL_SECONDS` | `30` | Worker heartbeat TTL before marked stale |
 | `COORDINATION_LOCK_TTL_SECONDS` | `60` | Default coordination lock TTL |
 | `JOB_DEFAULT_MAX_ATTEMPTS` | `3` | Default max attempts for jobs |
 | `JOB_DEFAULT_RETRY_DELAY_SECONDS` | `15` | Default retry delay |
 | `JOB_CLAIM_LEASE_SECONDS` | `60` | Default worker claim lease |
+
+## Persistence
+
+Job records, idempotency keys, worker registrations, coordination locks, and fencing counters are stored in MongoDB (`INTERNAL_SERVICE_MONGODB_DB`, default `vertexa_internal`). This state is intentionally separate from the portal business-state reducer/collections. Job claims use atomic Mongo `findOneAndUpdate`; idempotency keys use a unique index; expired leases are requeued/dead-lettered; fencing tokens protect stale workers from mutating reclaimed jobs/locks.
 
 ## Security
 
@@ -58,9 +65,9 @@ All endpoints except `GET /health` require `X-Internal-Service-Key` when `INTERN
 - `GET /jobs/{job_id}` - job details
 - `POST /jobs/claim-next` - claim next queued job `{workerId, types?, leaseSeconds?}`
 - `POST /jobs/{job_id}/claim` - claim specific job `{workerId, leaseSeconds?}`
-- `POST /jobs/{job_id}/heartbeat` - extend claim lease `{workerId, leaseSeconds?}`
-- `POST /jobs/{job_id}/complete` - complete job `{workerId, result?}`
-- `POST /jobs/{job_id}/fail` - fail job `{workerId, error?, retryable?, retryDelaySeconds?}`
+- `POST /jobs/{job_id}/heartbeat` - extend claim lease `{workerId, leaseSeconds?, fencingToken?}`
+- `POST /jobs/{job_id}/complete` - complete job `{workerId, result?, fencingToken?}`
+- `POST /jobs/{job_id}/fail` - fail job `{workerId, error?, retryable?, retryDelaySeconds?, fencingToken?}`
 - `POST /jobs/{job_id}/cancel` - cancel queued/running job `{reason?}`
 - `POST /jobs/{job_id}/retry` - manually requeue failed/dead/cancelled job
 
