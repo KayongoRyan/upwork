@@ -2,13 +2,14 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { z } from "zod";
-import { billLines, sameBill } from "@/lib/boq";
+import { billLines, sameBill, estimateFor, expenditureFor, lineActual, lineEstimate } from "@/lib/boq";
 import { isManagerFieldNotice } from "@/lib/notices";
 import { nextId, fullName, buildCsv } from "@/lib/utils";
 import { overlapsRange } from "@/lib/metrics";
 import { readValidatedUploadFile } from "@/lib/server/file-validation";
 import { readCostEdits } from "@/lib/server/cost-lines";
 import { costReportPdf } from "@/lib/server/cost-pdf";
+import { createXlsx } from "@/lib/server/xlsx";
 import { PersistenceError } from "@/lib/server/mongo";
 import { readState } from "@/lib/server/memory";
 import { apiError } from "../lib/api-response";
@@ -351,6 +352,98 @@ cpmisRemainingRouter.get("/reports", async (req: Request, res: Response) => {
   res.setHeader("Content-Disposition", `attachment; filename="cpmis-${stampName}.csv"`);
   res.setHeader("Cache-Control", "no-store");
   return res.status(200).send(csv);
+});
+
+cpmisRemainingRouter.get("/reports/workbook", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const from = String(req.query.from ?? "2025-01-01");
+  const to = String(req.query.to ?? "2027-12-31");
+  const projectId = String(req.query.project ?? "all");
+  const state = await readState();
+  const invalid = from > to;
+  const projects = state.projects.filter((project) => {
+    if (projectId !== "all" && project.id !== projectId) return false;
+    if (invalid) return false;
+    return overlapsRange(project, from, to);
+  });
+  const ids = new Set(projects.map((project) => project.id));
+  const usersById = new Map(state.users.map((u) => [u.id, u]));
+  const projectRows: (string | number)[][] = [[
+    "Code","Name","Status","Progress %","Budget (RWF)","Spent (RWF)","Measured Estimate (RWF)","Measured Actual (RWF)","Variance (RWF)","Manager","Location","Start","Expected Completion"
+  ]];
+  let totalBudget = 0, totalSpent = 0, totalEstimate = 0, totalActual = 0;
+  for (const project of projects) {
+    const manager = usersById.get(project.managerId);
+    const estimate = estimateFor(state.boq, project.id);
+    const actual = expenditureFor(state.boq, project.id);
+    const variance = actual - estimate;
+    totalBudget += project.budget; totalSpent += project.spent; totalEstimate += estimate; totalActual += actual;
+    projectRows.push([
+      project.code, project.name, project.status, project.progress,
+      project.budget, project.spent, estimate, actual, variance,
+      manager ? `${manager.firstName} ${manager.lastName}` : "Unassigned",
+      project.location, project.startDate, project.expectedEndDate,
+    ]);
+  }
+  projectRows.push(["TOTAL","","","", totalBudget, totalSpent, totalEstimate, totalActual, totalActual - totalEstimate, "", "", "", ""]);
+
+  const boqRows: (string | number)[][] = [[
+    "Project Code","Project","BOQ Code","Description","Unit","Estimated Qty","Actual Qty","Unit Rate (RWF)","Estimated (RWF)","Actual (RWF)","Variance (RWF)"
+  ]];
+  for (const item of state.boq.filter((b) => ids.has(b.projectId)).sort((a,b)=> (a.projectId+a.code).localeCompare(b.projectId+b.code))) {
+    const project = projects.find((p) => p.id === item.projectId);
+    const est = lineEstimate(item); const act = lineActual(item);
+    boqRows.push([project?.code ?? "", project?.name ?? "", item.code, item.description, item.unit, item.estimatedQty, item.actualQty, item.unitRate, est, act, act - est]);
+  }
+
+  const costRows: (string | number)[][] = [[
+    "Report ID","Project Code","Project","Status","Submitted By","Submitted At","Line Code","Description","Unit","Estimated Qty","Actual Qty","Unit Rate (RWF)","Estimated (RWF)","Actual (RWF)","Variance (RWF)"
+  ]];
+  for (const report of (state.costReports ?? []).filter((r) => ids.has(r.projectId))) {
+    const project = projects.find((p) => p.id === report.projectId);
+    const submitter = report.submittedBy ? usersById.get(report.submittedBy) : null;
+    const submitterName = submitter ? `${submitter.firstName} ${submitter.lastName}` : "";
+    const submittedAt = report.submittedAt ?? "";
+    const lines = report.lines?.length ? report.lines : billLines(state.boq, report.projectId);
+    if (lines.length === 0) {
+      costRows.push([report.id, project?.code ?? "", project?.name ?? "", report.status, submitterName, submittedAt, "", "", "", 0, 0, 0, 0, 0, 0]);
+      continue;
+    }
+    for (const line of lines) {
+      const est = lineEstimate(line); const act = lineActual(line);
+      costRows.push([report.id, project?.code ?? "", project?.name ?? "", report.status, submitterName, submittedAt, line.code, line.description, line.unit, line.estimatedQty, line.actualQty, line.unitRate, est, act, act - est]);
+    }
+  }
+
+  const summaryRows: (string | number)[][] = [
+    ["CPMIS Financial Workbook"],
+    ["Generated At", new Date().toISOString()],
+    ["From", from],
+    ["To", to],
+    ["Project Filter", projectId === "all" ? "All projects" : (projects[0]?.code ?? projectId)],
+    [],
+    ["Metric", "Value (RWF / %)"],
+    ["Projects Included", projects.length],
+    ["Total Budget (RWF)", totalBudget],
+    ["Total Spent (RWF)", totalSpent],
+    ["Total Measured Estimate (RWF)", totalEstimate],
+    ["Total Measured Actual (RWF)", totalActual],
+    ["Total Variance (RWF)", totalActual - totalEstimate],
+    ["Budget Utilization (Actual/Budget %)", totalBudget > 0 ? Math.round((totalActual / totalBudget) * 10000) / 100 : 0],
+  ];
+
+  const workbook = createXlsx([
+    { name: "Summary", rows: summaryRows },
+    { name: "Projects", rows: projectRows },
+    { name: "BOQ", rows: boqRows },
+    { name: "Cost Reports", rows: costRows },
+  ]);
+  const stampName = projectId === "all" ? "all" : (projects[0]?.code ?? projectId);
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="cpmis-financial-${stampName}.xlsx"`);
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(200).send(workbook);
 });
 
 // --- pm reports ---

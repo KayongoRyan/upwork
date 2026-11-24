@@ -52,7 +52,7 @@ export function ReportsView() {
       <PageHeader
         title="Reports & analytics"
         description="Sample performance, workforce, and budget figures for this preview. Do not treat the amounts as company accounts."
-        actions={<Button asChild><a href={`/api/reports?${exportQuery.toString()}`}><Download />Export CSV</a></Button>}
+        actions={<div className="flex flex-wrap gap-2"><Button asChild variant="outline"><a href={`/api/reports?${exportQuery.toString()}`}><Download />Export CSV</a></Button><Button asChild><a href={`/api/reports/workbook?${exportQuery.toString()}`}><Download />Export workbook</a></Button></div>}
       />
       <div className="mb-4 rounded-[22px] border border-accent/30 bg-[#fff1eb] px-4 py-3 text-sm text-black">
         Demonstration data in RWF. The monthly trend is a fixed sample series. Project counts, progress, and budget bars follow the records currently in this session.
