@@ -116,6 +116,7 @@ const PORTAL_ACTIONS: Record<PortalKey, ReadonlySet<AdminAction["type"]>> = {
     "decide-report",
     "resubmit-report",
     "create-boq",
+    "create-boq-batch",
     "update-boq",
     "delete-boq",
     "revise-cost-bill",
@@ -160,6 +161,7 @@ const PORTAL_ACTIONS: Record<PortalKey, ReadonlySet<AdminAction["type"]>> = {
   quantity_surveyor: new Set<AdminAction["type"]>([
     ...NOTIFICATION_ACTIONS,
     "create-boq",
+    "create-boq-batch",
     "update-boq",
     "delete-boq",
     "send-cost-report",
@@ -1132,6 +1134,8 @@ function targetProjectIds(state: AdminState, action: AdminAction): string[] {
     case "create-boq":
     case "update-boq":
       return [action.input.projectId];
+    case "create-boq-batch":
+      return [action.projectId];
     case "delete-boq": {
       const item = state.boq.find((b) => b.id === action.id);
       return item ? [item.projectId] : [];

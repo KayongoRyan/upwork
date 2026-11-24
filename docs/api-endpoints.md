@@ -65,6 +65,7 @@ This document lists the HTTP endpoints exposed by the Express API (canonical aut
 |---|---|---|---|---|---|---|
 | POST | `/api/v1/cpmis/documents` | Admin session | Yes | `multipart/form-data`: `file`, metadata fields, `csrfToken` | JSON/redirect per caller | Uploads to object storage; metadata in MongoDB; file validation enforced. |
 | POST | `/api/v1/cpmis/documents/revise` | Admin session | Yes | `multipart/form-data`: `file`, `fileId`, metadata, `csrfToken` | JSON/redirect per caller | Appends revision; preserves history. |
+| POST | `/api/v1/cpmis/documents/extract-invoice` | Admin session | Yes | `multipart/form-data`: `file`, `csrfToken` | JSON `{ ok, extraction }` | Best-effort invoice metadata extraction (no DB write). Returns confidence, warnings, editable fields, raw text preview; scanned/image OCR not available. |
 | GET | `/api/v1/cpmis/documents/file` | Authorized session | No | Query identifying file/version | Binary stream with content headers | Authenticated/authorized download; supports legacy dataUrl fallback. |
 
 ### CPMIS Business APIs (JSON)
@@ -129,6 +130,8 @@ All endpoints below require a valid portal session. Mutating endpoints require C
 |---|---|---:|---:|---|
 | GET | `/api/v1/cpmis/business/boq` | No | No | List BOQ items. |
 | GET | `/api/v1/cpmis/business/boq/export` | No | No | XLSX attachment (`boq-summary-*.xlsx`); query `projectId?`; Summary and BOQ Lines sheets; scoped to authorized projects. |
+| POST | `/api/v1/cpmis/business/boq/import/preview` | Yes | No | Multipart `file`, `projectId`, `csrfToken`; QS session. Parses .xlsx/.csv, returns validated preview rows (no DB writes). |
+| POST | `/api/v1/cpmis/business/boq/import/accept` | Yes | Yes | JSON `{ projectId, rows[] }`; QS session. Server revalidates selected rows and creates BOQ lines via batch action. |
 | POST | `/api/v1/cpmis/business/boq` | Yes | Yes | Create BOQ item; QS/assignment checks. |
 | PATCH | `/api/v1/cpmis/business/boq/:id` | Yes | No | Update BOQ item. |
 | DELETE | `/api/v1/cpmis/business/boq/:id` | Yes | No | Delete BOQ item. |
@@ -187,6 +190,7 @@ These routes live under `app/api/**/route.ts`. They forward to Express and shoul
 | `/api/cpmis/business/[...path]` | GET,POST,PATCH,PUT,DELETE | `/api/v1/cpmis/business/:path` | Session cookie + CSRF for mutating requests. |
 | `/api/documents` | POST | `/api/v1/cpmis/documents` | Admin session + CSRF; multipart. |
 | `/api/documents/revise` | POST | `/api/v1/cpmis/documents/revise` | Admin session + CSRF; multipart. |
+| `/api/documents/extract-invoice` | POST | `/api/v1/cpmis/documents/extract-invoice` | Admin session + CSRF; multipart; no DB write. |
 | `/api/documents/file` | GET | `/api/v1/cpmis/documents/file` | Authorized session. |
 | `/api/state` | GET | `/api/v1/cpmis/state` | Admin session; reserved/unused. |
 | `/api/users` | POST | `/api/v1/cpmis/users` | Admin session + CSRF; legacy form. |

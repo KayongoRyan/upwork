@@ -61,6 +61,7 @@ export type AdminAction =
   | { type: "open-report-review"; id: string; stamp: Stamp }
   | { type: "decide-report"; id: string; decision: Extract<EngineerReportStatus, "approved" | "rejected">; note: string; stamp: Stamp }
   | { type: "create-boq"; surveyorId: string; input: BoqInput; stamp: Stamp }
+  | { type: "create-boq-batch"; surveyorId: string; projectId: string; inputs: BoqInput[]; stamp: Stamp }
   | { type: "update-boq"; surveyorId: string; id: string; input: BoqInput; stamp: Stamp }
   | { type: "delete-boq"; surveyorId: string; id: string; stamp: Stamp }
   | { type: "submit-cost-report"; projectId: string; surveyorId: string; stamp: Stamp }
@@ -631,6 +632,31 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         action.stamp,
         `${item.code} added to the bill`,
         `${name} added ${item.description} on the bill of quantities.`,
+        { id: surveyor.id, name },
+      );
+    }
+    case "create-boq-batch": {
+      const surveyor = activeSurveyor(state, action.surveyorId);
+      if (!surveyor) return state;
+      if (action.projectId !== surveyor.projectId) return state;
+      const inputs = Array.isArray(action.inputs) ? action.inputs : [];
+      if (inputs.length === 0) return state;
+      const name = `${surveyor.firstName} ${surveyor.lastName}`;
+      const items: BoqItem[] = [];
+      for (let i = 0; i < inputs.length; i++) {
+        const input = parseBoq(inputs[i]);
+        if (!input) continue;
+        if (input.projectId !== action.projectId) continue;
+        items.push({ ...input, id: `${action.stamp.id}-b${i + 1}` });
+      }
+      if (items.length === 0) return state;
+      return measure(
+        state,
+        action.projectId,
+        [...items.reverse(), ...state.boq],
+        action.stamp,
+        `${items.length} BOQ line${items.length === 1 ? "" : "s"} imported`,
+        `${name} imported ${items.length} BOQ line${items.length === 1 ? "" : "s"} from a validated Excel import.`,
         { id: surveyor.id, name },
       );
     }
