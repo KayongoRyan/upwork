@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from . import config
 from .coordinator import WorkerCoordinator
+from .db import mongo
 from .jobs import JobStore
 
 
@@ -58,11 +59,13 @@ class ClaimNextJobRequest(BaseModel):
 class JobHeartbeatRequest(BaseModel):
     workerId: str = Field(min_length=1, max_length=200)
     leaseSeconds: int | None = Field(default=None, ge=5, le=3600)
+    fencingToken: int | None = Field(default=None, ge=1)
 
 
 class CompleteJobRequest(BaseModel):
     workerId: str = Field(min_length=1, max_length=200)
     result: dict[str, Any] = Field(default_factory=dict)
+    fencingToken: int | None = Field(default=None, ge=1)
 
 
 class FailJobRequest(BaseModel):
@@ -70,21 +73,15 @@ class FailJobRequest(BaseModel):
     error: dict[str, Any] = Field(default_factory=dict)
     retryable: bool = True
     retryDelaySeconds: int | None = Field(default=None, ge=1, le=3600)
+    fencingToken: int | None = Field(default=None, ge=1)
 
 
 class CancelJobRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
-coordinator = WorkerCoordinator(
-    worker_ttl_seconds=config.WORKER_HEARTBEAT_TTL_SECONDS,
-    lock_ttl_seconds=config.LOCK_TTL_SECONDS,
-)
-jobs = JobStore(
-    default_max_attempts=config.JOB_DEFAULT_MAX_ATTEMPTS,
-    default_retry_delay_seconds=config.JOB_DEFAULT_RETRY_DELAY_SECONDS,
-    claim_lease_seconds=config.JOB_CLAIM_LEASE_SECONDS,
-)
+coordinator: WorkerCoordinator | None = None
+jobs: JobStore | None = None
 
 
 def require_internal_key(x_internal_service_key: str | None = Header(default=None, alias="X-Internal-Service-Key")) -> None:
@@ -96,9 +93,39 @@ def require_internal_key(x_internal_service_key: str | None = Header(default=Non
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"ok": False, "error": "unauthorized"})
 
 
+def get_coordinator() -> WorkerCoordinator:
+    if coordinator is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"ok": False, "error": "coordination-not-ready"})
+    return coordinator
+
+
+def get_jobs() -> JobStore:
+    if jobs is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"ok": False, "error": "jobs-not-ready"})
+    return jobs
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    yield
+    global coordinator, jobs
+    db = await mongo.connect()
+    coordinator = WorkerCoordinator(
+        db,
+        worker_ttl_seconds=config.WORKER_HEARTBEAT_TTL_SECONDS,
+        lock_ttl_seconds=config.LOCK_TTL_SECONDS,
+    )
+    jobs = JobStore(
+        db,
+        default_max_attempts=config.JOB_DEFAULT_MAX_ATTEMPTS,
+        default_retry_delay_seconds=config.JOB_DEFAULT_RETRY_DELAY_SECONDS,
+        claim_lease_seconds=config.JOB_CLAIM_LEASE_SECONDS,
+    )
+    try:
+        yield
+    finally:
+        await mongo.close()
+        coordinator = None
+        jobs = None
 
 
 app = FastAPI(
@@ -126,18 +153,18 @@ async def ready(_: None = Depends(require_internal_key)) -> dict[str, Any]:
         "service": config.SERVICE_NAME,
         "version": config.SERVICE_VERSION,
         "status": "ready",
-        "coordination": await coordinator.status(),
+        "coordination": await get_coordinator().status(),
     }
 
 
 @app.get("/coordination/status")
 async def coordination_status(_: None = Depends(require_internal_key)) -> dict[str, Any]:
-    return {"ok": True, "coordination": await coordinator.status()}
+    return {"ok": True, "coordination": await get_coordinator().status()}
 
 
 @app.post("/workers/register", status_code=status.HTTP_201_CREATED)
 async def register_worker(payload: RegisterWorkerRequest, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    worker = await coordinator.register_worker(
+    worker = await get_coordinator().register_worker(
         name=payload.name,
         capabilities=payload.capabilities,
         metadata=payload.metadata,
@@ -148,12 +175,12 @@ async def register_worker(payload: RegisterWorkerRequest, _: None = Depends(requ
 
 @app.get("/workers")
 async def list_workers(_: None = Depends(require_internal_key)) -> dict[str, Any]:
-    return {"ok": True, "items": await coordinator.list_workers()}
+    return {"ok": True, "items": await get_coordinator().list_workers()}
 
 
 @app.get("/workers/{worker_id}")
 async def get_worker(worker_id: str, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    worker = await coordinator.get_worker(worker_id)
+    worker = await get_coordinator().get_worker(worker_id)
     if not worker:
         raise HTTPException(status_code=404, detail={"ok": False, "error": "worker-not-found"})
     return {"ok": True, "worker": worker}
@@ -161,7 +188,7 @@ async def get_worker(worker_id: str, _: None = Depends(require_internal_key)) ->
 
 @app.post("/workers/{worker_id}/heartbeat")
 async def heartbeat(worker_id: str, payload: HeartbeatRequest | None = None, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    worker = await coordinator.heartbeat(worker_id, metadata=(payload.metadata if payload else None))
+    worker = await get_coordinator().heartbeat(worker_id, metadata=(payload.metadata if payload else None))
     if not worker:
         raise HTTPException(status_code=404, detail={"ok": False, "error": "worker-not-found"})
     return {"ok": True, "worker": worker}
@@ -169,7 +196,7 @@ async def heartbeat(worker_id: str, payload: HeartbeatRequest | None = None, _: 
 
 @app.post("/workers/{worker_id}/deregister")
 async def deregister_worker(worker_id: str, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    removed = await coordinator.deregister(worker_id)
+    removed = await get_coordinator().deregister(worker_id)
     if not removed:
         raise HTTPException(status_code=404, detail={"ok": False, "error": "worker-not-found"})
     return {"ok": True, "deregistered": True, "workerId": worker_id}
@@ -177,12 +204,12 @@ async def deregister_worker(worker_id: str, _: None = Depends(require_internal_k
 
 @app.get("/coordination/locks")
 async def list_locks(_: None = Depends(require_internal_key)) -> dict[str, Any]:
-    return {"ok": True, "items": await coordinator.list_locks()}
+    return {"ok": True, "items": await get_coordinator().list_locks()}
 
 
 @app.post("/coordination/locks/{name}/acquire")
 async def acquire_lock(name: str, payload: AcquireLockRequest, response: Response, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    result = await coordinator.acquire_lock(name=name, owner_worker_id=payload.ownerWorkerId, ttl_seconds=payload.ttlSeconds)
+    result = await get_coordinator().acquire_lock(name=name, owner_worker_id=payload.ownerWorkerId, ttl_seconds=payload.ttlSeconds)
     if not result.get("ok"):
         err = result.get("error")
         if err == "worker-not-found":
@@ -196,7 +223,7 @@ async def acquire_lock(name: str, payload: AcquireLockRequest, response: Respons
 
 @app.post("/coordination/locks/{name}/release")
 async def release_lock(name: str, payload: ReleaseLockRequest, response: Response, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    result = await coordinator.release_lock(name=name, owner_worker_id=payload.ownerWorkerId, fencing_token=payload.fencingToken)
+    result = await get_coordinator().release_lock(name=name, owner_worker_id=payload.ownerWorkerId, fencing_token=payload.fencingToken)
     if not result.get("ok"):
         err = result.get("error")
         if err in {"not-owner", "fencing-token-mismatch"}:
@@ -231,7 +258,7 @@ async def create_job(payload: CreateJobRequest, _: None = Depends(require_intern
                 run_at = run_at.replace(tzinfo=timezone.utc)
         except Exception:
             raise HTTPException(status_code=400, detail={"ok": False, "error": "invalid-run-at"})
-    return await jobs.create_job(
+    return await get_jobs().create_job(
         job_type=payload.type,
         payload=payload.payload,
         priority=payload.priority,
@@ -245,12 +272,12 @@ async def create_job(payload: CreateJobRequest, _: None = Depends(require_intern
 
 @app.get("/jobs")
 async def list_jobs(status_filter: str | None = None, type: str | None = None, limit: int = 100, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    return {"ok": True, "items": await jobs.list_jobs(status=status_filter, job_type=type, limit=limit)}
+    return {"ok": True, "items": await get_jobs().list_jobs(status=status_filter, job_type=type, limit=limit)}
 
 
 @app.get("/jobs/{job_id}")
 async def get_job(job_id: str, response: Response, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    job = await jobs.get_job(job_id)
+    job = await get_jobs().get_job(job_id)
     if not job:
         response.status_code = status.HTTP_404_NOT_FOUND
         return {"ok": False, "error": "job-not-found"}
@@ -259,12 +286,12 @@ async def get_job(job_id: str, response: Response, _: None = Depends(require_int
 
 @app.post("/jobs/claim-next")
 async def claim_next_job(payload: ClaimNextJobRequest, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    return await jobs.claim_next_job(worker_id=payload.workerId, job_types=payload.types or None, lease_seconds=payload.leaseSeconds)
+    return await get_jobs().claim_next_job(worker_id=payload.workerId, job_types=payload.types or None, lease_seconds=payload.leaseSeconds)
 
 
 @app.post("/jobs/{job_id}/claim")
 async def claim_job(job_id: str, payload: ClaimJobRequest, response: Response, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    result = await jobs.claim_job(job_id, worker_id=payload.workerId, lease_seconds=payload.leaseSeconds)
+    result = await get_jobs().claim_job(job_id, worker_id=payload.workerId, lease_seconds=payload.leaseSeconds)
     if not result.get("ok"):
         return _job_error_response(result, response)
     return result
@@ -272,7 +299,7 @@ async def claim_job(job_id: str, payload: ClaimJobRequest, response: Response, _
 
 @app.post("/jobs/{job_id}/heartbeat")
 async def heartbeat_job(job_id: str, payload: JobHeartbeatRequest, response: Response, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    result = await jobs.heartbeat_job(job_id, worker_id=payload.workerId, lease_seconds=payload.leaseSeconds)
+    result = await get_jobs().heartbeat_job(job_id, worker_id=payload.workerId, lease_seconds=payload.leaseSeconds, fencing_token=payload.fencingToken)
     if not result.get("ok"):
         return _job_error_response(result, response)
     return result
@@ -280,7 +307,7 @@ async def heartbeat_job(job_id: str, payload: JobHeartbeatRequest, response: Res
 
 @app.post("/jobs/{job_id}/complete")
 async def complete_job(job_id: str, payload: CompleteJobRequest, response: Response, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    result = await jobs.complete_job(job_id, worker_id=payload.workerId, result=payload.result)
+    result = await get_jobs().complete_job(job_id, worker_id=payload.workerId, result=payload.result, fencing_token=payload.fencingToken)
     if not result.get("ok"):
         return _job_error_response(result, response)
     return result
@@ -288,12 +315,13 @@ async def complete_job(job_id: str, payload: CompleteJobRequest, response: Respo
 
 @app.post("/jobs/{job_id}/fail")
 async def fail_job(job_id: str, payload: FailJobRequest, response: Response, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    result = await jobs.fail_job(
+    result = await get_jobs().fail_job(
         job_id,
         worker_id=payload.workerId,
         error=payload.error or {"code": "job-failed", "message": "Job failed"},
         retryable=payload.retryable,
         retry_delay_seconds=payload.retryDelaySeconds,
+        fencing_token=payload.fencingToken,
     )
     if not result.get("ok"):
         return _job_error_response(result, response)
@@ -302,7 +330,7 @@ async def fail_job(job_id: str, payload: FailJobRequest, response: Response, _: 
 
 @app.post("/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str, response: Response, payload: CancelJobRequest | None = None, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    result = await jobs.cancel_job(job_id, reason=(payload.reason if payload else None))
+    result = await get_jobs().cancel_job(job_id, reason=(payload.reason if payload else None))
     if not result.get("ok"):
         return _job_error_response(result, response)
     return result
@@ -310,7 +338,7 @@ async def cancel_job(job_id: str, response: Response, payload: CancelJobRequest 
 
 @app.post("/jobs/{job_id}/retry")
 async def retry_job(job_id: str, response: Response, _: None = Depends(require_internal_key)) -> dict[str, Any]:
-    result = await jobs.retry_job(job_id)
+    result = await get_jobs().retry_job(job_id)
     if not result.get("ok"):
         return _job_error_response(result, response)
     return result
