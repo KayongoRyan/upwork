@@ -4,6 +4,7 @@ import { Children, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Download } from "lucide-react";
 import { MonthlyActivityChart } from "@/components/dashboard/monthly-activity-chart";
+import { ProjectPredictivePanel } from "@/components/shared/project-predictive-panel";
 import { ProjectStatusChart } from "@/components/dashboard/project-status-chart";
 import { WorkforceChart } from "@/components/dashboard/workforce-chart";
 import { PageHeader } from "@/components/shared/page-header";
@@ -12,6 +13,22 @@ import { Button } from "@/components/ui/button";
 import { useAdmin } from "@/lib/data/admin-store";
 import { budgetTotals, countProjects, overlapsRange } from "@/lib/metrics";
 import { formatDate, formatMoney } from "@/lib/utils";
+
+type AnalyticsDeviation = { projectId: string; code: string; name: string; varianceAmount?: number; variancePercent?: number | null; deviationPercent?: number | null; daysToExpectedEnd?: number | null; status?: string };
+type AnalyticsProject = {
+  projectId: string; code: string; name: string;
+  progress: { actualPercent: number; plannedPercent: number | null; deviationPercent: number | null };
+  measurements: { estimatedAmount: number; actualAmount: number; varianceAmount: number };
+  cost: { budget: number; spent: number; varianceAmount: number };
+  schedule: { status: string };
+  insights: string[];
+};
+type AnalyticsResponse = {
+  ok: true; generatedAt: string;
+  portfolio: { averageProgress: number; averagePlannedProgress: number | null; totalCostVariance: number; totalMeasurementVariance: number; atRiskProjects: number; delayedProjects: number; overdueTasks: number; totalBudget: number; totalSpent: number };
+  deviations: { costOverruns: AnalyticsDeviation[]; scheduleBehind: AnalyticsDeviation[]; measurementOverruns: AnalyticsDeviation[] };
+  projects: AnalyticsProject[];
+};
 
 export function ReportsView() {
   const data = useAdmin();
@@ -47,7 +64,7 @@ export function ReportsView() {
   const exportQuery = new URLSearchParams({ from, to });
   if (projectId !== "all") exportQuery.set("project", projectId);
 
-  const [analytics, setAnalytics] = useState<any>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +72,7 @@ export function ReportsView() {
     if (projectId !== "all") q.set("projectId", projectId);
     fetch(`/api/reports/analytics${q.toString() ? `?${q.toString()}` : ""}`, { credentials: "same-origin", cache: "no-store" })
       .then(async (res) => {
-        const json = await res.json().catch(() => null);
+        const json = (await res.json().catch(() => null)) as (AnalyticsResponse & { message?: string; error?: string }) | null;
         if (!res.ok || !json?.ok) throw new Error(json?.message || json?.error || "Could not load analytics.");
         if (!cancelled) { setAnalytics(json); setAnalyticsError(null); }
       })
@@ -133,15 +150,15 @@ export function ReportsView() {
               <div className="rounded-xl border border-black/5 bg-light-gray/30 p-3">
                 <h3 className="text-sm font-semibold">Cost deviations</h3>
                 <ul className="mt-2 space-y-2 text-sm">
-                  {(analytics.deviations.costOverruns ?? []).length === 0 ? <li className="text-black/45">No cost overruns detected.</li> : analytics.deviations.costOverruns.map((d: any) => (
-                    <li key={d.projectId} className="flex justify-between gap-3"><span>{d.code}</span><span className="tabular-nums text-accent">{formatMoney(d.varianceAmount, data.settings.currency)}</span></li>
+                  {(analytics.deviations.costOverruns ?? []).length === 0 ? <li className="text-black/45">No cost overruns detected.</li> : analytics.deviations.costOverruns.map((d) => (
+                    <li key={d.projectId} className="flex justify-between gap-3"><span>{d.code}</span><span className="tabular-nums text-accent">{formatMoney(d.varianceAmount ?? 0, data.settings.currency)}</span></li>
                   ))}
                 </ul>
               </div>
               <div className="rounded-xl border border-black/5 bg-light-gray/30 p-3">
                 <h3 className="text-sm font-semibold">Schedule deviations</h3>
                 <ul className="mt-2 space-y-2 text-sm">
-                  {(analytics.deviations.scheduleBehind ?? []).length === 0 ? <li className="text-black/45">No schedule deviations detected.</li> : analytics.deviations.scheduleBehind.map((d: any) => (
+                  {(analytics.deviations.scheduleBehind ?? []).length === 0 ? <li className="text-black/45">No schedule deviations detected.</li> : analytics.deviations.scheduleBehind.map((d) => (
                     <li key={d.projectId} className="flex justify-between gap-3"><span>{d.code}</span><span className="tabular-nums text-accent">{d.deviationPercent === null ? d.status : `${d.deviationPercent}% vs plan`}</span></li>
                   ))}
                 </ul>
@@ -149,8 +166,8 @@ export function ReportsView() {
               <div className="rounded-xl border border-black/5 bg-light-gray/30 p-3">
                 <h3 className="text-sm font-semibold">Measurement variances</h3>
                 <ul className="mt-2 space-y-2 text-sm">
-                  {(analytics.deviations.measurementOverruns ?? []).length === 0 ? <li className="text-black/45">No measurement overruns detected.</li> : analytics.deviations.measurementOverruns.map((d: any) => (
-                    <li key={d.projectId} className="flex justify-between gap-3"><span>{d.code}</span><span className="tabular-nums text-accent">{formatMoney(d.varianceAmount, data.settings.currency)}</span></li>
+                  {(analytics.deviations.measurementOverruns ?? []).length === 0 ? <li className="text-black/45">No measurement overruns detected.</li> : analytics.deviations.measurementOverruns.map((d) => (
+                    <li key={d.projectId} className="flex justify-between gap-3"><span>{d.code}</span><span className="tabular-nums text-accent">{formatMoney(d.varianceAmount ?? 0, data.settings.currency)}</span></li>
                   ))}
                 </ul>
               </div>
@@ -173,7 +190,7 @@ export function ReportsView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {analytics.projects.map((p: any) => (
+                  {analytics.projects.map((p) => (
                     <tr key={p.projectId} className="border-t border-black/5">
                       <td className="px-3 py-2"><p className="font-medium">{p.code}</p><p className="text-xs text-black/45">{p.name}</p></td>
                       <td className="px-3 py-2 tabular-nums">{p.progress.actualPercent}%</td>
@@ -192,7 +209,7 @@ export function ReportsView() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              {analytics.projects.slice(0, 6).map((p: any) => (
+              {analytics.projects.slice(0, 6).map((p) => (
                 <div key={p.projectId} className="rounded-xl border border-black/5 bg-light-gray/30 p-3">
                   <p className="text-sm font-medium">{p.code} · {p.name}</p>
                   <ul className="mt-2 list-disc pl-5 text-xs text-black/60">
@@ -204,6 +221,10 @@ export function ReportsView() {
           </div>
         ) : null}
       </section>
+
+      <div className="mb-4">
+        <ProjectPredictivePanel projectId={projectId} />
+      </div>
 
       {chosen ? null : <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

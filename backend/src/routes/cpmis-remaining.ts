@@ -10,6 +10,7 @@ import { readValidatedUploadFile } from "@/lib/server/file-validation";
 import { readCostEdits } from "@/lib/server/cost-lines";
 import { costReportPdf } from "@/lib/server/cost-pdf";
 import { createXlsx } from "@/lib/server/xlsx";
+import { buildPredictiveAnalytics } from "@/lib/server/predictive-analytics";
 import { PersistenceError } from "@/lib/server/mongo";
 import { readState } from "@/lib/server/memory";
 import { apiError } from "../lib/api-response";
@@ -507,6 +508,33 @@ cpmisRemainingRouter.get("/reports/analytics", async (req: Request, res: Respons
     deviations,
     projects: projectMetrics,
   });
+});
+
+cpmisRemainingRouter.get("/reports/predictive", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  const role = auth.session.role;
+  if (!["administrator", "project_manager", "quantity_surveyor"].includes(role)) {
+    return apiError(res, 403, "forbidden", { message: "You do not have access to predictive analytics.", requestId: req.requestId });
+  }
+  const projectId = String(req.query.projectId ?? req.query.project ?? "all");
+  const state = await readState();
+  let scoped = state;
+  if (role === "project_manager") {
+    const ids = new Set(state.projects.filter((p) => p.managerId === auth.session.id).map((p) => p.id));
+    scoped = { ...state, projects: state.projects.filter((p) => ids.has(p.id)), tasks: state.tasks.filter((t) => ids.has(t.projectId)), boq: state.boq.filter((b) => ids.has(b.projectId)), progressMarks: (state.progressMarks ?? []).filter((m) => ids.has(m.projectId)), costReports: (state.costReports ?? []).filter((r) => ids.has(r.projectId)), reports: state.reports.filter((r) => ids.has(r.projectId)) } as any;
+  } else if (role === "quantity_surveyor") {
+    const ids = new Set(state.projects.filter((p) => p.id === auth.session.projectId).map((p) => p.id));
+    scoped = { ...state, projects: state.projects.filter((p) => ids.has(p.id)), tasks: state.tasks.filter((t) => ids.has(t.projectId)), boq: state.boq.filter((b) => ids.has(b.projectId)), progressMarks: (state.progressMarks ?? []).filter((m) => ids.has(m.projectId)), costReports: (state.costReports ?? []).filter((r) => ids.has(r.projectId)), reports: state.reports.filter((r) => ids.has(r.projectId)) } as any;
+  }
+  if (projectId !== "all") {
+    const ids = new Set(scoped.projects.filter((p) => p.id === projectId).map((p) => p.id));
+    scoped = { ...scoped, projects: scoped.projects.filter((p) => ids.has(p.id)), tasks: scoped.tasks.filter((t) => ids.has(t.projectId)), boq: scoped.boq.filter((b) => ids.has(b.projectId)), progressMarks: (scoped.progressMarks ?? []).filter((m) => ids.has(m.projectId)), costReports: (scoped.costReports ?? []).filter((r) => ids.has(r.projectId)), reports: scoped.reports.filter((r) => ids.has(r.projectId)) } as any;
+  }
+
+  const analytics = buildPredictiveAnalytics(scoped);
+  res.setHeader("cache-control", "no-store");
+  return res.json({ ...analytics, scope: { role, projectId } });
 });
 
 cpmisRemainingRouter.get("/reports/workbook", async (req: Request, res: Response) => {
