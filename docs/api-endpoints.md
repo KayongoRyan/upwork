@@ -128,6 +128,7 @@ All endpoints below require a valid portal session. Mutating endpoints require C
 | Method | Path | CSRF | Idempotency | Notes |
 |---|---|---:|---:|---|
 | GET | `/api/v1/cpmis/business/boq` | No | No | List BOQ items. |
+| GET | `/api/v1/cpmis/business/boq/export` | No | No | XLSX attachment (`boq-summary-*.xlsx`); query `projectId?`; Summary and BOQ Lines sheets; scoped to authorized projects. |
 | POST | `/api/v1/cpmis/business/boq` | Yes | Yes | Create BOQ item; QS/assignment checks. |
 | PATCH | `/api/v1/cpmis/business/boq/:id` | Yes | No | Update BOQ item. |
 | DELETE | `/api/v1/cpmis/business/boq/:id` | Yes | No | Delete BOQ item. |

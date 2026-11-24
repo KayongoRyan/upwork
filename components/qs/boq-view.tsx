@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ export function QsBoq() {
       <PageHeader
         title="Bill of quantities"
         description={project ? `${project.code} · ${project.name}. Estimated amount and measured amount are quantity × unit rate, rounded to the franc.` : "No project is assigned to this account."}
+        actions={project ? <Button asChild variant="outline"><a href={`/api/cpmis/business/boq/export?projectId=${encodeURIComponent(project.id)}`}><Download />Export BOQ summary</a></Button> : undefined}
       />
       {project ? <AddLine projectId={project.id} onAdd={data.add} /> : null}
       <div className="mt-4 overflow-x-auto rounded-[22px] border border-black/5 bg-card">

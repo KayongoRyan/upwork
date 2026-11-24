@@ -5,13 +5,14 @@ import { employeeSchema, engineerReportSchema, projectSchema, taskSchema, userSc
 import { applyPortalAction } from "@/lib/server/portal-store";
 import { readState } from "@/lib/server/memory";
 import { PersistenceError } from "@/lib/server/mongo";
-import { billLines, linesActual, linesEstimate, parseBoq } from "@/lib/boq";
+import { billLines, estimateFor, expenditureFor, lineActual, lineEstimate, linesActual, linesEstimate, parseBoq } from "@/lib/boq";
 import { apiError } from "../lib/api-response";
 import { requireAnySession, requireSession } from "../lib/session";
 import { canAccessProject, isAdmin } from "../lib/rbac";
 import { verifyCsrfToken, setUserPassword, removeUserCredential, destroySessionsForUser } from "../lib/auth-bridge";
 import { withIdempotency } from "../lib/idempotency";
 import { logger } from "../lib/logger";
+import { createXlsx } from "@/lib/server/xlsx";
 
 export const businessRouter = Router();
 
@@ -568,6 +569,63 @@ businessRouter.get("/boq", async (req: Request, res: Response) => {
   }
   res.setHeader("cache-control", "no-store");
   res.json({ ok: true, items });
+});
+
+businessRouter.get("/boq/export", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
+  let projects = state.projects;
+  if (projectId) {
+    if (!(await ensureProjectAccess(req, res, auth.session, projectId))) return;
+    projects = projects.filter((p: any) => p.id === projectId);
+  } else if (!isAdmin(auth.session)) {
+    projects = scopedProjects(state, auth.session);
+  }
+  const ids = new Set(projects.map((p: any) => p.id));
+  const items = state.boq.filter((b: any) => ids.has(b.projectId)).sort((a: any, b: any) => (a.projectId + a.code).localeCompare(b.projectId + b.code));
+  const projectsById = new Map(projects.map((p: any) => [p.id, p]));
+
+  const summaryRows: (string | number)[][] = [
+    ["BOQ Summary Export"],
+    ["Generated At", new Date().toISOString()],
+    ["Project Filter", projectId ? (projectsById.get(projectId)?.code ?? projectId) : "All accessible projects"],
+    [],
+    ["Project Code", "Project", "BOQ Lines", "Estimated Total (RWF)", "Actual Total (RWF)", "Variance (RWF)"],
+  ];
+  let grandEst = 0;
+  let grandAct = 0;
+  for (const project of projects) {
+    const pItems = items.filter((i: any) => i.projectId === project.id);
+    const est = estimateFor(state.boq, project.id);
+    const act = expenditureFor(state.boq, project.id);
+    grandEst += est;
+    grandAct += act;
+    summaryRows.push([project.code, project.name, pItems.length, est, act, act - est]);
+  }
+  summaryRows.push(["TOTAL", "", items.length, grandEst, grandAct, grandAct - grandEst]);
+
+  const lineRows: (string | number)[][] = [
+    ["Project Code", "Project", "Item Code", "Description", "Unit", "Estimated Qty", "Actual Qty", "Unit Rate (RWF)", "Estimated Amount (RWF)", "Actual Amount (RWF)", "Variance (RWF)"],
+  ];
+  for (const item of items) {
+    const project = projectsById.get(item.projectId);
+    const est = lineEstimate(item);
+    const act = lineActual(item);
+    lineRows.push([project?.code ?? "", project?.name ?? "", item.code, item.description, item.unit, item.estimatedQty, item.actualQty, item.unitRate, est, act, act - est]);
+  }
+
+  const workbook = createXlsx([
+    { name: "Summary", rows: summaryRows },
+    { name: "BOQ Lines", rows: lineRows },
+  ]);
+  const stampName = projectId ? (projectsById.get(projectId)?.code ?? projectId) : "all";
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="boq-summary-${stampName}.xlsx"`);
+  res.setHeader("Cache-Control", "no-store");
+  return res.status(200).send(workbook);
 });
 
 businessRouter.post("/boq", async (req: Request, res: Response) => {
