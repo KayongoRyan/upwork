@@ -643,8 +643,8 @@ businessRouter.post("/boq/import/preview", upload.single("file"), async (req: Re
   const file = (req as any).file as Express.Multer.File | undefined;
   if (!file) return apiError(res, 400, "validation-failed", { message: "Choose an Excel (.xlsx) or CSV file to import.", requestId: req.requestId });
   const lower = file.originalname.toLowerCase();
-  if (!(lower.endsWith(".xlsx") || lower.endsWith(".csv"))) {
-    return apiError(res, 400, "validation-failed", { message: "Unsupported file type. Upload a .xlsx or .csv file.", requestId: req.requestId });
+  if (!(lower.endsWith(".xlsx") || lower.endsWith(".csv") || lower.endsWith(".pdf") || lower.endsWith(".txt"))) {
+    return apiError(res, 400, "validation-failed", { message: "Unsupported file type. Upload a .xlsx, .csv, .pdf, or .txt file.", requestId: req.requestId });
   }
   try {
     const preview = parseBoqImportFile(file.originalname, file.buffer, projectId);

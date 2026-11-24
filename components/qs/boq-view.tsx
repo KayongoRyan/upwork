@@ -26,7 +26,7 @@ export function QsBoq() {
         description={project ? `${project.code} · ${project.name}. Estimated amount and measured amount are quantity × unit rate, rounded to the franc.` : "No project is assigned to this account."}
         actions={project ? (
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setImportOpen((v) => !v)}><Upload />{importOpen ? "Close import" : "Import Excel"}</Button>
+            <Button variant="outline" onClick={() => setImportOpen((v) => !v)}><Upload />{importOpen ? "Close import" : "Import / Extract BOQ"}</Button>
             <Button asChild variant="outline"><a href={`/api/cpmis/business/boq/export?projectId=${encodeURIComponent(project.id)}`}><Download />Export BOQ summary</a></Button>
           </div>
         ) : undefined}
@@ -128,12 +128,13 @@ type ImportPreviewRow = {
 
 type ImportPreview = {
   fileName: string;
-  format: "xlsx" | "csv";
+  format: "xlsx" | "csv" | "pdf" | "txt";
   headers: string[];
   rows: ImportPreviewRow[];
   totalRows: number;
   validRows: number;
   invalidRows: number;
+  warnings?: string[];
 };
 
 function ImportBoqPanel({ projectId, csrfToken, onClose }: { projectId: string; csrfToken: string; onClose: () => void }) {
@@ -147,7 +148,7 @@ function ImportBoqPanel({ projectId, csrfToken, onClose }: { projectId: string; 
   const hasErrors = rows.some((r) => r.selected && r.errors.length > 0);
 
   async function uploadPreview() {
-    if (!file) { toast.error("Choose a .xlsx or .csv file."); return; }
+    if (!file) { toast.error("Choose a .xlsx, .csv, .pdf, or .txt file."); return; }
     setLoading(true);
     try {
       const form = new FormData();
@@ -222,19 +223,19 @@ function ImportBoqPanel({ projectId, csrfToken, onClose }: { projectId: string; 
     <div className="mb-4 rounded-[22px] border border-black/5 bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">Import BOQ from Excel</p>
-          <p className="mt-1 text-sm text-black/45">Upload a .xlsx or .csv file, review extracted rows, fix issues, then accept to create BOQ lines.</p>
+          <p className="text-sm font-semibold">Import or extract BOQ</p>
+          <p className="mt-1 text-sm text-black/45">Upload a .xlsx, .csv, .pdf, or .txt file. Extracted rows are validated for review before any BOQ lines are created.</p>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}><X className="h-4 w-4" />Close</Button>
       </div>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <Label className="min-w-[260px] flex-1">Import file
-          <Input className="mt-1" type="file" accept=".xlsx,.csv" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); setRows([]); }} />
+          <Input className="mt-1" type="file" accept=".xlsx,.csv,.pdf,.txt" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); setRows([]); }} />
         </Label>
         <Button type="button" onClick={uploadPreview} disabled={loading || !file}>{loading ? "Parsing..." : "Upload and review"}</Button>
       </div>
-      <p className="mt-2 text-xs text-black/40">Expected columns: Code, Description, Unit ({boqUnits.join(", ")}), Estimated qty, Actual qty, Unit rate. Header names are matched flexibly.</p>
+      <p className="mt-2 text-xs text-black/40">Expected columns: Code, Description, Unit ({boqUnits.join(", ")}), Estimated qty, Actual qty, Unit rate. Header names are matched flexibly. PDF/TXT extraction is best-effort; review extracted rows carefully.</p>
 
       {preview ? (
         <div className="mt-4">
@@ -243,6 +244,11 @@ function ImportBoqPanel({ projectId, csrfToken, onClose }: { projectId: string; 
             <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-red-700"><AlertCircle className="h-3.5 w-3.5" />{preview.invalidRows} invalid</span>
             <span className="text-black/45">{preview.totalRows} data row(s) in {preview.fileName}</span>
           </div>
+          {preview.warnings && preview.warnings.length > 0 ? (
+            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {preview.warnings.map((w, i) => <p key={i}>{w}</p>)}
+            </div>
+          ) : null}
 
           <div className="mt-3 overflow-x-auto rounded-xl border border-black/5">
             <table className="w-full min-w-[980px] text-left text-sm">
