@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Router, type Request, type Response } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { employeeSchema, engineerReportSchema, projectSchema, taskSchema, userSchema } from "@/lib/validations/schemas";
 import { applyPortalAction } from "@/lib/server/portal-store";
@@ -13,8 +14,11 @@ import { verifyCsrfToken, setUserPassword, removeUserCredential, destroySessions
 import { withIdempotency } from "../lib/idempotency";
 import { logger } from "../lib/logger";
 import { createXlsx } from "@/lib/server/xlsx";
+import { parseBoqImportFile } from "@/lib/server/boq-import";
+import type { BoqInput } from "@/types";
 
 export const businessRouter = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 function stamp(session: { id: string; firstName: string; lastName: string; role: string }) {
   const id = `act-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -626,6 +630,80 @@ businessRouter.get("/boq/export", async (req: Request, res: Response) => {
   res.setHeader("Content-Disposition", `attachment; filename="boq-summary-${stampName}.xlsx"`);
   res.setHeader("Cache-Control", "no-store");
   return res.status(200).send(workbook);
+});
+
+businessRouter.post("/boq/import/preview", upload.single("file"), async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "quantity_surveyor");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const projectId = String(req.body?.projectId ?? "");
+  if (!projectId) return apiError(res, 400, "validation-failed", { message: "projectId is required.", requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, projectId))) return;
+  const file = (req as any).file as Express.Multer.File | undefined;
+  if (!file) return apiError(res, 400, "validation-failed", { message: "Choose an Excel (.xlsx) or CSV file to import.", requestId: req.requestId });
+  const lower = file.originalname.toLowerCase();
+  if (!(lower.endsWith(".xlsx") || lower.endsWith(".csv"))) {
+    return apiError(res, 400, "validation-failed", { message: "Unsupported file type. Upload a .xlsx or .csv file.", requestId: req.requestId });
+  }
+  try {
+    const preview = parseBoqImportFile(file.originalname, file.buffer, projectId);
+    res.setHeader("cache-control", "no-store");
+    return res.json({ ok: true, preview });
+  } catch (error: any) {
+    logger.error("business.boq_import_preview_failed", error, { requestId: req.requestId, fileName: file.originalname });
+    return apiError(res, 400, "validation-failed", { message: error?.message || "Could not parse the import file.", requestId: req.requestId });
+  }
+});
+
+const boqImportAcceptSchema = z.object({
+  projectId: z.string().min(1),
+  rows: z.array(z.object({
+    code: z.string().trim().min(2),
+    description: z.string().trim().min(3),
+    unit: z.enum(["m3", "m2", "m", "t", "nr", "ls"]),
+    estimatedQty: z.coerce.number().min(0),
+    actualQty: z.coerce.number().min(0),
+    unitRate: z.coerce.number().min(0),
+  })).min(1).max(500),
+});
+
+businessRouter.post("/boq/import/accept", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "quantity_surveyor");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const parsed = parseOr400(boqImportAcceptSchema, req.body ?? {}, req, res);
+  if (!parsed) return;
+  if (!(await ensureProjectAccess(req, res, auth.session, parsed.projectId))) return;
+
+  const inputs: BoqInput[] = [];
+  const rowErrors: { index: number; message: string }[] = [];
+  for (let i = 0; i < parsed.rows.length; i++) {
+    const row = parsed.rows[i]!;
+    const input = parseBoq({ ...row, projectId: parsed.projectId } as any);
+    if (!input) { rowErrors.push({ index: i, message: "Row failed BOQ validation." }); continue; }
+    inputs.push(input);
+  }
+  if (inputs.length === 0) {
+    return apiError(res, 400, "validation-failed", { message: "No valid BOQ rows to import.", details: rowErrors, requestId: req.requestId });
+  }
+
+  return withIdempotency(req, res, `business:boq:import:${auth.session.id}`, parsed, async () => {
+    res.setHeader("cache-control", "no-store");
+    const result = await runAction(req, "quantity_surveyor", auth.session, {
+      type: "create-boq-batch",
+      surveyorId: auth.session.id,
+      projectId: parsed.projectId,
+      inputs,
+      stamp: stamp(auth.session),
+    }, 201);
+    if (result.status >= 400) return result;
+    return {
+      status: 201,
+      body: { ...(result.body ?? {}), imported: inputs.length, skipped: rowErrors.length, rowErrors },
+    };
+  });
 });
 
 businessRouter.post("/boq", async (req: Request, res: Response) => {
