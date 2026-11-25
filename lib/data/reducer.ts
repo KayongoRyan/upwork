@@ -989,18 +989,30 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const reason = action.input.reason.trim();
       if (title.length < 3 || description.length < 3 || reason.length < 3) return state;
       if (action.input.boqItemId && !state.boq.some((b) => b.id === action.input.boqItemId && b.projectId === project.id)) return state;
+      const reference = action.input.reference.trim();
+      const currency = (action.input.currency || state.settings.currency || "RWF").trim().toUpperCase();
+      const normalizedAmount = Math.round(amount * 100) / 100;
+      const duplicateVariation = (state.variations ?? []).some((v) =>
+        v.projectId === project.id &&
+        !["cancelled", "rejected"].includes(v.status) &&
+        (
+          (reference !== "" && v.reference.trim().toLowerCase() === reference.toLowerCase()) ||
+          (reference === "" && v.title.trim().toLowerCase() === title.toLowerCase() && v.type === action.input.type && v.amount === normalizedAmount && v.currency === currency && (v.boqItemId ?? null) === (action.input.boqItemId ?? null))
+        ),
+      );
+      if (duplicateVariation) return state;
       const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
       const variation: VariationRecord = {
         id: action.stamp.id,
         projectId: project.id,
         boqItemId: action.input.boqItemId ?? null,
-        reference: action.input.reference.trim(),
+        reference,
         title,
         description,
         reason,
         type: action.input.type,
-        amount: Math.round(amount * 100) / 100,
-        currency: (action.input.currency || state.settings.currency || "RWF").trim().toUpperCase(),
+        amount: normalizedAmount,
+        currency,
         status: "draft",
         submittedBy: null,
         submittedAt: null,
@@ -1130,6 +1142,19 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const desc = action.input.description.trim();
       const vendor = action.input.vendor.trim();
       if (desc.length < 3) return state;
+      const currency = (action.input.currency || state.settings.currency || "RWF").trim().toUpperCase();
+      const normalizedAmount = Math.round(amount * 100) / 100;
+      const duplicateExpense = (state.expenses ?? []).some((e) =>
+        e.projectId === project.id &&
+        !["cancelled", "rejected"].includes(e.status) &&
+        e.category === action.input.category &&
+        e.description.trim().toLowerCase() === desc.toLowerCase() &&
+        e.amount === normalizedAmount &&
+        e.currency === currency &&
+        e.vendor.trim().toLowerCase() === vendor.toLowerCase() &&
+        e.incurredDate === action.input.incurredDate,
+      );
+      if (duplicateExpense) return state;
       const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
       const expense: ExpenseRecord = {
         id: action.stamp.id,
@@ -1212,6 +1237,17 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       if (!Number.isFinite(amount) || amount <= 0) return state;
       const currency = (action.input.currency || expense.currency || state.settings.currency || "RWF").trim().toUpperCase();
       if (currency !== expense.currency) return state;
+      const reference = action.input.reference.trim();
+      const scheduledFor = action.input.scheduledFor ?? null;
+      const duplicatePayment = (state.payments ?? []).some((p) =>
+        p.expenseId === expense.id &&
+        ["pending", "approved", "paid"].includes(p.status) &&
+        (
+          (reference !== "" && p.reference.trim().toLowerCase() === reference.toLowerCase()) ||
+          (reference === "" && p.reference.trim() === "" && p.amount === Math.round(amount * 100) / 100 && p.currency === currency && p.method === action.input.method && (p.scheduledFor ?? null) === scheduledFor)
+        ),
+      );
+      if (duplicatePayment) return state;
       const activePaid = (state.payments ?? [])
         .filter((p) => p.expenseId === expense.id && ["pending", "approved", "paid"].includes(p.status))
         .reduce((sum, p) => sum + p.amount, 0);
@@ -1224,9 +1260,9 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         amount: Math.round(amount * 100) / 100,
         currency,
         method: action.input.method,
-        reference: action.input.reference.trim(),
+        reference,
         status: "pending",
-        scheduledFor: action.input.scheduledFor ?? null,
+        scheduledFor,
         paidAt: null,
         recordedBy: actor.id,
         recordedAt: action.stamp.at,
