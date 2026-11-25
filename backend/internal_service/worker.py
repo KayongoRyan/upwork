@@ -251,7 +251,7 @@ class WorkerRunner:
                         job_id,
                         worker_id=self.worker_id,
                         error={"code": "unhandled-exception", "message": str(exc), "details": {"exceptionType": type(exc).__name__}},
-                        retryable=True,
+                        retryable=False,
                         fencing_token=fencing_token,
                     )
                     return
