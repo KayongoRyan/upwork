@@ -86,7 +86,7 @@ Fields:
 - **Atomic claiming**: job claims use Mongo `findOneAndUpdate` with status/runAt filters and priority/runAt/createdAt sort; claims are atomic per document.
 - **Idempotency**: `internal_job_idempotency.key` has a unique index. Duplicate create requests with the same key return the existing job with `deduped:true`.
 - **Lease expiration**: running jobs with expired `claimExpiresAt` are requeued if attempts remain, otherwise moved to `dead_letter`.
-- **Fencing tokens**: each claim increments a fencing token stored on the job and history attempt. Heartbeat/complete/fail may include `fencingToken`; when provided, stale workers with mismatched tokens are rejected.
+- **Fencing tokens**: each claim increments a fencing token stored on the job and history attempt. Heartbeat/complete/fail **require** `fencingToken`; stale workers with missing or mismatched tokens are rejected.
 
 ## Lifecycle
 
@@ -113,9 +113,9 @@ Transitions:
 
 1. Register worker: `POST /workers/register`.
 2. Claim work: `POST /jobs/claim-next` with `{workerId, types?, leaseSeconds?}`.
-3. Heartbeat job while processing: `POST /jobs/{job_id}/heartbeat` with `{workerId, leaseSeconds?, fencingToken?}`.
-4. Complete: `POST /jobs/{job_id}/complete` with `{workerId, result, fencingToken?}`.
-5. Fail: `POST /jobs/{job_id}/fail` with `{workerId, error, retryable, retryDelaySeconds?, fencingToken?}`.
+3. Heartbeat job while processing: `POST /jobs/{job_id}/heartbeat` with `{workerId, leaseSeconds?, fencingToken}`.
+4. Complete: `POST /jobs/{job_id}/complete` with `{workerId, result, fencingToken}`.
+5. Fail: `POST /jobs/{job_id}/fail` with `{workerId, error, retryable, retryDelaySeconds?, fencingToken}`.
 
 Rules:
 - Only the claiming worker can heartbeat/complete/fail a running job.

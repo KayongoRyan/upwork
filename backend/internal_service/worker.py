@@ -167,10 +167,14 @@ class WorkerRunner:
     async def _process_job(self, job: dict[str, Any]) -> None:
         job_id = str(job.get("jobId"))
         job_type = str(job.get("type"))
-        fencing_token = job.get("fencingToken")
+        fencing_token_raw = job.get("fencingToken")
+        fencing_token = int(fencing_token_raw) if fencing_token_raw is not None else 0
         timeout_seconds = self._resolve_execution_timeout(job)
         ctx = WorkerContext(worker_id=self.worker_id, worker_name=self.worker_name, job=job, fencing_token=fencing_token)
         log.info("worker.job_claimed worker_id=%s job_id=%s type=%s fencing=%s timeout_s=%s", self.worker_id, job_id, job_type, fencing_token, timeout_seconds)
+        if fencing_token < 1:
+            log.warning("worker.missing_fencing_token worker_id=%s job_id=%s", self.worker_id, job_id)
+            return
 
         hb_stop = asyncio.Event()
         cancel_event = asyncio.Event()

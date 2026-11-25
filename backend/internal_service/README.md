@@ -86,9 +86,9 @@ All endpoints except `GET /health` require `X-Internal-Service-Key` when `INTERN
 - `GET /jobs/{job_id}` - job details
 - `POST /jobs/claim-next` - claim next queued job `{workerId, types?, leaseSeconds?}`
 - `POST /jobs/{job_id}/claim` - claim specific job `{workerId, leaseSeconds?}`
-- `POST /jobs/{job_id}/heartbeat` - extend claim lease `{workerId, leaseSeconds?, fencingToken?}`
-- `POST /jobs/{job_id}/complete` - complete job `{workerId, result?, fencingToken?}`
-- `POST /jobs/{job_id}/fail` - fail job `{workerId, error?, retryable?, retryDelaySeconds?, fencingToken?}`
+- `POST /jobs/{job_id}/heartbeat` - extend claim lease `{workerId, leaseSeconds?, fencingToken}`
+- `POST /jobs/{job_id}/complete` - complete job `{workerId, result?, fencingToken}`
+- `POST /jobs/{job_id}/fail` - fail job `{workerId, error?, retryable?, retryDelaySeconds?, fencingToken}`
 - `POST /jobs/{job_id}/cancel` - cancel queued/running job `{reason?}`
 - `POST /jobs/{job_id}/retry` - manually requeue failed/dead/cancelled job
 
