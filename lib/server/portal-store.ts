@@ -52,6 +52,7 @@ type RecordCollection =
   | "calendarEvents"
   | "progressMarks"
   | "costReports"
+  | "variations"
   | "expenses"
   | "payments"
   | "reports"
@@ -68,7 +69,7 @@ const PORTAL_COLLECTIONS: Record<
     monthlyActivity: true,
   },
   project_manager: {
-    records: ["tasks", "calendarEvents", "progressMarks", "costReports", "expenses", "payments"],
+    records: ["tasks", "calendarEvents", "progressMarks", "costReports", "variations", "expenses", "payments"],
   },
   site_engineer: {
     records: ["reports"],
@@ -127,6 +128,13 @@ const PORTAL_ACTIONS: Record<PortalKey, ReadonlySet<AdminAction["type"]>> = {
     "submit-cost-report",
     "open-cost-report-review",
     "decide-cost-report",
+    "create-variation",
+    "update-variation",
+    "submit-variation",
+    "open-variation-review",
+    "decide-variation",
+    "cancel-variation",
+    "delete-variation",
     "create-expense",
     "submit-expense",
     "decide-expense",
@@ -182,6 +190,9 @@ const PORTAL_ACTIONS: Record<PortalKey, ReadonlySet<AdminAction["type"]>> = {
     "update-boq",
     "delete-boq",
     "send-cost-report",
+    "create-variation",
+    "update-variation",
+    "submit-variation",
   ]),
 };
 
@@ -410,6 +421,22 @@ const COLLECTION_VALIDATORS: Partial<Record<RecordCollection | "notifications", 
     createdAt: { bsonType: "string" },
     updatedAt: { bsonType: "string" },
   }, ["id", "projectId", "status", "amount"]),
+  variations: objectSchema({
+    projectId: { bsonType: "string", minLength: 1 },
+    boqItemId: { bsonType: ["string", "null"] },
+    reference: { bsonType: "string" },
+    title: { bsonType: "string" },
+    description: { bsonType: "string" },
+    reason: { bsonType: "string" },
+    type: { enum: ["addition", "omission"] },
+    amount: { bsonType: ["int", "long", "double", "decimal"] },
+    currency: { bsonType: "string" },
+    status: { enum: ["draft", "submitted", "in_review", "approved", "rejected", "cancelled"] },
+    submittedBy: { bsonType: ["string", "null"] },
+    createdBy: { bsonType: "string" },
+    createdAt: { bsonType: "string" },
+    updatedAt: { bsonType: "string" },
+  }, ["id", "projectId", "status", "amount"]),
   payments: objectSchema({
     projectId: { bsonType: "string", minLength: 1 },
     expenseId: { bsonType: "string", minLength: 1 },
@@ -469,6 +496,8 @@ const RELATIONSHIP_INDEXES: Array<{ portal: PortalKey; collection: string; keys:
   { portal: "project_manager", collection: "tasks", keys: { projectId: 1 }, name: "rel_tasks_projectId" },
   { portal: "project_manager", collection: "progressMarks", keys: { projectId: 1 }, name: "rel_progressMarks_projectId" },
   { portal: "project_manager", collection: "costReports", keys: { projectId: 1 }, name: "rel_costReports_projectId" },
+  { portal: "project_manager", collection: "variations", keys: { projectId: 1 }, name: "rel_variations_projectId" },
+  { portal: "project_manager", collection: "variations", keys: { status: 1 }, name: "rel_variations_status" },
   { portal: "project_manager", collection: "expenses", keys: { projectId: 1 }, name: "rel_expenses_projectId" },
   { portal: "project_manager", collection: "expenses", keys: { status: 1 }, name: "rel_expenses_status" },
   { portal: "project_manager", collection: "payments", keys: { projectId: 1 }, name: "rel_payments_projectId" },
@@ -564,6 +593,7 @@ async function ensurePortalValidation(runtime: MongoRuntime): Promise<void> {
 function assertStateIntegrity(state: AdminState): void {
   const projectIds = new Set(state.projects.map((p) => p.id));
   const userIds = new Set(state.users.map((u) => u.id));
+  const boqIds = new Set((state.boq ?? []).map((b) => b.id));
 
   for (const project of state.projects) {
     if (project.managerId && !userIds.has(project.managerId)) {
@@ -628,6 +658,18 @@ function assertStateIntegrity(state: AdminState): void {
     }
   }
 
+  for (const variation of state.variations ?? []) {
+    if (!projectIds.has(variation.projectId)) {
+      throw new PersistenceError(`Variation ${variation.id} references missing project ${variation.projectId}.`);
+    }
+    if (variation.boqItemId && !boqIds.has(variation.boqItemId)) {
+      throw new PersistenceError(`Variation ${variation.id} references missing BOQ item ${variation.boqItemId}.`);
+    }
+    if (!(variation.amount > 0)) {
+      throw new PersistenceError(`Variation ${variation.id} must have amount > 0.`);
+    }
+  }
+
   const expenseIds = new Set((state.expenses ?? []).map((e) => e.id));
   for (const expense of state.expenses ?? []) {
     if (!projectIds.has(expense.projectId)) {
@@ -676,6 +718,14 @@ const STATUS_TRANSITIONS: Record<string, Record<string, ReadonlySet<string>>> = 
     in_review: new Set(["in_review", "approved", "rejected"]),
     approved: new Set(["approved"]),
     rejected: new Set(["rejected", "submitted"]),
+  },
+  variation: {
+    draft: new Set(["draft", "submitted", "cancelled"]),
+    submitted: new Set(["submitted", "in_review", "approved", "rejected", "cancelled"]),
+    in_review: new Set(["in_review", "approved", "rejected"]),
+    approved: new Set(["approved"]),
+    rejected: new Set(["rejected", "draft", "submitted", "cancelled"]),
+    cancelled: new Set(["cancelled"]),
   },
   expense: {
     draft: new Set(["draft", "submitted", "cancelled"]),
@@ -748,6 +798,12 @@ function assertStatusTransitions(previous: AdminState | null, next: AdminState):
   for (const item of next.costReports) {
     const prev = prevCostReports.get(item.id);
     if (prev) assertTransition("costReport", item.id, prev.status, item.status);
+  }
+
+  const prevVariations = new Map((previous.variations ?? []).map((item) => [item.id, item]));
+  for (const item of next.variations ?? []) {
+    const prev = prevVariations.get(item.id);
+    if (prev) assertTransition("variation", item.id, prev.status, item.status);
   }
 
   const prevExpenses = new Map((previous.expenses ?? []).map((item) => [item.id, item]));
@@ -862,6 +918,7 @@ async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
     calendarEvents,
     progressMarks,
     costReports,
+    variations,
     expenses,
     payments,
     reports,
@@ -879,6 +936,7 @@ async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
     readRecords<AdminState["calendarEvents"][number]>(runtime.dbs.project_manager, "calendarEvents"),
     readRecords<AdminState["progressMarks"][number]>(runtime.dbs.project_manager, "progressMarks"),
     readRecords<AdminState["costReports"][number]>(runtime.dbs.project_manager, "costReports"),
+    readRecords<AdminState["variations"][number]>(runtime.dbs.project_manager, "variations"),
     readRecords<AdminState["expenses"][number]>(runtime.dbs.project_manager, "expenses"),
     readRecords<AdminState["payments"][number]>(runtime.dbs.project_manager, "payments"),
     readRecords<AdminState["reports"][number]>(runtime.dbs.site_engineer, "reports"),
@@ -913,6 +971,7 @@ async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
     calendarEvents,
     progressMarks,
     costReports,
+    variations,
     expenses,
     payments,
     reports,
@@ -1099,6 +1158,7 @@ export function scopeStateForSession(state: AdminState, session: SessionUser): A
   const calendarEvents = state.calendarEvents;
   const progressMarks = state.progressMarks.filter((m) => projectIdSet.has(m.projectId));
   const costReports = state.costReports.filter((r) => projectIdSet.has(r.projectId));
+  const variations = (state.variations ?? []).filter((r) => projectIdSet.has(r.projectId));
   const expenses = (state.expenses ?? []).filter((r) => projectIdSet.has(r.projectId));
   const payments = (state.payments ?? []).filter((r) => projectIdSet.has(r.projectId));
   const reports = state.reports.filter((r) => projectIdSet.has(r.projectId));
@@ -1117,6 +1177,7 @@ export function scopeStateForSession(state: AdminState, session: SessionUser): A
     calendarEvents,
     progressMarks,
     costReports,
+    variations,
     expenses,
     payments,
     reports,
@@ -1266,6 +1327,17 @@ function targetProjectIds(state: AdminState, action: AdminAction): string[] {
     case "delete-cost-report": {
       const report = state.costReports.find((r) => r.id === action.id);
       return report ? [report.projectId] : [];
+    }
+    case "create-variation":
+    case "update-variation":
+      return [action.input.projectId];
+    case "submit-variation":
+    case "open-variation-review":
+    case "decide-variation":
+    case "cancel-variation":
+    case "delete-variation": {
+      const variation = (state.variations ?? []).find((v) => v.id === action.id);
+      return variation ? [variation.projectId] : [];
     }
     case "create-expense":
       return [action.input.projectId];

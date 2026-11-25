@@ -196,6 +196,32 @@ export interface CostReport {
   reviewHistory?: ReportReviewEvent[];
 }
 
+export type VariationStatus = "draft" | "submitted" | "in_review" | "approved" | "rejected" | "cancelled";
+
+export interface VariationRecord {
+  id: string;
+  projectId: string;
+  boqItemId: string | null;
+  reference: string;
+  title: string;
+  description: string;
+  reason: string;
+  type: "addition" | "omission";
+  amount: number;
+  currency: string;
+  status: VariationStatus;
+  submittedBy: string | null;
+  submittedAt: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  decisionNote: string;
+  rejectionNote: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewHistory: FinancialReviewEvent[];
+}
+
 export type ExpenseStatus = "draft" | "submitted" | "approved" | "rejected" | "cancelled";
 export type PaymentStatus = "pending" | "approved" | "paid" | "failed" | "cancelled" | "reversed";
 
@@ -378,7 +404,7 @@ export interface CalendarEvent {
 }
 
 /** A note the administrator writes on another portal's work. Only the project manager of that work sees it. */
-export type WorkKind = "project" | "task" | "report" | "cost" | "progress" | "boq" | "event";
+export type WorkKind = "project" | "task" | "report" | "cost" | "variation" | "progress" | "boq" | "event";
 
 export interface WorkComment {
   id: string;
@@ -409,6 +435,7 @@ export interface AdminState {
   reports: EngineerReport[];
   boq: BoqItem[];
   costReports: CostReport[];
+  variations: VariationRecord[];
   expenses: ExpenseRecord[];
   payments: PaymentRecord[];
   documents: ProjectDocument[];
