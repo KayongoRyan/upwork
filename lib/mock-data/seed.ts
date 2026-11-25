@@ -459,6 +459,7 @@ export function createSeedState(): AdminState {
     variations: [],
     expenses: [],
     payments: [],
+    costChanges: [],
   };
 }
 

@@ -11,7 +11,7 @@ const h = vi.hoisted(() => {
     projects: [{ id: "p1", name: "P1", code: "P1", managerId: "pm1", status: "active", progress: 0, budget: 1000, spent: 0, startDate: "2026-01-01", expectedEndDate: "2026-12-31", client: "C", location: "L", description: "Desc long enough" }],
     tasks: [{ id: "t1", projectId: "p1", title: "Task", assignee: "SE One", dueDate: "2026-12-01", priority: "medium", status: "todo", progress: 0 }],
     reports: [{ id: "r1", projectId: "p1", engineerId: "se1", status: "submitted", periodStart: "2026-01-01", periodEnd: "2026-01-01", progress: 10, summary: "Summary long enough", issues: "", photos: [] }],
-    boq: [], costReports: [], variations: [], expenses: [], payments: [], documents: [], notifications: [], activityLogs: [], workComments: [], progressMarks: [], calendarEvents: [], inquiries: [], settings: {},
+    boq: [], costReports: [], variations: [], expenses: [], payments: [], costChanges: [], documents: [], notifications: [], activityLogs: [], workComments: [], progressMarks: [], calendarEvents: [], inquiries: [], settings: {},
   };
   return {
     mockState,

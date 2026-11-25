@@ -9,6 +9,7 @@ import type {
   BoqInput,
   BoqItem,
   CostReport,
+  CostChangeRecord,
   EmployeeInput,
   EngineerReport,
   EngineerReportInput,
@@ -151,7 +152,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const manager = next.managerId ? state.users.find((user) => user.id === next.managerId) : null;
       if (next.managerId && (!manager || manager.role !== "project_manager" || manager.status !== "active")) return state;
       const becameDelayed = current.status !== "delayed" && next.status === "delayed";
-      return audit(
+      let result = audit(
         {
           ...state,
           projects: state.projects.map((project) => (project.id === next.id ? next : project)),
@@ -173,6 +174,13 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         next.code,
         becameDelayed ? "warning" : "success",
       );
+      if (current.budget !== next.budget) {
+        result = costChange(result, action.stamp, { id: `cc-${action.stamp.id}-budget`, projectId: next.id, sourceType: "project", sourceId: next.id, action: "update-project", field: "budget", previousValue: current.budget, newValue: next.budget, delta: next.budget - current.budget, currency: state.settings.currency, note: `Budget updated for ${next.code}` });
+      }
+      if (current.spent !== next.spent) {
+        result = costChange(result, action.stamp, { id: `cc-${action.stamp.id}-spent`, projectId: next.id, sourceType: "project", sourceId: next.id, action: "update-project", field: "spent", previousValue: current.spent, newValue: next.spent, delta: next.spent - current.spent, currency: state.settings.currency, note: `Spent updated for ${next.code}` });
+      }
+      return result;
     }
     case "delete-project": {
       const project = state.projects.find((item) => item.id === action.id);
@@ -786,7 +794,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       if (!changed) return state;
       const actor = pmActor(state, action.stamp);
       const spent = expenditureFor(boq, project.id);
-      return audit(
+      let result = audit(
         {
           ...state,
           boq,
@@ -807,6 +815,22 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         "success",
         actor,
       );
+      if (project.spent !== spent) {
+        result = costChange(result, action.stamp, {
+          id: `cc-${action.stamp.id}-spent`,
+          projectId: project.id,
+          sourceType: "cost_report",
+          sourceId: project.id,
+          action: "revise-cost-bill",
+          field: "project.spent",
+          previousValue: project.spent,
+          newValue: spent,
+          delta: spent - project.spent,
+          currency: state.settings.currency,
+          note: `${actor.name} revised cost bill quantities`,
+        });
+      }
+      return result;
     }
     case "send-cost-report": {
       const surveyor = activeSurveyor(state, action.surveyorId);
@@ -1051,7 +1075,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       if (action.decision === "rejected" && note.length < 3) return state;
       const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
       const ev: FinancialReviewEvent = { id: action.stamp.id, action: action.decision, actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note, at: action.stamp.at };
-      return audit({
+      let result = audit({
         ...state,
         variations: (state.variations ?? []).map((v) => v.id === variation.id ? {
           ...v, status: action.decision, reviewedBy: actor.id, reviewedAt: action.stamp.at, decisionNote: note,
@@ -1059,6 +1083,23 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         } : v),
         notifications: maybeNotify(state, action.stamp, { type: action.decision === "approved" ? "status" : "delay", title: `${project.code} variation ${action.decision}`, message: `${actor.name} ${action.decision} variation "${variation.title}".${note ? ` Note: ${note}` : ""}`, source: "administrator", senderName: actor.name, projectId: project.id }),
       }, action.stamp, action.decision === "approved" ? "Approved variation" : "Rejected variation", "Variations", project.code, action.decision === "approved" ? "success" : "warning", actor);
+      if (action.decision === "approved") {
+        const delta = variation.type === "addition" ? variation.amount : -variation.amount;
+        result = costChange(result, action.stamp, {
+          id: `cc-${action.stamp.id}-variation`,
+          projectId: project.id,
+          sourceType: "variation",
+          sourceId: variation.id,
+          action: "approve-variation",
+          field: "approvedVariationAmount",
+          previousValue: 0,
+          newValue: variation.amount,
+          delta,
+          currency: variation.currency,
+          note: `${variation.reference ? `${variation.reference}: ` : ""}${variation.title}`,
+        });
+      }
+      return result;
     }
     case "cancel-variation": {
       const variation = (state.variations ?? []).find((v) => v.id === action.id);
@@ -1133,7 +1174,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       if (action.decision === "rejected" && note.length < 3) return state;
       const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
       const ev: FinancialReviewEvent = { id: action.stamp.id, action: action.decision, actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note, at: action.stamp.at };
-      return audit({
+      let result = audit({
         ...state,
         expenses: (state.expenses ?? []).map((e) => e.id === expense.id ? {
           ...e, status: action.decision, reviewedBy: actor.id, reviewedAt: action.stamp.at, decisionNote: note,
@@ -1141,6 +1182,10 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         } : e),
         notifications: maybeNotify(state, action.stamp, { type: action.decision === "approved" ? "status" : "delay", title: `${project.code} expense ${action.decision}`, message: `${actor.name} ${action.decision} expense "${expense.description}".${note ? ` Note: ${note}` : ""}`, source: "administrator", senderName: actor.name, projectId: project.id }),
       }, action.stamp, action.decision === "approved" ? "Approved expense" : "Rejected expense", "Expenses", project.code, action.decision === "approved" ? "success" : "warning", actor);
+      if (action.decision === "approved") {
+        result = costChange(result, action.stamp, { id: `cc-${action.stamp.id}-expense`, projectId: project.id, sourceType: "expense", sourceId: expense.id, action: "approve-expense", field: "approvedExpenseAmount", previousValue: 0, newValue: expense.amount, delta: expense.amount, currency: expense.currency, note: expense.description });
+      }
+      return result;
     }
     case "cancel-expense": {
       const expense = (state.expenses ?? []).find((e) => e.id === action.id);
@@ -1213,10 +1258,12 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
       const paidAt = action.paidAt || action.stamp.at;
       const ev: FinancialReviewEvent = { id: action.stamp.id, action: "paid", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note: action.note.trim(), at: action.stamp.at };
-      return audit({
+      let result = audit({
         ...state,
         payments: (state.payments ?? []).map((p) => p.id === payment.id ? { ...p, status: "paid", paidAt, updatedAt: action.stamp.at, reviewHistory: [...(p.reviewHistory ?? []), ev] } : p),
       }, action.stamp, "Marked payment paid", "Payments", project.code, "success", actor);
+      result = costChange(result, action.stamp, { id: `cc-${action.stamp.id}-payment`, projectId: project.id, sourceType: "payment", sourceId: payment.id, action: "mark-payment-paid", field: "paidAmount", previousValue: 0, newValue: payment.amount, delta: payment.amount, currency: payment.currency, note: payment.reference ? `Payment ${payment.reference}` : "Payment marked paid" });
+      return result;
     }
     case "fail-payment": {
       const payment = (state.payments ?? []).find((p) => p.id === action.id);
@@ -1250,10 +1297,12 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       if (note.length < 3) return state;
       const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
       const ev: FinancialReviewEvent = { id: action.stamp.id, action: "reversed", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note, at: action.stamp.at };
-      return audit({
+      let result = audit({
         ...state,
         payments: (state.payments ?? []).map((p) => p.id === payment.id ? { ...p, status: "reversed", updatedAt: action.stamp.at, reviewHistory: [...(p.reviewHistory ?? []), ev] } : p),
       }, action.stamp, "Reversed payment", "Payments", project.code, "warning", actor);
+      result = costChange(result, action.stamp, { id: `cc-${action.stamp.id}-payment-reversal`, projectId: project.id, sourceType: "payment", sourceId: payment.id, action: "reverse-payment", field: "paidAmount", previousValue: payment.amount, newValue: 0, delta: -payment.amount, currency: payment.currency, note });
+      return result;
     }
     case "submit-cost-report": {
       const project = managedProject(state, action.projectId, action.stamp.actorId);
@@ -1607,7 +1656,7 @@ function measure(
 ) {
   const spent = expenditureFor(boq, projectId);
   const project = state.projects.find((item) => item.id === projectId);
-  return audit(
+  let result = audit(
     {
       ...state,
       boq,
@@ -1628,6 +1677,22 @@ function measure(
     "success",
     sender,
   );
+  if (project && project.spent !== spent) {
+    result = costChange(result, stamp, {
+      id: `cc-${stamp.id}-spent`,
+      projectId,
+      sourceType: "boq",
+      sourceId: projectId,
+      action: "measure-boq",
+      field: "project.spent",
+      previousValue: project.spent,
+      newValue: spent,
+      delta: spent - project.spent,
+      currency: state.settings.currency,
+      note: message,
+    });
+  }
+  return result;
 }
 
 function managedProject(state: AdminState, projectId: string, managerId?: string) {
@@ -1696,6 +1761,32 @@ function audit(
     status,
   };
   return { ...state, activityLogs: [entry, ...state.activityLogs] };
+}
+
+function costChange(
+  state: AdminState,
+  stamp: Stamp,
+  entry: Omit<CostChangeRecord, "id" | "actorId" | "actorName" | "actorRole" | "createdAt"> & { id?: string },
+): AdminState {
+  const actor = actorFromStamp(state, stamp);
+  const record: CostChangeRecord = {
+    id: entry.id ?? `cc-${stamp.id}-${(state.costChanges ?? []).length + 1}`,
+    projectId: entry.projectId,
+    sourceType: entry.sourceType,
+    sourceId: entry.sourceId,
+    action: entry.action,
+    field: entry.field,
+    previousValue: entry.previousValue,
+    newValue: entry.newValue,
+    delta: entry.delta,
+    currency: entry.currency,
+    note: entry.note,
+    actorId: actor.id,
+    actorName: actor.name,
+    actorRole: (actor.role ?? stamp.actorRole ?? "administrator") as UserRole,
+    createdAt: stamp.at,
+  };
+  return { ...state, costChanges: [record, ...(state.costChanges ?? [])] };
 }
 
 function receipt(state: AdminState, stamp: Stamp, projectId: string, title: string, message: string): AppNotification {

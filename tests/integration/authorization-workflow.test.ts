@@ -22,6 +22,7 @@ const h = vi.hoisted(() => {
     costReports: [{ id: "cr1", projectId: "p1", surveyorId: "qs1", status: "pending", lines: [], submittedAt: null, submittedBy: null }],
     variations: [],
     expenses: [], payments: [],
+    costChanges: [],
     documents: [], notifications: [], activityLogs: [], workComments: [], progressMarks: [], calendarEvents: [], inquiries: [], settings: {},
   };
   return {

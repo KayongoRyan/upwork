@@ -151,9 +151,13 @@ All endpoints below require a valid portal session. Mutating endpoints require C
 | POST | `/api/v1/cpmis/business/variations/:id/cancel` | Yes | No | Admin cancels non-approved/non-cancelled variation. Body: `note?`. |
 | DELETE | `/api/v1/cpmis/business/variations/:id` | Yes | No | Admin deletes variation record. |
 
-#### Expense Transactions
+#### Cost Changes
 
 | Method | Path | CSRF | Idempotency | Notes |
+|---|---|---:|---:|---|
+| GET | `/api/v1/cpmis/business/cost-changes` | No | No | List append-only historical cost changes. Query `projectId`, `sourceType`, `sourceId` optional. Scoped by role/project access. |
+
+#### Expense Transactions
 |---|---|---:|---:|---|
 | GET | `/api/v1/cpmis/business/expenses` | No | No | List expense transactions. Query `projectId` optional. Scoped by role/project access. |
 | POST | `/api/v1/cpmis/business/expenses` | Yes | Yes | Create expense (`draft`). Admin/PM; project access required. Body: `projectId, category, description, amount, currency?, vendor?, incurredDate`. |
