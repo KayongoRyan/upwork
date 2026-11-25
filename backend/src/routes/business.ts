@@ -880,6 +880,93 @@ businessRouter.get("/projects/:id/expense-transactions", async (req: Request, re
   res.json({ ok: true, projectId, expenses, payments, variations });
 });
 
+businessRouter.get("/projects/:id/reconciliation", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  const projectId = String(req.params.id);
+  if (!(await ensureProjectAccess(req, res, auth.session, projectId))) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const project = state.projects.find((p: any) => p.id === projectId);
+  if (!project) return apiError(res, 404, "not-found", { requestId: req.requestId });
+
+  const currency = state.settings?.currency ?? "RWF";
+  const lines = billLines(state.boq, projectId);
+  const boqEstimated = linesEstimate(lines);
+  const boqValuation = linesActual(lines); // measured/actual BOQ valuation
+
+  const variations = (state.variations ?? []).filter((v: any) => v.projectId === projectId);
+  const approvedVariations = variations.filter((v: any) => v.status === "approved");
+  const approvedVariationAdditions = approvedVariations.filter((v: any) => v.type === "addition").reduce((s: number, v: any) => s + (Number(v.amount) || 0), 0);
+  const approvedVariationOmissions = approvedVariations.filter((v: any) => v.type === "omission").reduce((s: number, v: any) => s + (Number(v.amount) || 0), 0);
+  const approvedVariationNet = approvedVariationAdditions - approvedVariationOmissions;
+  const adjustedBudget = (Number(project.budget) || 0) + approvedVariationNet;
+
+  const expenses = (state.expenses ?? []).filter((e: any) => e.projectId === projectId);
+  const expenseTotals = {
+    draft: expenses.filter((e: any) => e.status === "draft").reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0),
+    submitted: expenses.filter((e: any) => e.status === "submitted").reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0),
+    approved: expenses.filter((e: any) => e.status === "approved").reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0),
+    rejected: expenses.filter((e: any) => e.status === "rejected").reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0),
+    cancelled: expenses.filter((e: any) => e.status === "cancelled").reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0),
+  };
+
+  const payments = (state.payments ?? []).filter((p: any) => p.projectId === projectId);
+  const paymentTotals = {
+    pending: payments.filter((p: any) => p.status === "pending").reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0),
+    approved: payments.filter((p: any) => p.status === "approved").reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0),
+    paid: payments.filter((p: any) => p.status === "paid").reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0),
+    failed: payments.filter((p: any) => p.status === "failed").reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0),
+    cancelled: payments.filter((p: any) => p.status === "cancelled").reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0),
+    reversed: payments.filter((p: any) => p.status === "reversed").reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0),
+  };
+  const netPaid = paymentTotals.paid - paymentTotals.reversed;
+  const outstandingApprovedExpense = Math.max(0, expenseTotals.approved - paymentTotals.pending - paymentTotals.approved - paymentTotals.paid);
+
+  res.setHeader("cache-control", "no-store");
+  res.json({
+    ok: true,
+    projectId,
+    currency,
+    budget: {
+      baseline: Number(project.budget) || 0,
+      approvedVariationAdditions,
+      approvedVariationOmissions,
+      approvedVariationNet,
+      adjusted: adjustedBudget,
+    },
+    valuation: {
+      boqEstimated,
+      boqMeasured: boqValuation,
+      boqVariance: boqValuation - boqEstimated,
+      projectSpent: Number(project.spent) || 0,
+    },
+    expenses: {
+      totals: expenseTotals,
+      approvedCommitted: expenseTotals.approved,
+      outstandingApproved: outstandingApprovedExpense,
+      count: expenses.length,
+    },
+    payments: {
+      totals: paymentTotals,
+      netPaid,
+      outstandingApproved: paymentTotals.pending + paymentTotals.approved,
+      count: payments.length,
+    },
+    reconciliation: {
+      adjustedBudgetMinusValuation: adjustedBudget - boqValuation,
+      valuationMinusNetPaid: boqValuation - netPaid,
+      approvedExpensesMinusNetPaid: expenseTotals.approved - netPaid,
+      baselineBudgetMinusValuation: (Number(project.budget) || 0) - boqValuation,
+    },
+    notes: [
+      "Budget baseline is Project.budget; adjusted budget includes approved variation additions minus omissions.",
+      "Valuation uses BOQ measured actuals (actualQty * unitRate). Project.spent is the denormalized BOQ measured cache.",
+      "Expenses and payments are transaction records; approved expenses are commitments, net paid excludes reversed payments.",
+    ],
+  });
+});
+
 businessRouter.post("/expenses", async (req: Request, res: Response) => {
   const auth = await requireAnySession(req, res);
   if (!auth) return;
