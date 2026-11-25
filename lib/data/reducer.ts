@@ -13,8 +13,11 @@ import type {
   EngineerReport,
   EngineerReportInput,
   EngineerReportStatus,
+  ExpenseRecord,
+  FinancialReviewEvent,
   NotificationType,
   DocumentRevision,
+  PaymentRecord,
   ProjectDocument,
   ProjectInput,
   ReportReviewEvent,
@@ -71,6 +74,16 @@ export type AdminAction =
   | { type: "decide-cost-report"; id: string; decision: "approved" | "rejected"; note: string; stamp: Stamp }
   | { type: "delete-cost-report"; id: string; stamp: Stamp }
   | { type: "revise-cost-bill"; projectId: string; lines: { id: string; estimatedQty: number; actualQty: number; unitRate: number }[]; stamp: Stamp }
+  | { type: "create-expense"; input: { projectId: string; category: "labor" | "material" | "equipment" | "subcontractor" | "service" | "other"; description: string; amount: number; currency: string; vendor: string; incurredDate: string }; stamp: Stamp }
+  | { type: "submit-expense"; id: string; stamp: Stamp }
+  | { type: "decide-expense"; id: string; decision: "approved" | "rejected"; note: string; stamp: Stamp }
+  | { type: "cancel-expense"; id: string; note: string; stamp: Stamp }
+  | { type: "create-payment"; input: { projectId: string; expenseId: string; amount: number; currency: string; method: "cash" | "bank_transfer" | "mobile_money" | "cheque" | "other"; reference: string; scheduledFor: string | null }; stamp: Stamp }
+  | { type: "approve-payment"; id: string; note: string; stamp: Stamp }
+  | { type: "mark-payment-paid"; id: string; note: string; paidAt: string | null; stamp: Stamp }
+  | { type: "fail-payment"; id: string; note: string; stamp: Stamp }
+  | { type: "cancel-payment"; id: string; note: string; stamp: Stamp }
+  | { type: "reverse-payment"; id: string; note: string; stamp: Stamp }
   | { type: "register-document"; document: Omit<ProjectDocument, "id" | "revisions">; revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt">; stamp: Stamp }
   | { type: "revise-document"; documentId: string; revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt" | "status">; stamp: Stamp }
   | { type: "issue-revision"; documentId: string; stamp: Stamp }
@@ -933,6 +946,180 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         notifications: state.notifications.filter((item) => item.id !== `ntf-${id}`),
         activityLogs: state.activityLogs.filter((item) => item.id !== `log-${id}`),
       };
+    }
+    case "create-expense": {
+      const project = state.projects.find((p) => p.id === action.input.projectId);
+      if (!project) return state;
+      const amount = Number(action.input.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return state;
+      const desc = action.input.description.trim();
+      const vendor = action.input.vendor.trim();
+      if (desc.length < 3) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
+      const expense: ExpenseRecord = {
+        id: action.stamp.id,
+        projectId: project.id,
+        category: action.input.category,
+        description: desc,
+        amount: Math.round(amount * 100) / 100,
+        currency: (action.input.currency || state.settings.currency || "RWF").trim().toUpperCase(),
+        vendor,
+        incurredDate: action.input.incurredDate,
+        status: "draft",
+        submittedBy: null,
+        submittedAt: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        decisionNote: "",
+        rejectionNote: "",
+        createdBy: actor.id,
+        createdAt: action.stamp.at,
+        updatedAt: action.stamp.at,
+        reviewHistory: [{ id: action.stamp.id, action: "created", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note: "", at: action.stamp.at }],
+      };
+      return audit({ ...state, expenses: [expense, ...(state.expenses ?? [])] }, action.stamp, "Created expense", "Expenses", project.code, "success", actor);
+    }
+    case "submit-expense": {
+      const expense = (state.expenses ?? []).find((e) => e.id === action.id);
+      const project = expense ? state.projects.find((p) => p.id === expense.projectId) : undefined;
+      if (!expense || !project) return state;
+      if (expense.status !== "draft" && expense.status !== "rejected") return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: "submitted", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "project_manager") as UserRole, note: "", at: action.stamp.at };
+      return audit({
+        ...state,
+        expenses: (state.expenses ?? []).map((e) => e.id === expense.id ? { ...e, status: "submitted", submittedBy: actor.id, submittedAt: action.stamp.at, updatedAt: action.stamp.at, reviewHistory: [...(e.reviewHistory ?? []), ev] } : e),
+      }, action.stamp, "Submitted expense", "Expenses", project.code, "success", actor);
+    }
+    case "decide-expense": {
+      const expense = (state.expenses ?? []).find((e) => e.id === action.id);
+      const project = expense ? state.projects.find((p) => p.id === expense.projectId) : undefined;
+      if (!expense || !project || expense.status !== "submitted") return state;
+      const note = action.note.trim();
+      if (action.decision === "rejected" && note.length < 3) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: action.decision, actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note, at: action.stamp.at };
+      return audit({
+        ...state,
+        expenses: (state.expenses ?? []).map((e) => e.id === expense.id ? {
+          ...e, status: action.decision, reviewedBy: actor.id, reviewedAt: action.stamp.at, decisionNote: note,
+          rejectionNote: action.decision === "rejected" ? note : e.rejectionNote, updatedAt: action.stamp.at, reviewHistory: [...(e.reviewHistory ?? []), ev],
+        } : e),
+        notifications: maybeNotify(state, action.stamp, { type: action.decision === "approved" ? "status" : "delay", title: `${project.code} expense ${action.decision}`, message: `${actor.name} ${action.decision} expense "${expense.description}".${note ? ` Note: ${note}` : ""}`, source: "administrator", senderName: actor.name, projectId: project.id }),
+      }, action.stamp, action.decision === "approved" ? "Approved expense" : "Rejected expense", "Expenses", project.code, action.decision === "approved" ? "success" : "warning", actor);
+    }
+    case "cancel-expense": {
+      const expense = (state.expenses ?? []).find((e) => e.id === action.id);
+      const project = expense ? state.projects.find((p) => p.id === expense.projectId) : undefined;
+      if (!expense || !project) return state;
+      if (["cancelled"].includes(expense.status)) return state;
+      // do not cancel if there are paid/reversed payments? allow cancel only when no active payments
+      const hasActivePayments = (state.payments ?? []).some((p) => p.expenseId === expense.id && ["pending", "approved", "paid"].includes(p.status));
+      if (hasActivePayments) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: "cancelled", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note: action.note.trim(), at: action.stamp.at };
+      return audit({
+        ...state,
+        expenses: (state.expenses ?? []).map((e) => e.id === expense.id ? { ...e, status: "cancelled", updatedAt: action.stamp.at, reviewHistory: [...(e.reviewHistory ?? []), ev] } : e),
+      }, action.stamp, "Cancelled expense", "Expenses", project.code, "warning", actor);
+    }
+    case "create-payment": {
+      const expense = (state.expenses ?? []).find((e) => e.id === action.input.expenseId);
+      const project = expense ? state.projects.find((p) => p.id === expense.projectId) : undefined;
+      if (!expense || !project) return state;
+      if (expense.projectId !== action.input.projectId) return state;
+      if (expense.status !== "approved") return state;
+      const amount = Number(action.input.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return state;
+      const currency = (action.input.currency || expense.currency || state.settings.currency || "RWF").trim().toUpperCase();
+      if (currency !== expense.currency) return state;
+      const activePaid = (state.payments ?? [])
+        .filter((p) => p.expenseId === expense.id && ["pending", "approved", "paid"].includes(p.status))
+        .reduce((sum, p) => sum + p.amount, 0);
+      if (Math.round((activePaid + amount) * 100) > Math.round(expense.amount * 100)) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
+      const payment: PaymentRecord = {
+        id: action.stamp.id,
+        projectId: project.id,
+        expenseId: expense.id,
+        amount: Math.round(amount * 100) / 100,
+        currency,
+        method: action.input.method,
+        reference: action.input.reference.trim(),
+        status: "pending",
+        scheduledFor: action.input.scheduledFor ?? null,
+        paidAt: null,
+        recordedBy: actor.id,
+        recordedAt: action.stamp.at,
+        reviewedBy: null,
+        reviewedAt: null,
+        decisionNote: "",
+        failureNote: "",
+        createdAt: action.stamp.at,
+        updatedAt: action.stamp.at,
+        reviewHistory: [{ id: action.stamp.id, action: "created", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note: "", at: action.stamp.at }],
+      };
+      return audit({ ...state, payments: [payment, ...(state.payments ?? [])] }, action.stamp, "Recorded payment", "Payments", project.code, "success", actor);
+    }
+    case "approve-payment": {
+      const payment = (state.payments ?? []).find((p) => p.id === action.id);
+      const project = payment ? state.projects.find((p) => p.id === payment.projectId) : undefined;
+      if (!payment || !project || payment.status !== "pending") return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: "approved", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note: action.note.trim(), at: action.stamp.at };
+      return audit({
+        ...state,
+        payments: (state.payments ?? []).map((p) => p.id === payment.id ? { ...p, status: "approved", reviewedBy: actor.id, reviewedAt: action.stamp.at, decisionNote: action.note.trim(), updatedAt: action.stamp.at, reviewHistory: [...(p.reviewHistory ?? []), ev] } : p),
+      }, action.stamp, "Approved payment", "Payments", project.code, "success", actor);
+    }
+    case "mark-payment-paid": {
+      const payment = (state.payments ?? []).find((p) => p.id === action.id);
+      const project = payment ? state.projects.find((p) => p.id === payment.projectId) : undefined;
+      if (!payment || !project || payment.status !== "approved") return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
+      const paidAt = action.paidAt || action.stamp.at;
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: "paid", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note: action.note.trim(), at: action.stamp.at };
+      return audit({
+        ...state,
+        payments: (state.payments ?? []).map((p) => p.id === payment.id ? { ...p, status: "paid", paidAt, updatedAt: action.stamp.at, reviewHistory: [...(p.reviewHistory ?? []), ev] } : p),
+      }, action.stamp, "Marked payment paid", "Payments", project.code, "success", actor);
+    }
+    case "fail-payment": {
+      const payment = (state.payments ?? []).find((p) => p.id === action.id);
+      const project = payment ? state.projects.find((p) => p.id === payment.projectId) : undefined;
+      if (!payment || !project || !["pending", "approved"].includes(payment.status)) return state;
+      const note = action.note.trim();
+      if (note.length < 3) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: "failed", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note, at: action.stamp.at };
+      return audit({
+        ...state,
+        payments: (state.payments ?? []).map((p) => p.id === payment.id ? { ...p, status: "failed", failureNote: note, updatedAt: action.stamp.at, reviewHistory: [...(p.reviewHistory ?? []), ev] } : p),
+      }, action.stamp, "Marked payment failed", "Payments", project.code, "warning", actor);
+    }
+    case "cancel-payment": {
+      const payment = (state.payments ?? []).find((p) => p.id === action.id);
+      const project = payment ? state.projects.find((p) => p.id === payment.projectId) : undefined;
+      if (!payment || !project || !["pending", "approved", "failed"].includes(payment.status)) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: "cancelled", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note: action.note.trim(), at: action.stamp.at };
+      return audit({
+        ...state,
+        payments: (state.payments ?? []).map((p) => p.id === payment.id ? { ...p, status: "cancelled", updatedAt: action.stamp.at, reviewHistory: [...(p.reviewHistory ?? []), ev] } : p),
+      }, action.stamp, "Cancelled payment", "Payments", project.code, "warning", actor);
+    }
+    case "reverse-payment": {
+      const payment = (state.payments ?? []).find((p) => p.id === action.id);
+      const project = payment ? state.projects.find((p) => p.id === payment.projectId) : undefined;
+      if (!payment || !project || payment.status !== "paid") return state;
+      const note = action.note.trim();
+      if (note.length < 3) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: "reversed", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note, at: action.stamp.at };
+      return audit({
+        ...state,
+        payments: (state.payments ?? []).map((p) => p.id === payment.id ? { ...p, status: "reversed", updatedAt: action.stamp.at, reviewHistory: [...(p.reviewHistory ?? []), ev] } : p),
+      }, action.stamp, "Reversed payment", "Payments", project.code, "warning", actor);
     }
     case "submit-cost-report": {
       const project = managedProject(state, action.projectId, action.stamp.actorId);

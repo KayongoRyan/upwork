@@ -196,6 +196,63 @@ export interface CostReport {
   reviewHistory?: ReportReviewEvent[];
 }
 
+export type ExpenseStatus = "draft" | "submitted" | "approved" | "rejected" | "cancelled";
+export type PaymentStatus = "pending" | "approved" | "paid" | "failed" | "cancelled" | "reversed";
+
+export interface FinancialReviewEvent {
+  id: string;
+  action: string;
+  actorId: string;
+  actorName: string;
+  actorRole: UserRole;
+  note: string;
+  at: string;
+}
+
+export interface ExpenseRecord {
+  id: string;
+  projectId: string;
+  category: "labor" | "material" | "equipment" | "subcontractor" | "service" | "other";
+  description: string;
+  amount: number;
+  currency: string;
+  vendor: string;
+  incurredDate: string;
+  status: ExpenseStatus;
+  submittedBy: string | null;
+  submittedAt: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  decisionNote: string;
+  rejectionNote: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewHistory: FinancialReviewEvent[];
+}
+
+export interface PaymentRecord {
+  id: string;
+  projectId: string;
+  expenseId: string;
+  amount: number;
+  currency: string;
+  method: "cash" | "bank_transfer" | "mobile_money" | "cheque" | "other";
+  reference: string;
+  status: PaymentStatus;
+  scheduledFor: string | null;
+  paidAt: string | null;
+  recordedBy: string;
+  recordedAt: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  decisionNote: string;
+  failureNote: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewHistory: FinancialReviewEvent[];
+}
+
 export interface BoqItem {
   id: string;
   projectId: string;
@@ -352,6 +409,8 @@ export interface AdminState {
   reports: EngineerReport[];
   boq: BoqItem[];
   costReports: CostReport[];
+  expenses: ExpenseRecord[];
+  payments: PaymentRecord[];
   documents: ProjectDocument[];
   settings: OrgSettings;
   monthlyActivity: MonthlyPoint[];

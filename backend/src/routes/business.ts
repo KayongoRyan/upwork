@@ -834,3 +834,247 @@ businessRouter.delete("/cost-reports/:id", async (req: Request, res: Response) =
   const id = String(req.params.id);
   return withAction(req, res, "administrator", auth.session, { type: "delete-cost-report", id, stamp: stamp(auth.session) });
 });
+
+// 8. Expense transactions (financial lifecycle).
+// NOTE: GET /projects/:id/expenses remains the legacy BOQ expense summary for compatibility.
+const expenseCategorySchema = z.enum(["labor", "material", "equipment", "subcontractor", "service", "other"]);
+const expenseCreateSchema = z.object({
+  projectId: z.string().min(1),
+  category: expenseCategorySchema,
+  description: z.string().trim().min(3).max(500),
+  amount: z.coerce.number().positive(),
+  currency: z.string().trim().min(1).max(8).optional(),
+  vendor: z.string().trim().max(200).optional(),
+  incurredDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+const expenseDecisionSchema = z.object({
+  decision: z.enum(["approved", "rejected"]),
+  note: z.string().trim().max(1000).optional(),
+});
+const expenseCancelSchema = z.object({ note: z.string().trim().max(1000).optional() });
+
+businessRouter.get("/expenses", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
+  if (projectId && !(await ensureProjectAccess(req, res, auth.session, projectId))) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const allowed = new Set(scopedProjects(state, auth.session).map((p: any) => p.id));
+  const expenses = (state.expenses ?? []).filter((e: any) => allowed.has(e.projectId) && (!projectId || e.projectId === projectId));
+  res.setHeader("cache-control", "no-store");
+  res.json({ ok: true, expenses });
+});
+
+businessRouter.get("/projects/:id/expense-transactions", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  const projectId = String(req.params.id);
+  if (!(await ensureProjectAccess(req, res, auth.session, projectId))) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const expenses = (state.expenses ?? []).filter((e: any) => e.projectId === projectId);
+  const payments = (state.payments ?? []).filter((p: any) => p.projectId === projectId);
+  res.setHeader("cache-control", "no-store");
+  res.json({ ok: true, projectId, expenses, payments });
+});
+
+businessRouter.post("/expenses", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  if (!["administrator", "project_manager"].includes(auth.session.role)) return apiError(res, 403, "forbidden", { requestId: req.requestId });
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const body = parseOr400(expenseCreateSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  if (!(await ensureProjectAccess(req, res, auth.session, body.projectId))) return;
+  const portal = portalForSession(auth.session);
+  return withIdempotency(req, res, `business:expenses:create:${auth.session.id}`, body, async () => {
+    res.setHeader("cache-control", "no-store");
+    return runAction(req, portal, auth.session, {
+      type: "create-expense",
+      input: { ...body, currency: body.currency ?? "RWF", vendor: body.vendor ?? "" },
+      stamp: stamp(auth.session),
+    }, 201);
+  });
+});
+
+businessRouter.post("/expenses/:id/submit", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  if (!["administrator", "project_manager"].includes(auth.session.role)) return apiError(res, 403, "forbidden", { requestId: req.requestId });
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const expense = (state.expenses ?? []).find((e: any) => e.id === id);
+  if (!expense) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, expense.projectId, state))) return;
+  return withAction(req, res, portalForSession(auth.session), auth.session, { type: "submit-expense", id, stamp: stamp(auth.session) });
+});
+
+businessRouter.post("/expenses/:id/decide", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const body = parseOr400(expenseDecisionSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  if (body.decision === "rejected" && (body.note ?? "").trim().length < 3) {
+    return apiError(res, 400, "validation-failed", { message: "Rejection note must be at least 3 characters.", requestId: req.requestId });
+  }
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const expense = (state.expenses ?? []).find((e: any) => e.id === id);
+  if (!expense) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, expense.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "decide-expense", id, decision: body.decision, note: body.note ?? "", stamp: stamp(auth.session) });
+});
+
+businessRouter.post("/expenses/:id/cancel", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const body = parseOr400(expenseCancelSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const expense = (state.expenses ?? []).find((e: any) => e.id === id);
+  if (!expense) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, expense.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "cancel-expense", id, note: body.note ?? "", stamp: stamp(auth.session) });
+});
+
+// 9. Payment transactions (financial lifecycle).
+const paymentMethodSchema = z.enum(["cash", "bank_transfer", "mobile_money", "cheque", "other"]);
+const paymentCreateSchema = z.object({
+  projectId: z.string().min(1),
+  expenseId: z.string().min(1),
+  amount: z.coerce.number().positive(),
+  currency: z.string().trim().min(1).max(8).optional(),
+  method: paymentMethodSchema,
+  reference: z.string().trim().max(200).optional(),
+  scheduledFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+});
+const paymentNoteSchema = z.object({ note: z.string().trim().max(1000).optional() });
+const paymentPaidSchema = z.object({ note: z.string().trim().max(1000).optional(), paidAt: z.string().datetime().nullable().optional() });
+const paymentFailSchema = z.object({ note: z.string().trim().min(3).max(1000) });
+
+businessRouter.get("/payments", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
+  const expenseId = typeof req.query.expenseId === "string" ? req.query.expenseId : undefined;
+  if (projectId && !(await ensureProjectAccess(req, res, auth.session, projectId))) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const allowed = new Set(scopedProjects(state, auth.session).map((p: any) => p.id));
+  const payments = (state.payments ?? []).filter((p: any) =>
+    allowed.has(p.projectId) && (!projectId || p.projectId === projectId) && (!expenseId || p.expenseId === expenseId));
+  res.setHeader("cache-control", "no-store");
+  res.json({ ok: true, payments });
+});
+
+businessRouter.post("/payments", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  if (!["administrator", "project_manager"].includes(auth.session.role)) return apiError(res, 403, "forbidden", { requestId: req.requestId });
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const body = parseOr400(paymentCreateSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  if (!(await ensureProjectAccess(req, res, auth.session, body.projectId))) return;
+  const portal = portalForSession(auth.session);
+  return withIdempotency(req, res, `business:payments:create:${auth.session.id}`, body, async () => {
+    res.setHeader("cache-control", "no-store");
+    return runAction(req, portal, auth.session, {
+      type: "create-payment",
+      input: { ...body, currency: body.currency ?? "RWF", reference: body.reference ?? "", scheduledFor: body.scheduledFor ?? null },
+      stamp: stamp(auth.session),
+    }, 201);
+  });
+});
+
+businessRouter.post("/payments/:id/approve", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const body = parseOr400(paymentNoteSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const payment = (state.payments ?? []).find((p: any) => p.id === id);
+  if (!payment) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, payment.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "approve-payment", id, note: body.note ?? "", stamp: stamp(auth.session) });
+});
+
+businessRouter.post("/payments/:id/paid", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const body = parseOr400(paymentPaidSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const payment = (state.payments ?? []).find((p: any) => p.id === id);
+  if (!payment) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, payment.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "mark-payment-paid", id, note: body.note ?? "", paidAt: body.paidAt ?? null, stamp: stamp(auth.session) });
+});
+
+businessRouter.post("/payments/:id/fail", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const body = parseOr400(paymentFailSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const payment = (state.payments ?? []).find((p: any) => p.id === id);
+  if (!payment) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, payment.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "fail-payment", id, note: body.note, stamp: stamp(auth.session) });
+});
+
+businessRouter.post("/payments/:id/cancel", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const body = parseOr400(paymentNoteSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const payment = (state.payments ?? []).find((p: any) => p.id === id);
+  if (!payment) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, payment.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "cancel-payment", id, note: body.note ?? "", stamp: stamp(auth.session) });
+});
+
+businessRouter.post("/payments/:id/reverse", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const body = parseOr400(paymentFailSchema, req.body ?? {}, req, res);
+  if (!body) return; // note min 3 required by schema
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const payment = (state.payments ?? []).find((p: any) => p.id === id);
+  if (!payment) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, payment.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "reverse-payment", id, note: body.note, stamp: stamp(auth.session) });
+});
