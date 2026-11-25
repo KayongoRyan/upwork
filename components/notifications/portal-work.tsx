@@ -105,7 +105,16 @@ function Person({ person, portal, type, comments }: { person: UserAccount; porta
         group("Cost statements", costs.map((report) => ({
           id: report.id,
           kind: "cost" as const,
-          title: report.status === "pending" ? "Statement with the project manager" : "Statement submitted to the administrator",
+          title:
+            report.status === "pending"
+              ? "Statement with the project manager"
+              : report.status === "submitted"
+                ? "Statement submitted to the administrator"
+                : report.status === "in_review"
+                  ? "Statement under administrator review"
+                  : report.status === "approved"
+                    ? "Statement approved by administrator"
+                    : "Statement rejected by administrator",
           meta: `${report.submittedAt ? formatDateTime(report.submittedAt) : "Undated"} · ${report.lines.length} lines`,
           projectId: report.projectId,
         }))),
@@ -159,7 +168,16 @@ function Person({ person, portal, type, comments }: { person: UserAccount; porta
           group("Statements sent", costs.map((report) => ({
             id: report.id,
             kind: "cost" as const,
-            title: report.status === "pending" ? "Sent to the project manager" : "Submitted onward",
+            title:
+              report.status === "pending"
+                ? "Sent to the project manager"
+                : report.status === "submitted"
+                  ? "Submitted onward"
+                  : report.status === "in_review"
+                    ? "Under administrator review"
+                    : report.status === "approved"
+                      ? "Approved by administrator"
+                      : "Rejected by administrator",
             meta: `${report.submittedAt ? formatDateTime(report.submittedAt) : "Undated"} · ${report.lines.length} lines`,
             projectId: report.projectId,
           }))),

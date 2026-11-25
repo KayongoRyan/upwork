@@ -22,6 +22,7 @@ import {
 } from "../lib/auth-bridge";
 import { PersistenceError } from "@/lib/server/mongo";
 import {
+  LifecycleActionError,
   PortalActionError,
   applyPortalAction,
   isPortalKey,
@@ -105,6 +106,9 @@ cpmisRouter.post("/portal/:portal/actions", async (req: Request, res: Response) 
   } catch (error) {
     if (error instanceof PortalActionError) {
       return apiError(res, 403, "action-not-allowed", { requestId: req.requestId, extra: { action: error.action, portal: error.portal } });
+    }
+    if (error instanceof LifecycleActionError) {
+      return apiError(res, 409, "lifecycle-rejected", { message: error.message, requestId: req.requestId, extra: { action: error.action } });
     }
     if (error instanceof PersistenceError) {
       return apiError(res, 503, "persistence-failed", { requestId: req.requestId });

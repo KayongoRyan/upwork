@@ -16,6 +16,7 @@ import { PersistenceError } from "@/lib/server/mongo";
 import { readState } from "@/lib/server/memory";
 import { apiError } from "../lib/api-response";
 import {
+  LifecycleActionError,
   applyPortalAction,
   type PortalKey,
 } from "@/lib/server/portal-store";
@@ -48,10 +49,13 @@ function redirect(res: Response, path: string, query: Record<string, string> = {
   return res.redirect(303, target);
 }
 
-async function persistOrRedirect<T>(work: () => Promise<T>, onFailure: () => T): Promise<T> {
+async function persistOrRedirect<T>(work: () => Promise<T>, onFailure: (message?: string) => T): Promise<T> {
   try {
     return await work();
   } catch (error) {
+    if (error instanceof LifecycleActionError) {
+      return onFailure(error.message);
+    }
     if (error instanceof PersistenceError) {
       console.error("[persistence] The change was not saved.", error);
       return onFailure();
@@ -869,7 +873,7 @@ cpmisRemainingRouter.post("/pm/reports", async (req: Request, res: Response) => 
       await applyPortalAction("project_manager", { type: "submit-report", input: parsed.data, toAdmin: true, stamp: stamp(auth.session, id) } as any, auth.session);
       return redirect(res, "/pm/reports", { sent: state.settings.profileName });
     },
-    () => redirect(res, "/pm/reports", { error: "The report could not be saved. Try again." }),
+    (msg) => redirect(res, "/pm/reports", { error: msg ?? "The report could not be saved. Try again." }),
   );
 });
 
@@ -892,7 +896,7 @@ cpmisRemainingRouter.post("/pm/reports/open", async (req: Request, res: Response
       await applyPortalAction("project_manager", { type: "open-report-review", id, stamp: stamp(auth.session, stampId) } as any, auth.session);
       return redirect(res, "/pm/reports", { opened: sender }, id);
     },
-    () => redirect(res, "/pm/reports", { error: "The review could not be opened. Try again." }, id),
+    (msg) => redirect(res, "/pm/reports", { error: msg ?? "The review could not be opened. Try again." }, id),
   );
 });
 
@@ -920,7 +924,7 @@ cpmisRemainingRouter.post("/pm/reports/decide", async (req: Request, res: Respon
       await applyPortalAction("project_manager", { type: "decide-report", id, decision, note, stamp: stamp(auth.session, stampId) } as any, auth.session);
       return redirect(res, "/pm/reports", { reviewSent: sender }, id);
     },
-    () => redirect(res, "/pm/reports", { error: "The review could not be saved. Try again." }, id),
+    (msg) => redirect(res, "/pm/reports", { error: msg ?? "The review could not be saved. Try again." }, id),
   );
 });
 
@@ -1003,13 +1007,13 @@ cpmisRemainingRouter.post("/pm/costs", async (req: Request, res: Response) => {
       await applyPortalAction("project_manager", { type: "revise-cost-bill", projectId, lines: parsed.lines, stamp: stamp(auth.session, edited) } as any, auth.session);
       const fresh = await readState();
       const live = billLines(fresh.boq, projectId);
-      const latest = (fresh.costReports ?? []).find((report) => report.projectId === projectId && report.status === "submitted");
+      const latest = (fresh.costReports ?? []).find((report) => report.projectId === projectId && ["submitted", "in_review", "approved"].includes(report.status));
       if (latest && sameBill(latest.lines, live)) return redirect(res, "/pm/costs", { error: "These figures are already with the administrator. Change a quantity or rate to send an update." });
       const id = nextId("act");
       await applyPortalAction("project_manager", { type: "submit-cost-report", projectId, surveyorId: surveyor.id, stamp: stamp(auth.session, id) } as any, auth.session);
       return redirect(res, "/pm/costs", { sent: fresh.settings.profileName });
     },
-    () => redirect(res, "/pm/costs", { error: "The cost bill could not be saved. Try again." }),
+    (msg) => redirect(res, "/pm/costs", { error: msg ?? "The cost bill could not be saved. Try again." }),
   );
 });
 
@@ -1041,7 +1045,7 @@ cpmisRemainingRouter.post("/pm/costs/edit", async (req: Request, res: Response) 
       await applyPortalAction("project_manager", { type: "revise-cost-bill", projectId, lines: parsed.lines, stamp: stamp(auth.session, id) } as any, auth.session);
       return redirect(res, "/pm/costs", { edited: project.code });
     },
-    () => redirect(res, "/pm/costs", { error: "The cost lines could not be saved. Try again." }),
+    (msg) => redirect(res, "/pm/costs", { error: msg ?? "The cost lines could not be saved. Try again." }),
   );
 });
 
@@ -1086,7 +1090,7 @@ cpmisRemainingRouter.post("/qs/reports", async (req: Request, res: Response) => 
       await applyPortalAction("quantity_surveyor", { type: "send-cost-report", surveyorId: surveyor.id, stamp: stamp(auth.session, id) } as any, auth.session);
       return redirect(res, "/qs/reports", { sent: `${manager.firstName} ${manager.lastName}` });
     },
-    () => redirect(res, "/qs/reports", { error: "The cost report could not be saved. Try again." }),
+    (msg) => redirect(res, "/qs/reports", { error: msg ?? "The cost report could not be saved. Try again." }),
   );
 });
 
@@ -1153,13 +1157,12 @@ cpmisRemainingRouter.post("/se/reports", upload.array("photos", MAX_PHOTOS), asy
       await applyPortalAction("site_engineer", {
         type: "submit-report",
         toAdmin: false,
-        input: { projectId: actor.projectId!, engineerId: actor.id, periodStart: date, periodEnd: date, progress, summary, issues },
-        photos,
+        input: { projectId: actor.projectId!, engineerId: actor.id, periodStart: date, periodEnd: date, progress, summary, issues, photos },
         stamp: stamp(auth.session, stampId),
       } as any, auth.session);
       return redirect(res, "/se/reports", { sent: "1" }, stampId);
     },
-    () => redirect(res, "/se/reports", { error: "The report could not be saved. Try again." }),
+    (msg) => redirect(res, "/se/reports", { error: msg ?? "The report could not be saved. Try again." }),
   );
 });
 

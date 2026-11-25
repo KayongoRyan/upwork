@@ -17,6 +17,7 @@ import type {
   DocumentRevision,
   ProjectDocument,
   ProjectInput,
+  ReportReviewEvent,
   TaskInput,
   TaskItem,
   TaskPriority,
@@ -66,6 +67,8 @@ export type AdminAction =
   | { type: "delete-boq"; surveyorId: string; id: string; stamp: Stamp }
   | { type: "submit-cost-report"; projectId: string; surveyorId: string; stamp: Stamp }
   | { type: "send-cost-report"; surveyorId: string; stamp: Stamp }
+  | { type: "open-cost-report-review"; id: string; stamp: Stamp }
+  | { type: "decide-cost-report"; id: string; decision: "approved" | "rejected"; note: string; stamp: Stamp }
   | { type: "delete-cost-report"; id: string; stamp: Stamp }
   | { type: "revise-cost-bill"; projectId: string; lines: { id: string; estimatedQty: number; actualQty: number; unitRate: number }[]; stamp: Stamp }
   | { type: "register-document"; document: Omit<ProjectDocument, "id" | "revisions">; revision: Omit<DocumentRevision, "id" | "revision" | "uploadedAt">; stamp: Stamp }
@@ -100,6 +103,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         createdAt: action.stamp.at,
       };
       const manager = state.users.find((user) => user.id === project.managerId);
+      if (project.managerId && (!manager || manager.role !== "project_manager" || manager.status !== "active")) return state;
       const assignee = manager ? `${manager.firstName} ${manager.lastName}` : "Unassigned";
       return audit(
         {
@@ -123,6 +127,8 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const current = state.projects.find((project) => project.id === action.id);
       if (!current) return state;
       const next = { ...current, ...normalizeProject(action.input), id: current.id, createdAt: current.createdAt };
+      const manager = next.managerId ? state.users.find((user) => user.id === next.managerId) : null;
+      if (next.managerId && (!manager || manager.role !== "project_manager" || manager.status !== "active")) return state;
       const becameDelayed = current.status !== "delayed" && next.status === "delayed";
       return audit(
         {
@@ -296,6 +302,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
     case "create-task": {
       const project = managedProject(state, action.input.projectId, action.stamp.actorId);
       if (!project) return state;
+      if (!isValidEngineerAssignee(state, project.id, action.input.assignee ?? "")) return state;
       const item: TaskItem = {
         ...action.input,
         id: action.stamp.id,
@@ -315,6 +322,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const project = managedProject(state, action.projectId, action.stamp.actorId);
       const current = item ? managedProject(state, item.projectId, action.stamp.actorId) : undefined;
       if (!item || !project || !current) return state;
+      if (!isValidEngineerAssignee(state, project.id, item.assignee)) return state;
       return audit(
         {
           ...state,
@@ -361,6 +369,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const project = managedProject(state, action.projectId, action.stamp.actorId);
       const current = item ? managedProject(state, item.projectId, action.stamp.actorId) : undefined;
       if (!item || !project || !current) return state;
+      if (!isValidEngineerAssignee(state, project.id, action.assignee)) return state;
       return audit(
         {
           ...state,
@@ -459,6 +468,21 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const project = managedProject(state, action.input.projectId, action.stamp.actorId);
       const engineer = state.users.find((user) => user.id === action.input.engineerId && user.role === "site_engineer" && user.status === "active");
       if (!project || !engineer) return state;
+      if (engineer.projectId !== project.id) return state; // engineer must be assigned to project
+      // Duplicate submission protection: same engineer+project+period already has a non-rejected report
+      const duplicate = state.reports.some(
+        (r) => r.projectId === project.id && r.engineerId === engineer.id && r.periodStart === action.input.periodStart && r.periodEnd === action.input.periodEnd && r.status !== "rejected",
+      );
+      if (duplicate) return state;
+      const historyEvent: ReportReviewEvent = {
+        id: action.stamp.id,
+        action: "submitted",
+        actorId: action.stamp.actorId ?? engineer.id,
+        actorName: action.stamp.actorName ?? `${engineer.firstName} ${engineer.lastName}`,
+        actorRole: (action.stamp.actorRole ?? "site_engineer") as UserRole,
+        note: "",
+        at: action.stamp.at,
+      };
       const report: EngineerReport = {
         ...action.input,
         id: action.stamp.id,
@@ -472,6 +496,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         reviewerId: null,
         decisionNote: "",
         rejectionNote: "",
+        reviewHistory: [historyEvent],
       };
       const sender = `${engineer.firstName} ${engineer.lastName}`;
       const adminName = state.settings.profileName;
@@ -520,10 +545,19 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const project = report ? managedProject(state, report.projectId, action.stamp.actorId) : undefined;
       if (!report || !project || report.status !== "submitted") return state;
       const actor = pmActor(state, action.stamp);
+      const historyEvent: ReportReviewEvent = {
+        id: action.stamp.id,
+        action: "in_review",
+        actorId: actor.id,
+        actorName: actor.name,
+        actorRole: "project_manager",
+        note: "",
+        at: action.stamp.at,
+      };
       return audit(
         {
           ...state,
-          reports: state.reports.map((item) => (item.id === report.id ? { ...item, status: "in_review", reviewerId: actor.id } : item)),
+          reports: state.reports.map((item) => (item.id === report.id ? { ...item, status: "in_review", reviewerId: actor.id, reviewHistory: [...(item.reviewHistory ?? []), historyEvent] } : item)),
         },
         action.stamp,
         "Opened engineer report",
@@ -539,10 +573,20 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       if (!report || !project || report.status !== "in_review") return state;
       const actor = pmActor(state, action.stamp);
       const approved = action.decision === "approved";
+      const comment = action.note.trim();
+      if (!approved && comment.length < 3) return state; // rejection reason required
       const progress = approved ? Math.max(project.progress, report.progress) : project.progress;
       const engineer = state.users.find((user) => user.id === report.engineerId);
       const engineerName = engineer ? `${engineer.firstName} ${engineer.lastName}` : "the sender";
-      const comment = action.note.trim();
+      const historyEvent: ReportReviewEvent = {
+        id: action.stamp.id,
+        action: action.decision,
+        actorId: actor.id,
+        actorName: actor.name,
+        actorRole: "project_manager",
+        note: comment,
+        at: action.stamp.at,
+      };
       return audit(
         {
           ...state,
@@ -554,8 +598,9 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
                   status: action.decision,
                   reviewedAt: action.stamp.at,
                   reviewerId: actor.id,
-                  decisionNote: action.note.trim(),
-                  rejectionNote: action.decision === "rejected" ? action.note.trim() : item.rejectionNote,
+                  decisionNote: comment,
+                  rejectionNote: action.decision === "rejected" ? comment : item.rejectionNote,
+                  reviewHistory: [...(item.reviewHistory ?? []), historyEvent],
                 }
               : item,
           ),
@@ -583,6 +628,15 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       if (!report || !engineer || !project || report.status !== "rejected" || engineer.projectId !== project.id) return state;
       const name = `${engineer.firstName} ${engineer.lastName}`;
       const progress = Math.min(100, Math.max(0, Math.round(action.progress)));
+      const historyEvent: ReportReviewEvent = {
+        id: action.stamp.id,
+        action: "resubmitted",
+        actorId: engineer.id,
+        actorName: name,
+        actorRole: "site_engineer",
+        note: "",
+        at: action.stamp.at,
+      };
       return audit(
         {
           ...state,
@@ -599,6 +653,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
                   reviewedAt: null,
                   reviewerId: null,
                   decisionNote: "",
+                  reviewHistory: [...(item.reviewHistory ?? []), historyEvent],
                 }
               : item,
           ),
@@ -738,7 +793,11 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const lines = surveyor?.projectId ? billLines(state.boq, surveyor.projectId) : [];
       if (!surveyor || !project || lines.length === 0) return state;
       const already = (state.costReports ?? []).some(
-        (report) => report.projectId === project.id && report.submittedBy === surveyor.id && sameBill(report.lines, lines),
+        (report) =>
+          report.projectId === project.id &&
+          report.submittedBy === surveyor.id &&
+          report.status !== "rejected" &&
+          sameBill(report.lines, lines),
       );
       if (already) return state;
       const name = `${surveyor.firstName} ${surveyor.lastName}`;
@@ -752,6 +811,17 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         lines,
         submittedAt: action.stamp.at,
         submittedBy: surveyor.id,
+        reviewHistory: [
+          {
+            id: action.stamp.id,
+            action: "submitted",
+            actorId: surveyor.id,
+            actorName: name,
+            actorRole: "quantity_surveyor",
+            note: "",
+            at: action.stamp.at,
+          },
+        ],
       };
       return audit(
         {
@@ -774,6 +844,87 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         { id: surveyor.id, name },
       );
     }
+    case "open-cost-report-review": {
+      const report = (state.costReports ?? []).find((item) => item.id === action.id);
+      const project = report ? state.projects.find((item) => item.id === report.projectId) : undefined;
+      if (!report || !project || report.status !== "submitted") return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
+      const historyEvent: ReportReviewEvent = {
+        id: action.stamp.id,
+        action: "in_review",
+        actorId: actor.id,
+        actorName: actor.name,
+        actorRole: (action.stamp.actorRole ?? "administrator") as UserRole,
+        note: "",
+        at: action.stamp.at,
+      };
+      return audit(
+        {
+          ...state,
+          costReports: (state.costReports ?? []).map((item) =>
+            item.id === report.id
+              ? { ...item, status: "in_review", reviewerId: actor.id, reviewHistory: [...(item.reviewHistory ?? []), historyEvent] }
+              : item,
+          ),
+        },
+        action.stamp,
+        "Opened cost report review",
+        "Reports",
+        project.code,
+        "success",
+        actor,
+      );
+    }
+    case "decide-cost-report": {
+      const report = (state.costReports ?? []).find((item) => item.id === action.id);
+      const project = report ? state.projects.find((item) => item.id === report.projectId) : undefined;
+      if (!report || !project || report.status !== "in_review") return state;
+      const approved = action.decision === "approved";
+      const comment = action.note.trim();
+      if (!approved && comment.length < 3) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
+      const historyEvent: ReportReviewEvent = {
+        id: action.stamp.id,
+        action: action.decision,
+        actorId: actor.id,
+        actorName: actor.name,
+        actorRole: (action.stamp.actorRole ?? "administrator") as UserRole,
+        note: comment,
+        at: action.stamp.at,
+      };
+      return audit(
+        {
+          ...state,
+          costReports: (state.costReports ?? []).map((item) =>
+            item.id === report.id
+              ? {
+                  ...item,
+                  status: action.decision,
+                  reviewedAt: action.stamp.at,
+                  reviewerId: actor.id,
+                  decisionNote: comment,
+                  rejectionNote: approved ? (item.rejectionNote ?? "") : comment,
+                  reviewHistory: [...(item.reviewHistory ?? []), historyEvent],
+                }
+              : item,
+          ),
+          notifications: maybeNotify(state, action.stamp, {
+            type: approved ? "status" : "delay",
+            title: `${project.code} cost report ${approved ? "approved" : "rejected"}`,
+            message: `${actor.name} ${approved ? "approved" : "rejected"} the cost report for ${project.name}.${comment ? ` Note: ${comment}` : ""}`,
+            source: "administrator",
+            senderName: actor.name,
+            projectId: project.id,
+          }),
+        },
+        action.stamp,
+        approved ? "Approved cost report" : "Rejected cost report",
+        "Reports",
+        project.code,
+        approved ? "success" : "warning",
+        actor,
+      );
+    }
     case "delete-cost-report": {
       const id = action.id;
       return {
@@ -788,7 +939,23 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       const surveyor = state.users.find((user) => user.id === action.surveyorId && user.role === "quantity_surveyor" && user.status === "active" && user.projectId === action.projectId);
       const lines = billLines(state.boq, action.projectId);
       if (!project || !surveyor || lines.length === 0) return state;
+      const already = (state.costReports ?? []).some(
+        (report) =>
+          report.projectId === project.id &&
+          ["submitted", "in_review", "approved"].includes(report.status) &&
+          sameBill(report.lines, lines),
+      );
+      if (already) return state; // duplicate submission protection
       const actor = pmActor(state, action.stamp);
+      const historyEvent: ReportReviewEvent = {
+        id: action.stamp.id,
+        action: "submitted",
+        actorId: actor.id,
+        actorName: actor.name,
+        actorRole: "project_manager",
+        note: "",
+        at: action.stamp.at,
+      };
       const report: CostReport = {
         id: action.stamp.id,
         projectId: project.id,
@@ -797,6 +964,7 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
         lines,
         submittedAt: action.stamp.at,
         submittedBy: actor.id,
+        reviewHistory: [historyEvent],
       };
       const expenditure = linesActual(lines);
       const surveyorName = `${surveyor.firstName} ${surveyor.lastName}`;
@@ -1093,6 +1261,18 @@ function emptyToNull(value: string | null) {
 
 function activeSurveyor(state: AdminState, id: string) {
   return state.users.find((user) => user.id === id && user.role === "quantity_surveyor" && user.status === "active") ?? null;
+}
+
+function isValidEngineerAssignee(state: AdminState, projectId: string, assignee: string) {
+  const name = assignee.trim();
+  if (!name || name.toLowerCase() === "unassigned") return true; // allow unassigned
+  return state.users.some(
+    (user) =>
+      user.role === "site_engineer" &&
+      user.status === "active" &&
+      user.projectId === projectId &&
+      `${user.firstName} ${user.lastName}`.trim().toLowerCase() === name.toLowerCase(),
+  );
 }
 
 function measure(

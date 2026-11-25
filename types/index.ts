@@ -168,7 +168,7 @@ export interface ReportPhoto {
   fileKey?: string;
 }
 
-export type CostReportStatus = "pending" | "submitted";
+export type CostReportStatus = "pending" | "submitted" | "in_review" | "approved" | "rejected";
 
 /** Frozen bill of quantities filed by the project manager. */
 export interface CostReportLine {
@@ -188,6 +188,12 @@ export interface CostReport {
   lines: CostReportLine[];
   submittedAt: string | null;
   submittedBy: string | null;
+  reviewedAt?: string | null;
+  reviewerId?: string | null;
+  decisionNote?: string;
+  rejectionNote?: string;
+  /** Append-only lifecycle history (submitted/reviewed actions). */
+  reviewHistory?: ReportReviewEvent[];
 }
 
 export interface BoqItem {
@@ -200,6 +206,16 @@ export interface BoqItem {
   actualQty: number;
   /** Francs per unit. Line amounts are round(quantity × rate). */
   unitRate: number;
+}
+
+export interface ReportReviewEvent {
+  id: string;
+  action: "submitted" | "in_review" | "approved" | "rejected" | "resubmitted";
+  actorId: string;
+  actorName: string;
+  actorRole: UserRole;
+  note: string;
+  at: string;
 }
 
 export interface EngineerReport {
@@ -219,6 +235,8 @@ export interface EngineerReport {
   decisionNote: string;
   /** Kept after a resubmit so the engineer still sees why it was sent back. */
   rejectionNote: string;
+  /** Append-only review/approval history for lifecycle auditability. */
+  reviewHistory?: ReportReviewEvent[];
 }
 
 export interface OrgSettings {
