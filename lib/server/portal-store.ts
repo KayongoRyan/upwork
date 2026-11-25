@@ -52,6 +52,8 @@ type RecordCollection =
   | "calendarEvents"
   | "progressMarks"
   | "costReports"
+  | "expenses"
+  | "payments"
   | "reports"
   | "boq";
 
@@ -66,7 +68,7 @@ const PORTAL_COLLECTIONS: Record<
     monthlyActivity: true,
   },
   project_manager: {
-    records: ["tasks", "calendarEvents", "progressMarks", "costReports"],
+    records: ["tasks", "calendarEvents", "progressMarks", "costReports", "expenses", "payments"],
   },
   site_engineer: {
     records: ["reports"],
@@ -125,6 +127,16 @@ const PORTAL_ACTIONS: Record<PortalKey, ReadonlySet<AdminAction["type"]>> = {
     "submit-cost-report",
     "open-cost-report-review",
     "decide-cost-report",
+    "create-expense",
+    "submit-expense",
+    "decide-expense",
+    "cancel-expense",
+    "create-payment",
+    "approve-payment",
+    "mark-payment-paid",
+    "fail-payment",
+    "cancel-payment",
+    "reverse-payment",
     "register-document",
     "revise-document",
     "issue-revision",
@@ -153,6 +165,9 @@ const PORTAL_ACTIONS: Record<PortalKey, ReadonlySet<AdminAction["type"]>> = {
     "decide-report",
     "revise-cost-bill",
     "submit-cost-report",
+    "create-expense",
+    "submit-expense",
+    "create-payment",
   ]),
   site_engineer: new Set<AdminAction["type"]>([
     ...NOTIFICATION_ACTIONS,
@@ -381,6 +396,33 @@ const COLLECTION_VALIDATORS: Partial<Record<RecordCollection | "notifications", 
     actualQty: { bsonType: ["int", "long", "double", "decimal"] },
     unitRate: { bsonType: ["int", "long", "double", "decimal"] },
   }, ["id", "projectId"]),
+  expenses: objectSchema({
+    projectId: { bsonType: "string", minLength: 1 },
+    category: { bsonType: "string" },
+    description: { bsonType: "string" },
+    amount: { bsonType: ["int", "long", "double", "decimal"] },
+    currency: { bsonType: "string" },
+    vendor: { bsonType: "string" },
+    incurredDate: { bsonType: "string" },
+    status: { enum: ["draft", "submitted", "approved", "rejected", "cancelled"] },
+    submittedBy: { bsonType: ["string", "null"] },
+    createdBy: { bsonType: "string" },
+    createdAt: { bsonType: "string" },
+    updatedAt: { bsonType: "string" },
+  }, ["id", "projectId", "status", "amount"]),
+  payments: objectSchema({
+    projectId: { bsonType: "string", minLength: 1 },
+    expenseId: { bsonType: "string", minLength: 1 },
+    amount: { bsonType: ["int", "long", "double", "decimal"] },
+    currency: { bsonType: "string" },
+    method: { bsonType: "string" },
+    reference: { bsonType: "string" },
+    status: { enum: ["pending", "approved", "paid", "failed", "cancelled", "reversed"] },
+    recordedBy: { bsonType: "string" },
+    recordedAt: { bsonType: "string" },
+    createdAt: { bsonType: "string" },
+    updatedAt: { bsonType: "string" },
+  }, ["id", "projectId", "expenseId", "status", "amount"]),
   notifications: objectSchema({
     title: { bsonType: "string" },
     message: { bsonType: "string" },
@@ -427,6 +469,11 @@ const RELATIONSHIP_INDEXES: Array<{ portal: PortalKey; collection: string; keys:
   { portal: "project_manager", collection: "tasks", keys: { projectId: 1 }, name: "rel_tasks_projectId" },
   { portal: "project_manager", collection: "progressMarks", keys: { projectId: 1 }, name: "rel_progressMarks_projectId" },
   { portal: "project_manager", collection: "costReports", keys: { projectId: 1 }, name: "rel_costReports_projectId" },
+  { portal: "project_manager", collection: "expenses", keys: { projectId: 1 }, name: "rel_expenses_projectId" },
+  { portal: "project_manager", collection: "expenses", keys: { status: 1 }, name: "rel_expenses_status" },
+  { portal: "project_manager", collection: "payments", keys: { projectId: 1 }, name: "rel_payments_projectId" },
+  { portal: "project_manager", collection: "payments", keys: { expenseId: 1 }, name: "rel_payments_expenseId" },
+  { portal: "project_manager", collection: "payments", keys: { status: 1 }, name: "rel_payments_status" },
   { portal: "site_engineer", collection: "reports", keys: { projectId: 1 }, name: "rel_reports_projectId" },
   { portal: "site_engineer", collection: "reports", keys: { engineerId: 1 }, name: "rel_reports_engineerId" },
   { portal: "quantity_surveyor", collection: "boq", keys: { projectId: 1 }, name: "rel_boq_projectId" },
@@ -580,6 +627,28 @@ function assertStateIntegrity(state: AdminState): void {
       throw new PersistenceError(`Cost report ${report.id} references missing project ${report.projectId}.`);
     }
   }
+
+  const expenseIds = new Set((state.expenses ?? []).map((e) => e.id));
+  for (const expense of state.expenses ?? []) {
+    if (!projectIds.has(expense.projectId)) {
+      throw new PersistenceError(`Expense ${expense.id} references missing project ${expense.projectId}.`);
+    }
+    if (!(expense.amount > 0)) {
+      throw new PersistenceError(`Expense ${expense.id} must have amount > 0.`);
+    }
+  }
+
+  for (const payment of state.payments ?? []) {
+    if (!projectIds.has(payment.projectId)) {
+      throw new PersistenceError(`Payment ${payment.id} references missing project ${payment.projectId}.`);
+    }
+    if (!expenseIds.has(payment.expenseId)) {
+      throw new PersistenceError(`Payment ${payment.id} references missing expense ${payment.expenseId}.`);
+    }
+    if (!(payment.amount > 0)) {
+      throw new PersistenceError(`Payment ${payment.id} must have amount > 0.`);
+    }
+  }
 }
 
 const STATUS_TRANSITIONS: Record<string, Record<string, ReadonlySet<string>>> = {
@@ -607,6 +676,21 @@ const STATUS_TRANSITIONS: Record<string, Record<string, ReadonlySet<string>>> = 
     in_review: new Set(["in_review", "approved", "rejected"]),
     approved: new Set(["approved"]),
     rejected: new Set(["rejected", "submitted"]),
+  },
+  expense: {
+    draft: new Set(["draft", "submitted", "cancelled"]),
+    submitted: new Set(["submitted", "approved", "rejected", "cancelled"]),
+    approved: new Set(["approved", "cancelled"]),
+    rejected: new Set(["rejected", "draft", "submitted", "cancelled"]),
+    cancelled: new Set(["cancelled"]),
+  },
+  payment: {
+    pending: new Set(["pending", "approved", "failed", "cancelled"]),
+    approved: new Set(["approved", "paid", "failed", "cancelled"]),
+    paid: new Set(["paid", "reversed"]),
+    failed: new Set(["failed", "pending", "cancelled"]),
+    cancelled: new Set(["cancelled"]),
+    reversed: new Set(["reversed"]),
   },
   account: {
     active: new Set(["active", "inactive"]),
@@ -664,6 +748,18 @@ function assertStatusTransitions(previous: AdminState | null, next: AdminState):
   for (const item of next.costReports) {
     const prev = prevCostReports.get(item.id);
     if (prev) assertTransition("costReport", item.id, prev.status, item.status);
+  }
+
+  const prevExpenses = new Map((previous.expenses ?? []).map((item) => [item.id, item]));
+  for (const item of next.expenses ?? []) {
+    const prev = prevExpenses.get(item.id);
+    if (prev) assertTransition("expense", item.id, prev.status, item.status);
+  }
+
+  const prevPayments = new Map((previous.payments ?? []).map((item) => [item.id, item]));
+  for (const item of next.payments ?? []) {
+    const prev = prevPayments.get(item.id);
+    if (prev) assertTransition("payment", item.id, prev.status, item.status);
   }
 
   const prevUsers = new Map(previous.users.map((item) => [item.id, item]));
@@ -766,6 +862,8 @@ async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
     calendarEvents,
     progressMarks,
     costReports,
+    expenses,
+    payments,
     reports,
     boq,
     settingsDoc,
@@ -781,6 +879,8 @@ async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
     readRecords<AdminState["calendarEvents"][number]>(runtime.dbs.project_manager, "calendarEvents"),
     readRecords<AdminState["progressMarks"][number]>(runtime.dbs.project_manager, "progressMarks"),
     readRecords<AdminState["costReports"][number]>(runtime.dbs.project_manager, "costReports"),
+    readRecords<AdminState["expenses"][number]>(runtime.dbs.project_manager, "expenses"),
+    readRecords<AdminState["payments"][number]>(runtime.dbs.project_manager, "payments"),
     readRecords<AdminState["reports"][number]>(runtime.dbs.site_engineer, "reports"),
     readRecords<AdminState["boq"][number]>(runtime.dbs.quantity_surveyor, "boq"),
     admin.collection<StoredDocument>("settings").findOne({ _id: SETTINGS_DOC }),
@@ -813,6 +913,8 @@ async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
     calendarEvents,
     progressMarks,
     costReports,
+    expenses,
+    payments,
     reports,
     boq,
     notifications,
@@ -997,6 +1099,8 @@ export function scopeStateForSession(state: AdminState, session: SessionUser): A
   const calendarEvents = state.calendarEvents;
   const progressMarks = state.progressMarks.filter((m) => projectIdSet.has(m.projectId));
   const costReports = state.costReports.filter((r) => projectIdSet.has(r.projectId));
+  const expenses = (state.expenses ?? []).filter((r) => projectIdSet.has(r.projectId));
+  const payments = (state.payments ?? []).filter((r) => projectIdSet.has(r.projectId));
   const reports = state.reports.filter((r) => projectIdSet.has(r.projectId));
   const boq = state.boq.filter((b) => projectIdSet.has(b.projectId));
   const notifications = state.notifications.filter((n) => n.recipientId === session.id);
@@ -1013,6 +1117,8 @@ export function scopeStateForSession(state: AdminState, session: SessionUser): A
     calendarEvents,
     progressMarks,
     costReports,
+    expenses,
+    payments,
     reports,
     boq,
     notifications,
@@ -1160,6 +1266,24 @@ function targetProjectIds(state: AdminState, action: AdminAction): string[] {
     case "delete-cost-report": {
       const report = state.costReports.find((r) => r.id === action.id);
       return report ? [report.projectId] : [];
+    }
+    case "create-expense":
+      return [action.input.projectId];
+    case "submit-expense":
+    case "decide-expense":
+    case "cancel-expense": {
+      const expense = (state.expenses ?? []).find((e) => e.id === action.id);
+      return expense ? [expense.projectId] : [];
+    }
+    case "create-payment":
+      return [action.input.projectId];
+    case "approve-payment":
+    case "mark-payment-paid":
+    case "fail-payment":
+    case "cancel-payment":
+    case "reverse-payment": {
+      const payment = (state.payments ?? []).find((p) => p.id === action.id);
+      return payment ? [payment.projectId] : [];
     }
     case "register-document":
       return [action.document.projectId];

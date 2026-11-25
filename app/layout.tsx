@@ -50,6 +50,8 @@ const EMPTY_STATE: AdminState = {
   reports: [],
   boq: [],
   costReports: [],
+  expenses: [],
+  payments: [],
   documents: [],
   settings: {
     organizationName: "",

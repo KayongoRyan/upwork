@@ -135,7 +135,30 @@ All endpoints below require a valid portal session. Mutating endpoints require C
 | POST | `/api/v1/cpmis/business/boq` | Yes | Yes | Create BOQ item; QS/assignment checks. |
 | PATCH | `/api/v1/cpmis/business/boq/:id` | Yes | No | Update BOQ item. |
 | DELETE | `/api/v1/cpmis/business/boq/:id` | Yes | No | Delete BOQ item. |
-| GET | `/api/v1/cpmis/business/projects/:id/expenses` | No | No | List project expenses. |
+| GET | `/api/v1/cpmis/business/projects/:id/expenses` | No | No | Legacy BOQ expense summary for compatibility (budget/spent/estimated/actual/BOQ lines). Not expense transaction records. |
+| GET | `/api/v1/cpmis/business/projects/:id/expense-transactions` | No | No | Project expense and payment transaction records; project access scoped. |
+
+#### Expense Transactions
+
+| Method | Path | CSRF | Idempotency | Notes |
+|---|---|---:|---:|---|
+| GET | `/api/v1/cpmis/business/expenses` | No | No | List expense transactions. Query `projectId` optional. Scoped by role/project access. |
+| POST | `/api/v1/cpmis/business/expenses` | Yes | Yes | Create expense (`draft`). Admin/PM; project access required. Body: `projectId, category, description, amount, currency?, vendor?, incurredDate`. |
+| POST | `/api/v1/cpmis/business/expenses/:id/submit` | Yes | No | Submit draft/rejected expense for review. Admin/PM; project access required. |
+| POST | `/api/v1/cpmis/business/expenses/:id/decide` | Yes | No | Admin approves/rejects submitted expense. Body: `decision: approved|rejected, note?` (rejection note required, min 3 chars). |
+| POST | `/api/v1/cpmis/business/expenses/:id/cancel` | Yes | No | Admin cancels expense when no active payments exist. Body: `note?`. |
+
+#### Payment Transactions
+
+| Method | Path | CSRF | Idempotency | Notes |
+|---|---|---:|---:|---|
+| GET | `/api/v1/cpmis/business/payments` | No | No | List payment transactions. Query `projectId`, `expenseId` optional. Scoped by role/project access. |
+| POST | `/api/v1/cpmis/business/payments` | Yes | Yes | Create payment (`pending`) against approved expense. Admin/PM; project access required. Amount cannot exceed approved expense remaining active amount; currency must match expense. Body: `projectId, expenseId, amount, currency?, method, reference?, scheduledFor?`. |
+| POST | `/api/v1/cpmis/business/payments/:id/approve` | Yes | No | Admin approves pending payment. Body: `note?`. |
+| POST | `/api/v1/cpmis/business/payments/:id/paid` | Yes | No | Admin marks approved payment paid. Body: `note?, paidAt?`. |
+| POST | `/api/v1/cpmis/business/payments/:id/fail` | Yes | No | Admin marks pending/approved payment failed. Body: `note` required (min 3 chars). |
+| POST | `/api/v1/cpmis/business/payments/:id/cancel` | Yes | No | Admin cancels pending/approved/failed payment. Body: `note?`. |
+| POST | `/api/v1/cpmis/business/payments/:id/reverse` | Yes | No | Admin reverses paid payment. Body: `note` required (min 3 chars). |
 
 #### Cost Reports
 

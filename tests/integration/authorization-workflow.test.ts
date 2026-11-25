@@ -20,6 +20,7 @@ const h = vi.hoisted(() => {
     reports: [{ id: "r1", projectId: "p1", engineerId: "se1", status: "submitted", periodStart: "2026-01-01", periodEnd: "2026-01-01", progress: 10, summary: "Summary long enough", issues: "", photos: [] }],
     boq: [{ id: "b1", projectId: "p1", code: "B-1", description: "Concrete", unit: "m3", estimatedQty: 10, actualQty: 8, unitRate: 100 }],
     costReports: [{ id: "cr1", projectId: "p1", surveyorId: "qs1", status: "pending", lines: [], submittedAt: null, submittedBy: null }],
+    expenses: [], payments: [],
     documents: [], notifications: [], activityLogs: [], workComments: [], progressMarks: [], calendarEvents: [], inquiries: [], settings: {},
   };
   return {
