@@ -65,6 +65,7 @@ def _job_doc_to_dict(doc: dict[str, Any] | None, now: datetime | None = None) ->
         "maxAttempts": doc.get("maxAttempts"),
         "attemptsMade": doc.get("attemptsMade", 0),
         "retryDelaySeconds": doc.get("retryDelaySeconds"),
+        "executionTimeoutSeconds": doc.get("executionTimeoutSeconds"),
         "idempotencyKey": doc.get("idempotencyKey"),
         "createdAt": iso(as_utc(doc.get("createdAt"))),
         "updatedAt": iso(as_utc(doc.get("updatedAt"))),
@@ -153,6 +154,7 @@ class JobStore:
         priority: int = 5,
         max_attempts: int | None = None,
         retry_delay_seconds: int | None = None,
+        execution_timeout_seconds: int | None = None,
         idempotency_key: str | None = None,
         run_at: datetime | None = None,
         metadata: dict[str, Any] | None = None,
@@ -161,6 +163,7 @@ class JobStore:
         run_at = as_utc(run_at) or now
         max_attempts_val = max(1, max_attempts or self._default_max_attempts)
         retry_delay_val = max(1, retry_delay_seconds or self._default_retry_delay_seconds)
+        exec_timeout_val = max(1, int(execution_timeout_seconds or 0)) if execution_timeout_seconds is not None else None
         priority_val = max(1, min(10, priority))
         job_id = f"job_{uuid4().hex}"
 
@@ -189,6 +192,7 @@ class JobStore:
             "maxAttempts": max_attempts_val,
             "attemptsMade": 0,
             "retryDelaySeconds": retry_delay_val,
+            "executionTimeoutSeconds": exec_timeout_val,
             "idempotencyKey": idempotency_key,
             "createdAt": now,
             "updatedAt": now,

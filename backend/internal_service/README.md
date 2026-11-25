@@ -29,6 +29,8 @@ cd backend
 
 Handlers live in `backend/internal_service/processing/`. Each module exports `JOB_TYPES` and `async def handle(job, ctx) -> dict`. Built-in example: `internal.echo`. Unknown job types fail as non-retryable `unknown-job-type`.
 
+The worker enforces per-job execution timeouts (`executionTimeoutSeconds` or `JOB_EXECUTION_TIMEOUT_SECONDS`) and detects controlled cancellation (`POST /jobs/{id}/cancel`). Timed-out handlers are cancelled and failed as retryable `execution-timeout`; cancelled jobs are detected by the worker monitor and the worker does not overwrite cancellation status.
+
 ## Environment
 
 | Variable | Default | Description |
@@ -46,6 +48,7 @@ Handlers live in `backend/internal_service/processing/`. Each module exports `JO
 | `JOB_DEFAULT_MAX_ATTEMPTS` | `3` | Default max attempts for jobs |
 | `JOB_DEFAULT_RETRY_DELAY_SECONDS` | `15` | Default retry delay |
 | `JOB_CLAIM_LEASE_SECONDS` | `60` | Default worker claim lease |
+| `JOB_EXECUTION_TIMEOUT_SECONDS` | `300` | Default max handler execution time; timeout is reported as retryable `execution-timeout` |
 | `INTERNAL_WORKER_ID` | auto | Worker ID for `python -m internal_service.worker` |
 | `INTERNAL_WORKER_NAME` | auto | Worker display name |
 | `INTERNAL_WORKER_JOB_TYPES` | empty = all | Comma-separated job types this worker will claim |
