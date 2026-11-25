@@ -27,7 +27,15 @@ cd backend
 .\.venv\Scripts\python.exe -m internal_service.worker
 ```
 
-Handlers live in `backend/internal_service/processing/`. Each module exports `JOB_TYPES` and `async def handle(job, ctx) -> dict`. Built-in example: `internal.echo`. Unknown job types fail as non-retryable `unknown-job-type`.
+Handlers live in `backend/internal_service/processing/`. Each module exports `JOB_TYPES` and `async def handle(job, ctx) -> dict`. Unknown job types fail as non-retryable `unknown-job-type`.
+
+Built-in handlers:
+- `internal.echo` - echoes payload (diagnostic)
+- `analytics.predictive` - baseline delay/cost-overrun predictive analytics from project snapshot payload
+- `analytics.project` - project/portfolio analytics from snapshot payload
+- `report.monthly-progress` - structured monthly progress report data from snapshot payload
+- `report.project-workbook` - structured financial workbook data from snapshot payload
+- `boq.parse` - dependency-free BOQ CSV/XLSX/TXT parsing + validation preview from base64 payload
 
 The worker enforces per-job execution timeouts (`executionTimeoutSeconds` or `JOB_EXECUTION_TIMEOUT_SECONDS`) and detects controlled cancellation (`POST /jobs/{id}/cancel`). Timed-out handlers are cancelled and failed as retryable `execution-timeout`; cancelled jobs are detected by the worker monitor and the worker does not overwrite cancellation status.
 
