@@ -425,6 +425,26 @@ export interface ProgressMark {
   recordedAt: string;
 }
 
+export type CostChangeSource = "project" | "boq" | "cost_report" | "variation" | "expense" | "payment";
+
+export interface CostChangeRecord {
+  id: string;
+  projectId: string;
+  sourceType: CostChangeSource;
+  sourceId: string;
+  action: string;
+  field: string;
+  previousValue: number | string | null;
+  newValue: number | string | null;
+  delta: number | null;
+  currency: string;
+  note: string;
+  actorId: string;
+  actorName: string;
+  actorRole: UserRole;
+  createdAt: string;
+}
+
 export interface AdminState {
   projects: Project[];
   users: UserAccount[];
@@ -438,6 +458,7 @@ export interface AdminState {
   variations: VariationRecord[];
   expenses: ExpenseRecord[];
   payments: PaymentRecord[];
+  costChanges: CostChangeRecord[];
   documents: ProjectDocument[];
   settings: OrgSettings;
   monthlyActivity: MonthlyPoint[];

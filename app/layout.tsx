@@ -53,6 +53,7 @@ const EMPTY_STATE: AdminState = {
   variations: [],
   expenses: [],
   payments: [],
+  costChanges: [],
   documents: [],
   settings: {
     organizationName: "",

@@ -1236,3 +1236,24 @@ businessRouter.delete("/variations/:id", async (req: Request, res: Response) => 
   if (!(await ensureProjectAccess(req, res, auth.session, variation.projectId, state))) return;
   return withAction(req, res, "administrator", auth.session, { type: "delete-variation", id, stamp: stamp(auth.session) });
 });
+
+// 11. Historical cost changes (append-only).
+businessRouter.get("/cost-changes", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
+  const sourceType = typeof req.query.sourceType === "string" ? req.query.sourceType : undefined;
+  const sourceId = typeof req.query.sourceId === "string" ? req.query.sourceId : undefined;
+  if (projectId && !(await ensureProjectAccess(req, res, auth.session, projectId))) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const allowed = new Set(scopedProjects(state, auth.session).map((p: any) => p.id));
+  const costChanges = (state.costChanges ?? []).filter((c: any) =>
+    allowed.has(c.projectId) &&
+    (!projectId || c.projectId === projectId) &&
+    (!sourceType || c.sourceType === sourceType) &&
+    (!sourceId || c.sourceId === sourceId),
+  );
+  res.setHeader("cache-control", "no-store");
+  res.json({ ok: true, costChanges });
+});

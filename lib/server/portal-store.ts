@@ -55,6 +55,7 @@ type RecordCollection =
   | "variations"
   | "expenses"
   | "payments"
+  | "costChanges"
   | "reports"
   | "boq";
 
@@ -64,7 +65,7 @@ const PORTAL_COLLECTIONS: Record<
   { records: RecordCollection[]; settings?: boolean; monthlyActivity?: boolean }
 > = {
   administrator: {
-    records: ["projects", "users", "employees", "documents", "activityLogs", "workComments"],
+    records: ["projects", "users", "employees", "documents", "activityLogs", "workComments", "costChanges"],
     settings: true,
     monthlyActivity: true,
   },
@@ -450,6 +451,21 @@ const COLLECTION_VALIDATORS: Partial<Record<RecordCollection | "notifications", 
     createdAt: { bsonType: "string" },
     updatedAt: { bsonType: "string" },
   }, ["id", "projectId", "expenseId", "status", "amount"]),
+  costChanges: objectSchema({
+    projectId: { bsonType: "string", minLength: 1 },
+    sourceType: { enum: ["project", "boq", "cost_report", "variation", "expense", "payment"] },
+    sourceId: { bsonType: "string" },
+    action: { bsonType: "string" },
+    field: { bsonType: "string" },
+    previousValue: { bsonType: ["string", "int", "long", "double", "decimal", "null"] },
+    newValue: { bsonType: ["string", "int", "long", "double", "decimal", "null"] },
+    delta: { bsonType: ["int", "long", "double", "decimal", "null"] },
+    currency: { bsonType: "string" },
+    note: { bsonType: "string" },
+    actorId: { bsonType: "string" },
+    actorName: { bsonType: "string" },
+    createdAt: { bsonType: "string" },
+  }, ["id", "projectId", "sourceType", "sourceId", "action", "createdAt"]),
   notifications: objectSchema({
     title: { bsonType: "string" },
     message: { bsonType: "string" },
@@ -503,6 +519,8 @@ const RELATIONSHIP_INDEXES: Array<{ portal: PortalKey; collection: string; keys:
   { portal: "project_manager", collection: "payments", keys: { projectId: 1 }, name: "rel_payments_projectId" },
   { portal: "project_manager", collection: "payments", keys: { expenseId: 1 }, name: "rel_payments_expenseId" },
   { portal: "project_manager", collection: "payments", keys: { status: 1 }, name: "rel_payments_status" },
+  { portal: "administrator", collection: "costChanges", keys: { projectId: 1, createdAt: -1 }, name: "rel_costChanges_projectId_createdAt" },
+  { portal: "administrator", collection: "costChanges", keys: { sourceType: 1, sourceId: 1 }, name: "rel_costChanges_source" },
   { portal: "site_engineer", collection: "reports", keys: { projectId: 1 }, name: "rel_reports_projectId" },
   { portal: "site_engineer", collection: "reports", keys: { engineerId: 1 }, name: "rel_reports_engineerId" },
   { portal: "quantity_surveyor", collection: "boq", keys: { projectId: 1 }, name: "rel_boq_projectId" },
@@ -689,6 +707,12 @@ function assertStateIntegrity(state: AdminState): void {
     }
     if (!(payment.amount > 0)) {
       throw new PersistenceError(`Payment ${payment.id} must have amount > 0.`);
+    }
+  }
+
+  for (const change of state.costChanges ?? []) {
+    if (!projectIds.has(change.projectId)) {
+      throw new PersistenceError(`Cost change ${change.id} references missing project ${change.projectId}.`);
     }
   }
 }
@@ -914,6 +938,7 @@ async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
     documents,
     activityLogs,
     workComments,
+    costChanges,
     tasks,
     calendarEvents,
     progressMarks,
@@ -932,6 +957,7 @@ async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
     readRecords<AdminState["documents"][number]>(admin, "documents"),
     readRecords<AdminState["activityLogs"][number]>(admin, "activityLogs"),
     readRecords<AdminState["workComments"][number]>(admin, "workComments"),
+    readRecords<AdminState["costChanges"][number]>(admin, "costChanges"),
     readRecords<AdminState["tasks"][number]>(runtime.dbs.project_manager, "tasks"),
     readRecords<AdminState["calendarEvents"][number]>(runtime.dbs.project_manager, "calendarEvents"),
     readRecords<AdminState["progressMarks"][number]>(runtime.dbs.project_manager, "progressMarks"),
@@ -967,6 +993,7 @@ async function loadState(runtime: MongoRuntime): Promise<AdminState | null> {
     documents,
     activityLogs,
     workComments,
+    costChanges,
     tasks,
     calendarEvents,
     progressMarks,
@@ -1154,6 +1181,7 @@ export function scopeStateForSession(state: AdminState, session: SessionUser): A
   const documents = state.documents.filter((d) => projectIdSet.has(d.projectId) && (session.role === "administrator" || d.access.includes(session.role)));
   const scopedActivityLogs = state.activityLogs.filter((l) => userIds.has(l.userId) || projects.some((p) => l.record.includes(p.code) || l.record.includes(p.name)));
   const workComments = state.workComments.filter((c) => projectIdSet.has(c.projectId));
+  const costChanges = (state.costChanges ?? []).filter((c) => projectIdSet.has(c.projectId));
   const tasks = state.tasks.filter((t) => projectIdSet.has(t.projectId));
   const calendarEvents = state.calendarEvents;
   const progressMarks = state.progressMarks.filter((m) => projectIdSet.has(m.projectId));
@@ -1173,6 +1201,7 @@ export function scopeStateForSession(state: AdminState, session: SessionUser): A
     documents,
     activityLogs: scopedActivityLogs,
     workComments,
+    costChanges,
     tasks,
     calendarEvents,
     progressMarks,
