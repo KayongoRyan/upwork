@@ -60,13 +60,13 @@ class ClaimNextJobRequest(BaseModel):
 class JobHeartbeatRequest(BaseModel):
     workerId: str = Field(min_length=1, max_length=200)
     leaseSeconds: int | None = Field(default=None, ge=5, le=3600)
-    fencingToken: int | None = Field(default=None, ge=1)
+    fencingToken: int = Field(ge=1)
 
 
 class CompleteJobRequest(BaseModel):
     workerId: str = Field(min_length=1, max_length=200)
     result: dict[str, Any] = Field(default_factory=dict)
-    fencingToken: int | None = Field(default=None, ge=1)
+    fencingToken: int = Field(ge=1)
 
 
 class FailJobRequest(BaseModel):
@@ -74,7 +74,7 @@ class FailJobRequest(BaseModel):
     error: dict[str, Any] = Field(default_factory=dict)
     retryable: bool = True
     retryDelaySeconds: int | None = Field(default=None, ge=1, le=3600)
-    fencingToken: int | None = Field(default=None, ge=1)
+    fencingToken: int = Field(ge=1)
 
 
 class CancelJobRequest(BaseModel):
@@ -240,7 +240,7 @@ def _job_error_response(result: dict[str, Any], response: Response) -> dict[str,
     err = result.get("error")
     if err == "job-not-found":
         response.status_code = status.HTTP_404_NOT_FOUND
-    elif err in {"job-not-claimable", "job-not-owned", "job-not-cancellable", "job-not-retryable"}:
+    elif err in {"job-not-claimable", "job-not-owned", "job-not-cancellable", "job-not-retryable", "fencing-token-mismatch"}:
         response.status_code = status.HTTP_409_CONFLICT
     else:
         response.status_code = status.HTTP_400_BAD_REQUEST

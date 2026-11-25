@@ -309,13 +309,11 @@ class JobStore:
             continue
         return {"ok": True, "job": None}
 
-    async def heartbeat_job(self, job_id: str, *, worker_id: str, lease_seconds: int | None = None, fencing_token: int | None = None) -> dict[str, Any]:
+    async def heartbeat_job(self, job_id: str, *, worker_id: str, fencing_token: int, lease_seconds: int | None = None) -> dict[str, Any]:
         now = utcnow()
         await self._requeue_expired_claims(now)
         lease = max(5, lease_seconds or self._claim_lease_seconds)
-        q: dict[str, Any] = {"jobId": job_id, "status": "running", "claimedBy": worker_id}
-        if fencing_token is not None:
-            q["fencingToken"] = fencing_token
+        q: dict[str, Any] = {"jobId": job_id, "status": "running", "claimedBy": worker_id, "fencingToken": fencing_token}
         doc = await self._jobs.find_one_and_update(
             q,
             {"$set": {"claimExpiresAt": now + timedelta(seconds=lease), "updatedAt": now}},
@@ -325,25 +323,23 @@ class JobStore:
             existing = await self._jobs.find_one({"jobId": job_id})
             if not existing:
                 return {"ok": False, "error": "job-not-found"}
-            if fencing_token is not None and existing.get("fencingToken") != fencing_token:
+            if existing.get("status") != "running" or existing.get("claimedBy") != worker_id:
+                return {"ok": False, "error": "job-not-owned", "job": _job_doc_to_dict(existing, now)}
+            if existing.get("fencingToken") != fencing_token:
                 return {"ok": False, "error": "fencing-token-mismatch", "job": _job_doc_to_dict(existing, now)}
             return {"ok": False, "error": "job-not-owned", "job": _job_doc_to_dict(existing, now)}
         return {"ok": True, "job": _job_doc_to_dict(doc, now)}
 
-    async def complete_job(self, job_id: str, *, worker_id: str, result: dict[str, Any] | None = None, fencing_token: int | None = None) -> dict[str, Any]:
+    async def complete_job(self, job_id: str, *, worker_id: str, fencing_token: int, result: dict[str, Any] | None = None) -> dict[str, Any]:
         now = utcnow()
         await self._requeue_expired_claims(now)
-        q: dict[str, Any] = {"jobId": job_id, "status": "running", "claimedBy": worker_id}
-        if fencing_token is not None:
-            q["fencingToken"] = fencing_token
+        q: dict[str, Any] = {"jobId": job_id, "status": "running", "claimedBy": worker_id, "fencingToken": fencing_token}
         existing = await self._jobs.find_one({"jobId": job_id})
         if not existing:
             return {"ok": False, "error": "job-not-found"}
         if existing.get("status") != "running" or existing.get("claimedBy") != worker_id:
-            if fencing_token is not None and existing.get("fencingToken") != fencing_token:
-                return {"ok": False, "error": "fencing-token-mismatch", "job": _job_doc_to_dict(existing, now)}
             return {"ok": False, "error": "job-not-owned", "job": _job_doc_to_dict(existing, now)}
-        if fencing_token is not None and existing.get("fencingToken") != fencing_token:
+        if existing.get("fencingToken") != fencing_token:
             return {"ok": False, "error": "fencing-token-mismatch", "job": _job_doc_to_dict(existing, now)}
 
         history = existing.get("history", [])
@@ -359,6 +355,8 @@ class JobStore:
             latest = await self._jobs.find_one({"jobId": job_id})
             if not latest:
                 return {"ok": False, "error": "job-not-found"}
+            if latest.get("fencingToken") != fencing_token:
+                return {"ok": False, "error": "fencing-token-mismatch", "job": _job_doc_to_dict(latest, now)}
             return {"ok": False, "error": "job-not-owned", "job": _job_doc_to_dict(latest, now)}
         return {"ok": True, "job": _job_doc_to_dict(doc, now)}
 
@@ -367,10 +365,10 @@ class JobStore:
         job_id: str,
         *,
         worker_id: str,
+        fencing_token: int,
         error: dict[str, Any] | None = None,
         retryable: bool = True,
         retry_delay_seconds: int | None = None,
-        fencing_token: int | None = None,
     ) -> dict[str, Any]:
         now = utcnow()
         await self._requeue_expired_claims(now)
@@ -378,10 +376,8 @@ class JobStore:
         if not existing:
             return {"ok": False, "error": "job-not-found"}
         if existing.get("status") != "running" or existing.get("claimedBy") != worker_id:
-            if fencing_token is not None and existing.get("fencingToken") != fencing_token:
-                return {"ok": False, "error": "fencing-token-mismatch", "job": _job_doc_to_dict(existing, now)}
             return {"ok": False, "error": "job-not-owned", "job": _job_doc_to_dict(existing, now)}
-        if fencing_token is not None and existing.get("fencingToken") != fencing_token:
+        if existing.get("fencingToken") != fencing_token:
             return {"ok": False, "error": "fencing-token-mismatch", "job": _job_doc_to_dict(existing, now)}
 
         err = error or {"code": "job-failed", "message": "Job failed"}
@@ -394,7 +390,7 @@ class JobStore:
         attempts_made = int(existing.get("attemptsMade", 0))
         max_attempts = int(existing.get("maxAttempts", 1))
         can_retry = retryable and attempts_made < max_attempts
-        q: dict[str, Any] = {"jobId": job_id, "status": "running", "claimedBy": worker_id, "fencingToken": existing.get("fencingToken")}
+        q: dict[str, Any] = {"jobId": job_id, "status": "running", "claimedBy": worker_id, "fencingToken": fencing_token}
         if can_retry:
             delay = max(1, retry_delay_seconds or int(existing.get("retryDelaySeconds", self._default_retry_delay_seconds)))
             doc = await self._jobs.find_one_and_update(
