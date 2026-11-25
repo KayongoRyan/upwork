@@ -161,10 +161,20 @@ These routes remain for compatibility, form workflows, file downloads, or legacy
 | POST | `/api/v1/cpmis/admin/comments` | Admin session | Yes | Form/urlencoded + `csrfToken` | 303 redirect | Active admin comment workflow. |
 | POST | `/api/v1/cpmis/notifications` | Admin session | Yes | Form/urlencoded + `csrfToken` | 303 redirect | Legacy/admin-only; QS mark-read uses portal action. |
 | GET | `/api/v1/cpmis/reports` | Admin session | No | Query params as needed | CSV/file response | Admin report export. |
-| GET | `/api/v1/cpmis/reports/workbook` | Admin session | No | Query `from,to,project` | XLSX workbook attachment | Project financial workbook export. |
-| GET | `/api/v1/cpmis/reports/monthly-progress` | Admin session | No | Query `month=YYYY-MM,project` | XLSX workbook attachment | Monthly progress report export. |
-| GET | `/api/v1/cpmis/reports/analytics` | Admin, PM, or QS session | No | Query `projectId` or `project` (optional) | JSON `{ ok, generatedAt, scope, portfolio, deviations, projects }` | Dashboard-ready project analytics: planned vs actual progress, BOQ planned vs actual measurements, cost/schedule deviations, insights. Scoped by role (PM own projects, QS assigned project). |
-| GET | `/api/v1/cpmis/reports/predictive` | Admin, PM, or QS session | No | Query `projectId` or `project` (optional) | JSON `{ ok, generatedAt, scope, model, evaluation, limitations, forecasts }` | Baseline predictive analytics from historical project records. Delay and cost-overrun forecasts with confidence indicators, drivers, data quality, LOOCV evaluation metrics, and clearly stated limitations. Scoped by role. |
+| GET | `/api/v1/cpmis/reports/workbook` | Admin session | No | Query `from,to,project,async=true?` | XLSX workbook attachment, or 202 job envelope when `async=true` | Project financial workbook export. `async=true` enqueues `report.project-workbook` job. |
+| GET | `/api/v1/cpmis/reports/monthly-progress` | Admin session | No | Query `month=YYYY-MM,project,async=true?` | XLSX workbook attachment, or 202 job envelope when `async=true` | Monthly progress report export. `async=true` enqueues `report.monthly-progress` job. |
+| GET | `/api/v1/cpmis/reports/analytics` | Admin, PM, or QS session | No | Query `projectId` or `project` (optional), `async=true?` | JSON analytics, or 202 job envelope when `async=true` | Dashboard-ready project analytics. `async=true` enqueues `analytics.project` job with scoped state snapshot. Scoped by role (PM own projects, QS assigned project). |
+| GET | `/api/v1/cpmis/reports/predictive` | Admin, PM, or QS session | No | Query `projectId` or `project` (optional), `async=true?` | JSON predictive analytics, or 202 job envelope when `async=true` | Baseline predictive analytics. `async=true` enqueues `analytics.predictive` job with scoped state snapshot. Scoped by role. |
+| POST | `/api/v1/cpmis/jobs` | Admin session | Yes | JSON `{ type, payload, priority?, maxAttempts?, retryDelaySeconds?, executionTimeoutSeconds?, idempotencyKey?, runAt?, metadata? }` | 201/200 JSON job envelope | Generic internal job creation (allowed types only). |
+| GET | `/api/v1/cpmis/jobs` | Admin session | No | Query `status,type,limit` | JSON `{ ok, items }` | List internal jobs. |
+| GET | `/api/v1/cpmis/jobs/:jobId` | Admin or requesting user | No | - | JSON `{ ok, job }` | Get job status/result; non-admins can only read jobs they requested. |
+| POST | `/api/v1/cpmis/jobs/:jobId/cancel` | Admin session | Yes | JSON `{ reason? }` | JSON job envelope | Cancel queued/running job. |
+| POST | `/api/v1/cpmis/jobs/:jobId/retry` | Admin session | Yes | - | JSON job envelope | Retry failed/dead/cancelled job. |
+| POST | `/api/v1/cpmis/jobs/reports/analytics` | Admin, PM, or QS session | Yes | JSON `{ projectId? }` | 201/200 JSON job envelope | Enqueues `analytics.project` job with scoped server-side state snapshot. |
+| POST | `/api/v1/cpmis/jobs/reports/predictive` | Admin, PM, or QS session | Yes | JSON `{ projectId? }` | 201/200 JSON job envelope | Enqueues `analytics.predictive` job with scoped server-side state snapshot. |
+| POST | `/api/v1/cpmis/jobs/reports/monthly-progress` | Admin session | Yes | JSON `{ month: YYYY-MM, projectId? }` | 201/200 JSON job envelope | Enqueues `report.monthly-progress` job with scoped server-side state snapshot. |
+| POST | `/api/v1/cpmis/jobs/reports/workbook` | Admin session | Yes | JSON `{ projectId?, from?, to? }` | 201/200 JSON job envelope | Enqueues `report.project-workbook` job with scoped server-side state snapshot. |
+| POST | `/api/v1/cpmis/jobs/boq/parse` | Admin or QS session | Yes | JSON `{ contentBase64, fileName?, format? }` | 201/200 JSON job envelope | Enqueues `boq.parse` job for dependency-free async BOQ parsing/validation preview. |
 | POST | `/api/v1/cpmis/pm/reports` | PM session | Yes | Form + `csrfToken` | 303 redirect | Active form workflow. |
 | POST | `/api/v1/cpmis/pm/reports/open` | PM session | Yes | Form + `csrfToken` | 303 redirect | Active form workflow. |
 | POST | `/api/v1/cpmis/pm/reports/decide` | PM session | Yes | Form + `csrfToken` | 303 redirect | Active form workflow. |
@@ -190,6 +200,15 @@ These routes live under `app/api/**/route.ts`. They forward to Express and shoul
 | `/api/portal/[portal]/state` | GET | `/api/v1/cpmis/portal/:portal/state` | Session cookie. |
 | `/api/portal/[portal]/actions` | POST | `/api/v1/cpmis/portal/:portal/actions` | Session cookie + CSRF. |
 | `/api/cpmis/business/[...path]` | GET,POST,PATCH,PUT,DELETE | `/api/v1/cpmis/business/:path` | Session cookie + CSRF for mutating requests. |
+| `/api/jobs` | GET,POST | `/api/v1/cpmis/jobs` | Admin session; POST requires CSRF. |
+| `/api/jobs/[jobId]` | GET | `/api/v1/cpmis/jobs/:jobId` | Admin or requesting user session. |
+| `/api/jobs/[jobId]/cancel` | POST | `/api/v1/cpmis/jobs/:jobId/cancel` | Admin session + CSRF. |
+| `/api/jobs/[jobId]/retry` | POST | `/api/v1/cpmis/jobs/:jobId/retry` | Admin session + CSRF. |
+| `/api/jobs/reports/analytics` | POST | `/api/v1/cpmis/jobs/reports/analytics` | Admin/PM/QS session + CSRF. |
+| `/api/jobs/reports/predictive` | POST | `/api/v1/cpmis/jobs/reports/predictive` | Admin/PM/QS session + CSRF. |
+| `/api/jobs/reports/monthly-progress` | POST | `/api/v1/cpmis/jobs/reports/monthly-progress` | Admin session + CSRF. |
+| `/api/jobs/reports/workbook` | POST | `/api/v1/cpmis/jobs/reports/workbook` | Admin session + CSRF. |
+| `/api/jobs/boq/parse` | POST | `/api/v1/cpmis/jobs/boq/parse` | Admin/QS session + CSRF. |
 | `/api/documents` | POST | `/api/v1/cpmis/documents` | Admin session + CSRF; multipart. |
 | `/api/documents/revise` | POST | `/api/v1/cpmis/documents/revise` | Admin session + CSRF; multipart. |
 | `/api/documents/extract-invoice` | POST | `/api/v1/cpmis/documents/extract-invoice` | Admin or QS session + CSRF; multipart; no DB write. |
