@@ -16,8 +16,8 @@ This document defines job schemas and processing contracts for the internal Fast
 
 ```json
 {
-  "type": "report.generate",
-  "payload": { "projectId": "..." },
+  "type": "analytics.predictive",
+  "payload": { "state": { "projects": [], "tasks": [], "boq": [], "progressMarks": [] } },
   "priority": 5,
   "maxAttempts": 3,
   "retryDelaySeconds": 15,
@@ -44,7 +44,7 @@ Fields:
 ```json
 {
   "jobId": "job_...",
-  "type": "report.generate",
+  "type": "analytics.predictive",
   "payload": {},
   "status": "queued",
   "priority": 5,
@@ -149,6 +149,24 @@ Error object convention:
   "details": { "service": "..." }
 }
 ```
+
+## Supported Job Types (Python worker)
+
+Handlers live in `backend/internal_service/processing/` and are auto-discovered by `JOB_TYPES` + `async handle(job, ctx)`.
+
+| Job type | Payload (minimum) | Result |
+|---|---|---|
+| `internal.echo` | any `payload` | echoes payload/job/worker metadata |
+| `analytics.predictive` | `payload.state` (or payload containing `projects`, `tasks`, `boq/boqLines`, `progressMarks`) ; optional `now` | baseline delay/cost-overrun forecasts, evaluation, limitations |
+| `analytics.project` | `payload.state` (or payload containing `projects/tasks/boq`) ; optional `projectId`, `now` | portfolio/project analytics, deviations, insights |
+| `report.monthly-progress` | `payload.state`, `payload.month` (`YYYY-MM`), optional `projectId` | structured monthly progress report (summary, projectProgress, tasks, siteReports) |
+| `report.project-workbook` | `payload.state`, optional `projectId`, `from`, `to` | structured workbook data (summary, projects, boq, costReports) |
+| `boq.parse` | `payload.contentBase64` (or base64 `content`), optional `fileName`, `format` (`xlsx\|csv\|txt`) | BOQ import preview with mapped rows, validation errors/warnings, selection flags |
+
+Notes:
+- Analytics/report handlers are payload-driven snapshots; they do not mutate portal business state.
+- `boq.parse` performs dependency-free parsing/validation only; accepting/importing into business records remains an explicit application action.
+- Unknown job types fail as non-retryable `unknown-job-type`.
 
 ## Express Integration
 
