@@ -18,6 +18,17 @@ cd backend
 .\.venv\Scripts\python.exe -m internal_service
 ```
 
+## Worker
+
+Run a Python job worker (registers worker, claims jobs, dispatches by `job.type`, sends heartbeats, reports success/failure):
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m internal_service.worker
+```
+
+Handlers live in `backend/internal_service/processing/`. Each module exports `JOB_TYPES` and `async def handle(job, ctx) -> dict`. Built-in example: `internal.echo`. Unknown job types fail as non-retryable `unknown-job-type`.
+
 ## Environment
 
 | Variable | Default | Description |
@@ -35,6 +46,13 @@ cd backend
 | `JOB_DEFAULT_MAX_ATTEMPTS` | `3` | Default max attempts for jobs |
 | `JOB_DEFAULT_RETRY_DELAY_SECONDS` | `15` | Default retry delay |
 | `JOB_CLAIM_LEASE_SECONDS` | `60` | Default worker claim lease |
+| `INTERNAL_WORKER_ID` | auto | Worker ID for `python -m internal_service.worker` |
+| `INTERNAL_WORKER_NAME` | auto | Worker display name |
+| `INTERNAL_WORKER_JOB_TYPES` | empty = all | Comma-separated job types this worker will claim |
+| `INTERNAL_WORKER_POLL_INTERVAL_SECONDS` | `2.0` | Poll interval when no job is available |
+| `INTERNAL_WORKER_HEARTBEAT_SECONDS` | `15` | Worker/job heartbeat interval |
+| `INTERNAL_WORKER_CLAIM_LEASE_SECONDS` | `JOB_CLAIM_LEASE_SECONDS` | Claim lease for worker |
+| `INTERNAL_WORKER_LOG_LEVEL` | `INFO` | Worker log level |
 
 ## Persistence
 
