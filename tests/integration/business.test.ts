@@ -398,4 +398,49 @@ describe("business API", () => {
     expect(res.status).toBe(409);
     expect(res.body.error).toBe("conflict");
   });
+
+  it("returns project reconciliation between budget, valuation, expenses and payments", async () => {
+    h.currentSession.value = adminSession;
+    h.mockState.boq = [
+      { id: "b1", projectId: "p1", code: "A1", description: "Earthworks", unit: "m3", estimatedQty: 10, actualQty: 8, unitRate: 100 },
+    ] as any;
+    h.mockState.variations = [
+      { id: "v1", projectId: "p1", type: "addition", amount: 200, status: "approved", currency: "RWF" },
+      { id: "v2", projectId: "p1", type: "omission", amount: 50, status: "approved", currency: "RWF" },
+      { id: "v3", projectId: "p1", type: "addition", amount: 999, status: "submitted", currency: "RWF" },
+    ] as any;
+    h.mockState.expenses = [
+      { id: "e1", projectId: "p1", amount: 300, status: "approved", currency: "RWF" },
+      { id: "e2", projectId: "p1", amount: 100, status: "submitted", currency: "RWF" },
+    ] as any;
+    h.mockState.payments = [
+      { id: "pay1", projectId: "p1", expenseId: "e1", amount: 120, status: "paid", currency: "RWF" },
+      { id: "pay2", projectId: "p1", expenseId: "e1", amount: 20, status: "reversed", currency: "RWF" },
+      { id: "pay3", projectId: "p1", expenseId: "e1", amount: 50, status: "pending", currency: "RWF" },
+    ] as any;
+
+    const res = await request(app()).get("/api/v1/cpmis/business/projects/p1/reconciliation");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.budget).toEqual({
+      baseline: 1000,
+      approvedVariationAdditions: 200,
+      approvedVariationOmissions: 50,
+      approvedVariationNet: 150,
+      adjusted: 1150,
+    });
+    expect(res.body.valuation).toMatchObject({
+      boqEstimated: 1000,
+      boqMeasured: 800,
+      boqVariance: -200,
+      projectSpent: 0,
+    });
+    expect(res.body.expenses.approvedCommitted).toBe(300);
+    expect(res.body.expenses.outstandingApproved).toBe(130); // 300 - (50 pending + 0 approved + 120 paid)
+    expect(res.body.payments.netPaid).toBe(100); // 120 - 20
+    expect(res.body.reconciliation.adjustedBudgetMinusValuation).toBe(350);
+    expect(res.body.reconciliation.approvedExpensesMinusNetPaid).toBe(200);
+
+    h.mockState.boq = []; h.mockState.variations = []; h.mockState.expenses = []; h.mockState.payments = [];
+  });
 });

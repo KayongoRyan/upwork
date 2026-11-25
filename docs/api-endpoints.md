@@ -137,6 +137,7 @@ All endpoints below require a valid portal session. Mutating endpoints require C
 | DELETE | `/api/v1/cpmis/business/boq/:id` | Yes | No | Delete BOQ item. |
 | GET | `/api/v1/cpmis/business/projects/:id/expenses` | No | No | Legacy BOQ expense summary for compatibility (budget/spent/estimated/actual/BOQ lines). Not expense transaction records. |
 | GET | `/api/v1/cpmis/business/projects/:id/expense-transactions` | No | No | Project expense, payment, and variation transaction records; project access scoped. |
+| GET | `/api/v1/cpmis/business/projects/:id/reconciliation` | No | No | Project reconciliation: budget baseline/approved variation adjustments/adjusted budget, BOQ estimated/measured valuation, expense totals/approved committed/outstanding, payment totals/net paid/outstanding, and reconciliation differences. Scoped by project access. |
 
 #### Variation Records
 
@@ -156,6 +157,12 @@ All endpoints below require a valid portal session. Mutating endpoints require C
 | Method | Path | CSRF | Idempotency | Notes |
 |---|---|---:|---:|---|
 | GET | `/api/v1/cpmis/business/cost-changes` | No | No | List append-only historical cost changes. Query `projectId`, `sourceType`, `sourceId` optional. Scoped by role/project access. |
+
+#### Reconciliation
+
+| Method | Path | CSRF | Idempotency | Notes |
+|---|---|---:|---:|---|
+| GET | `/api/v1/cpmis/business/projects/:id/reconciliation` | No | No | Read-only reconciliation for an authorized project. Returns `budget` (baseline, approved variation additions/omissions/net, adjusted), `valuation` (BOQ estimated/measured/variance, projectSpent), `expenses` (status totals, approved committed, outstanding approved), `payments` (status totals, net paid, outstanding approved), `reconciliation` differences, and explanatory `notes`. |
 
 #### Expense Transactions
 |---|---|---:|---:|---|
