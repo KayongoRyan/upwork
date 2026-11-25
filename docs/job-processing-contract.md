@@ -21,6 +21,7 @@ This document defines job schemas and processing contracts for the internal Fast
   "priority": 5,
   "maxAttempts": 3,
   "retryDelaySeconds": 15,
+  "executionTimeoutSeconds": 300,
   "idempotencyKey": "optional-dedupe-key",
   "runAt": "2026-11-23T12:00:00Z",
   "metadata": { "source": "express" }
@@ -33,6 +34,7 @@ Fields:
 - `priority` (1-10, default 5): higher values claimed first.
 - `maxAttempts` (1-20, default from env): total attempts including first claim.
 - `retryDelaySeconds` (1-3600, default from env): delay before retry after retryable failure.
+- `executionTimeoutSeconds` (1-86400, optional, default `JOB_EXECUTION_TIMEOUT_SECONDS`): maximum handler execution time. Timeout is treated as a retryable `execution-timeout` failure if attempts remain.
 - `idempotencyKey` (optional): dedupes job creation; same key returns existing job with `deduped:true`.
 - `runAt` (optional ISO datetime): earliest claim time.
 - `metadata` (object): non-contract metadata.
@@ -49,6 +51,7 @@ Fields:
   "maxAttempts": 3,
   "attemptsMade": 0,
   "retryDelaySeconds": 15,
+  "executionTimeoutSeconds": 300,
   "idempotencyKey": null,
   "createdAt": "...",
   "updatedAt": "...",
@@ -119,6 +122,15 @@ Rules:
 - Claims have leases; expired leases are requeued or dead-lettered.
 - Workers should send periodic heartbeats for long-running jobs.
 - Job handlers must be idempotent where retries are possible.
+- Handlers should be async and cooperative with cancellation (`asyncio.CancelledError`) because timeout/cancellation stops handler tasks.
+
+## Execution Timeout & Controlled Cancellation
+
+- **Execution timeout**: each job may set `executionTimeoutSeconds`; otherwise the worker uses `JOB_EXECUTION_TIMEOUT_SECONDS` (default 300s). The worker enforces this deadline while the handler runs.
+- **Timeout outcome**: when the deadline is exceeded, the worker cancels the handler task and reports `fail_job` with `retryable=true` and error code `execution-timeout` (unless attempts are exhausted, in which case normal fail semantics move it to `dead_letter`).
+- **Controlled cancellation**: clients cancel via `POST /jobs/{job_id}/cancel` with `{reason?}`. The cancel endpoint marks queued/running jobs as `cancelled`.
+- **Worker cancellation detection**: the worker monitor polls job state and fencing ownership. If it observes `status=cancelled`, missing job, or fencing/ownership loss, it cancels the handler task and exits without overwriting the cancelled/fenced state.
+- **Shutdown behavior**: on worker shutdown, in-flight handlers are interrupted; jobs not explicitly completed/failed remain protected by claim lease expiration and will be requeued/dead-lettered by normal lease rules.
 
 ## Failure / Retry Semantics
 

@@ -40,6 +40,7 @@ class CreateJobRequest(BaseModel):
     priority: int = Field(default=5, ge=1, le=10)
     maxAttempts: int | None = Field(default=None, ge=1, le=20)
     retryDelaySeconds: int | None = Field(default=None, ge=1, le=3600)
+    executionTimeoutSeconds: int | None = Field(default=None, ge=1, le=86400)
     idempotencyKey: str | None = Field(default=None, min_length=1, max_length=200)
     runAt: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -264,6 +265,7 @@ async def create_job(payload: CreateJobRequest, _: None = Depends(require_intern
         priority=payload.priority,
         max_attempts=payload.maxAttempts,
         retry_delay_seconds=payload.retryDelaySeconds,
+        execution_timeout_seconds=payload.executionTimeoutSeconds,
         idempotency_key=payload.idempotencyKey,
         run_at=run_at,
         metadata=payload.metadata,

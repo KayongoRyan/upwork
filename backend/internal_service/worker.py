@@ -168,52 +168,160 @@ class WorkerRunner:
         job_id = str(job.get("jobId"))
         job_type = str(job.get("type"))
         fencing_token = job.get("fencingToken")
+        timeout_seconds = self._resolve_execution_timeout(job)
         ctx = WorkerContext(worker_id=self.worker_id, worker_name=self.worker_name, job=job, fencing_token=fencing_token)
-        log.info("worker.job_claimed worker_id=%s job_id=%s type=%s fencing=%s", self.worker_id, job_id, job_type, fencing_token)
+        log.info("worker.job_claimed worker_id=%s job_id=%s type=%s fencing=%s timeout_s=%s", self.worker_id, job_id, job_type, fencing_token, timeout_seconds)
 
         hb_stop = asyncio.Event()
-        hb_task = asyncio.create_task(self._job_heartbeat_loop(job_id, fencing_token, hb_stop), name=f"job-heartbeat-{job_id}")
+        cancel_event = asyncio.Event()
+        hb_task = asyncio.create_task(self._job_heartbeat_loop(job_id, fencing_token, hb_stop, cancel_event), name=f"job-heartbeat-{job_id}")
+        handler_task = asyncio.create_task(self._registry.dispatch(job, ctx), name=f"job-handler-{job_id}")
+        monitor_task = asyncio.create_task(self._job_monitor_loop(job_id, fencing_token, timeout_seconds, cancel_event), name=f"job-monitor-{job_id}")
+
+        outcome = "failed"
         try:
-            result = await self._registry.dispatch(job, ctx)
-            await self.jobs.complete_job(job_id, worker_id=self.worker_id, result=result, fencing_token=fencing_token)
-            log.info("worker.job_completed worker_id=%s job_id=%s type=%s", self.worker_id, job_id, job_type)
-        except asyncio.CancelledError:
-            await self.jobs.fail_job(
-                job_id,
-                worker_id=self.worker_id,
-                error={"code": "worker-cancelled", "message": "Worker cancelled while processing job"},
-                retryable=True,
-                fencing_token=fencing_token,
+            done, _ = await asyncio.wait(
+                {handler_task, monitor_task},
+                return_when=asyncio.FIRST_COMPLETED,
             )
-            raise
-        except RetryableJobError as exc:
-            log.warning("worker.job_retryable_failure worker_id=%s job_id=%s type=%s err=%s", self.worker_id, job_id, job_type, exc)
-            await self.jobs.fail_job(job_id, worker_id=self.worker_id, error=exc.to_dict(), retryable=True, fencing_token=fencing_token)
-        except NonRetryableJobError as exc:
-            log.warning("worker.job_nonretryable_failure worker_id=%s job_id=%s type=%s err=%s", self.worker_id, job_id, job_type, exc)
-            await self.jobs.fail_job(job_id, worker_id=self.worker_id, error=exc.to_dict(), retryable=False, fencing_token=fencing_token)
-        except Exception as exc:
-            log.exception("worker.job_unhandled_failure worker_id=%s job_id=%s type=%s", self.worker_id, job_id, job_type)
+
+            if monitor_task in done and not handler_task.done():
+                reason = monitor_task.result()
+                handler_task.cancel()
+                try:
+                    await handler_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception:
+                    log.exception("worker.job_handler_cancel_error worker_id=%s job_id=%s", self.worker_id, job_id)
+                if reason == "cancelled":
+                    outcome = "cancelled"
+                    log.info("worker.job_cancelled worker_id=%s job_id=%s type=%s", self.worker_id, job_id, job_type)
+                    # Cancellation is controlled by API/cancel endpoint; do not overwrite status.
+                    return
+                if reason == "timeout":
+                    outcome = "timeout"
+                    await self.jobs.fail_job(
+                        job_id,
+                        worker_id=self.worker_id,
+                        error={"code": "execution-timeout", "message": f"Job exceeded execution timeout ({timeout_seconds}s)", "details": {"timeoutSeconds": timeout_seconds}},
+                        retryable=True,
+                        fencing_token=fencing_token,
+                    )
+                    log.warning("worker.job_timeout worker_id=%s job_id=%s type=%s timeout_s=%s", self.worker_id, job_id, job_type, timeout_seconds)
+                    return
+                if reason == "shutdown":
+                    outcome = "shutdown"
+                    await self.jobs.fail_job(
+                        job_id,
+                        worker_id=self.worker_id,
+                        error={"code": "worker-shutdown", "message": "Worker shut down while processing job", "details": {"timeoutSeconds": timeout_seconds}},
+                        retryable=True,
+                        fencing_token=fencing_token,
+                    )
+                    log.warning("worker.job_interrupted_shutdown worker_id=%s job_id=%s type=%s", self.worker_id, job_id, job_type)
+                    return
+
+            if handler_task in done:
+                # Ensure monitor is stopped.
+                monitor_task.cancel()
+                try:
+                    await monitor_task
+                except asyncio.CancelledError:
+                    pass
+                try:
+                    result = handler_task.result()
+                except asyncio.CancelledError:
+                    raise
+                except RetryableJobError as exc:
+                    log.warning("worker.job_retryable_failure worker_id=%s job_id=%s type=%s err=%s", self.worker_id, job_id, job_type, exc)
+                    await self.jobs.fail_job(job_id, worker_id=self.worker_id, error=exc.to_dict(), retryable=True, fencing_token=fencing_token)
+                    return
+                except NonRetryableJobError as exc:
+                    log.warning("worker.job_nonretryable_failure worker_id=%s job_id=%s type=%s err=%s", self.worker_id, job_id, job_type, exc)
+                    await self.jobs.fail_job(job_id, worker_id=self.worker_id, error=exc.to_dict(), retryable=False, fencing_token=fencing_token)
+                    return
+                except Exception as exc:
+                    log.exception("worker.job_unhandled_failure worker_id=%s job_id=%s type=%s", self.worker_id, job_id, job_type)
+                    await self.jobs.fail_job(
+                        job_id,
+                        worker_id=self.worker_id,
+                        error={"code": "unhandled-exception", "message": str(exc), "details": {"exceptionType": type(exc).__name__}},
+                        retryable=True,
+                        fencing_token=fencing_token,
+                    )
+                    return
+
+                await self.jobs.complete_job(job_id, worker_id=self.worker_id, result=result, fencing_token=fencing_token)
+                outcome = "succeeded"
+                log.info("worker.job_completed worker_id=%s job_id=%s type=%s", self.worker_id, job_id, job_type)
+                return
+
+            # Fallback: should not happen, but fail safely.
+            handler_task.cancel()
+            monitor_task.cancel()
+            await asyncio.gather(handler_task, monitor_task, return_exceptions=True)
             await self.jobs.fail_job(
                 job_id,
                 worker_id=self.worker_id,
-                error={"code": "unhandled-exception", "message": str(exc), "details": {"exceptionType": type(exc).__name__}},
+                error={"code": "worker-internal-error", "message": "Job execution ended in unexpected state"},
                 retryable=True,
                 fencing_token=fencing_token,
             )
         finally:
             hb_stop.set()
-            hb_task.cancel()
-            try:
-                await hb_task
-            except asyncio.CancelledError:
-                pass
-            except Exception:
-                log.exception("worker.job_heartbeat_task_failed worker_id=%s job_id=%s", self.worker_id, job_id)
+            for t in (hb_task, monitor_task, handler_task):
+                if not t.done():
+                    t.cancel()
+            await asyncio.gather(hb_task, monitor_task, handler_task, return_exceptions=True)
+            log.debug("worker.job_finished worker_id=%s job_id=%s outcome=%s", self.worker_id, job_id, outcome)
 
-    async def _job_heartbeat_loop(self, job_id: str, fencing_token: int | None, stop: asyncio.Event) -> None:
+    def _resolve_execution_timeout(self, job: dict[str, Any]) -> int:
+        raw = job.get("executionTimeoutSeconds")
+        if raw is None:
+            raw = (job.get("metadata") or {}).get("executionTimeoutSeconds")
+        try:
+            val = int(raw) if raw is not None else int(config.JOB_EXECUTION_TIMEOUT_SECONDS)
+        except Exception:
+            val = int(config.JOB_EXECUTION_TIMEOUT_SECONDS)
+        return max(1, min(val, 86400))
+
+    async def _job_monitor_loop(self, job_id: str, fencing_token: int | None, timeout_seconds: int, cancel_event: asyncio.Event) -> str:
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+        poll = min(5.0, max(1.0, timeout_seconds / 10))
+        while not self._stop.is_set():
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                cancel_event.set()
+                return "timeout"
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=min(poll, remaining))
+                # Worker shutdown requested - interrupt handler; job will be failed/requeued.
+                cancel_event.set()
+                return "shutdown"
+            except asyncio.TimeoutError:
+                pass
+            try:
+                job = await self.jobs.get_job(job_id)
+            except Exception:
+                log.exception("worker.job_monitor_get_failed worker_id=%s job_id=%s", self.worker_id, job_id)
+                continue
+            if not job:
+                cancel_event.set()
+                return "cancelled"
+            status = job.get("status")
+            if status == "cancelled":
+                cancel_event.set()
+                return "cancelled"
+            if status != "running" or job.get("claimedBy") != self.worker_id or job.get("fencingToken") != fencing_token:
+                cancel_event.set()
+                return "cancelled"
+        cancel_event.set()
+        return "shutdown"
+
+    async def _job_heartbeat_loop(self, job_id: str, fencing_token: int | None, stop: asyncio.Event, cancel_event: asyncio.Event) -> None:
         interval = max(2.0, min(self.heartbeat_interval_seconds, max(5.0, self.lease_seconds / 3)))
-        while not stop.is_set():
+        while not stop.is_set() and not cancel_event.is_set():
             try:
                 await asyncio.wait_for(stop.wait(), timeout=interval)
                 return
@@ -223,6 +331,7 @@ class WorkerRunner:
                 res = await self.jobs.heartbeat_job(job_id, worker_id=self.worker_id, lease_seconds=self.lease_seconds, fencing_token=fencing_token)
                 if not res.get("ok"):
                     log.warning("worker.job_heartbeat_rejected worker_id=%s job_id=%s result=%s", self.worker_id, job_id, res)
+                    cancel_event.set()
                     return
             except Exception:
                 log.exception("worker.job_heartbeat_error worker_id=%s job_id=%s", self.worker_id, job_id)
