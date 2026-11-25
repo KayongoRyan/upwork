@@ -7,6 +7,7 @@ import { requireDb } from "./middleware/requireDb.js";
 import { cpmisRouter } from "./routes/cpmis.ts";
 import { cpmisRemainingRouter } from "./routes/cpmis-remaining.ts";
 import { businessRouter } from "./routes/business.ts";
+import { cpmisJobsRouter } from "./routes/cpmis-jobs.ts";
 import { healthRouter } from "./routes/health.js";
 import { inquiriesRouter } from "./routes/inquiries.js";
 import { notificationsRouter } from "./routes/notifications.js";
@@ -90,12 +91,14 @@ v1.get("/", (_req, res) => {
       `${config.apiBasePath}/notifications`,
       `${config.apiBasePath}/cpmis`,
       `${config.apiBasePath}/cpmis/business`,
+      `${config.apiBasePath}/cpmis/jobs`,
     ],
   });
 });
 v1.use("/health", healthRouter);
 v1.use("/inquiries", requireDb, inquiriesRouter);
 v1.use("/notifications", requireDb, notificationsRouter);
+v1.use("/cpmis/jobs", requireDb, cpmisJobsRouter);
 v1.use("/cpmis", requireDb, cpmisRouter);
 v1.use("/cpmis/business", requireDb, businessRouter);
 v1.use("/cpmis", requireDb, cpmisRemainingRouter);

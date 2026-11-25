@@ -11,6 +11,7 @@ import { readCostEdits } from "@/lib/server/cost-lines";
 import { costReportPdf } from "@/lib/server/cost-pdf";
 import { createXlsx } from "@/lib/server/xlsx";
 import { buildPredictiveAnalytics } from "@/lib/server/predictive-analytics";
+import { internalService, InternalServiceError } from "../lib/internalServiceClient.js";
 import { PersistenceError } from "@/lib/server/mongo";
 import { readState } from "@/lib/server/memory";
 import { apiError } from "../lib/api-response";
@@ -391,6 +392,32 @@ cpmisRemainingRouter.get("/reports/analytics", async (req: Request, res: Respons
   if (role === "quantity_surveyor") projects = projects.filter((p) => p.id === auth.session.projectId);
   if (projectId !== "all") projects = projects.filter((p) => p.id === projectId);
 
+  if (String(req.query.async) === "true") {
+    const ids = new Set(projects.map((p: any) => p.id));
+    const scoped = {
+      ...state,
+      projects: state.projects.filter((p: any) => ids.has(p.id)),
+      tasks: (state.tasks as any[]).filter((t: any) => ids.has(t.projectId)),
+      boq: ((state as any).boq ?? []).filter((b: any) => ids.has(b.projectId)),
+      progressMarks: ((state as any).progressMarks ?? []).filter((m: any) => ids.has(m.projectId)),
+      costReports: ((state as any).costReports ?? []).filter((r: any) => ids.has(r.projectId)),
+      reports: ((state as any).reports ?? []).filter((r: any) => ids.has(r.projectId)),
+      users: state.users,
+    };
+    try {
+      const result = await internalService.createJob({
+        type: "analytics.project",
+        payload: { state: scoped, projectId },
+        metadata: { source: "express", workflow: "reports.analytics", requestedBy: auth.session.id, requestId: req.requestId, async: true },
+      });
+      res.setHeader("cache-control", "no-store");
+      return res.status(result?.deduped ? 200 : 202).json(result);
+    } catch (error) {
+      if (error instanceof InternalServiceError) return apiError(res, error.status >= 400 && error.status < 600 ? error.status : 502, error.code, { message: error.message, requestId: req.requestId });
+      return apiError(res, 502, "internal-service-unavailable", { requestId: req.requestId });
+    }
+  }
+
   const tasks = (state.tasks as any[]).filter((t) => projects.some((p) => p.id === t.projectId));
   const boq = (state.boq as any[]).filter((b) => projects.some((p) => p.id === b.projectId));
 
@@ -532,6 +559,21 @@ cpmisRemainingRouter.get("/reports/predictive", async (req: Request, res: Respon
     scoped = { ...scoped, projects: scoped.projects.filter((p) => ids.has(p.id)), tasks: scoped.tasks.filter((t) => ids.has(t.projectId)), boq: scoped.boq.filter((b) => ids.has(b.projectId)), progressMarks: (scoped.progressMarks ?? []).filter((m) => ids.has(m.projectId)), costReports: (scoped.costReports ?? []).filter((r) => ids.has(r.projectId)), reports: scoped.reports.filter((r) => ids.has(r.projectId)) } as any;
   }
 
+  if (String(req.query.async) === "true") {
+    try {
+      const result = await internalService.createJob({
+        type: "analytics.predictive",
+        payload: { state: { ...scoped, users: state.users }, projectId },
+        metadata: { source: "express", workflow: "reports.predictive", requestedBy: auth.session.id, requestId: req.requestId, async: true },
+      });
+      res.setHeader("cache-control", "no-store");
+      return res.status(result?.deduped ? 200 : 202).json(result);
+    } catch (error) {
+      if (error instanceof InternalServiceError) return apiError(res, error.status >= 400 && error.status < 600 ? error.status : 502, error.code, { message: error.message, requestId: req.requestId });
+      return apiError(res, 502, "internal-service-unavailable", { requestId: req.requestId });
+    }
+  }
+
   const analytics = buildPredictiveAnalytics(scoped);
   res.setHeader("cache-control", "no-store");
   return res.json({ ...analytics, scope: { role, projectId } });
@@ -551,6 +593,32 @@ cpmisRemainingRouter.get("/reports/workbook", async (req: Request, res: Response
     return overlapsRange(project, from, to);
   });
   const ids = new Set(projects.map((project) => project.id));
+
+  if (String(req.query.async) === "true") {
+    const scoped = {
+      ...state,
+      projects: state.projects.filter((p: any) => ids.has(p.id)),
+      tasks: (state.tasks as any[]).filter((t: any) => ids.has(t.projectId)),
+      boq: ((state as any).boq ?? []).filter((b: any) => ids.has(b.projectId)),
+      progressMarks: ((state as any).progressMarks ?? []).filter((m: any) => ids.has(m.projectId)),
+      costReports: ((state as any).costReports ?? []).filter((r: any) => ids.has(r.projectId)),
+      reports: ((state as any).reports ?? []).filter((r: any) => ids.has(r.projectId)),
+      users: state.users,
+    };
+    try {
+      const result = await internalService.createJob({
+        type: "report.project-workbook",
+        payload: { state: scoped, projectId, from, to },
+        metadata: { source: "express", workflow: "reports.workbook", requestedBy: auth.session.id, requestId: req.requestId, async: true },
+      });
+      res.setHeader("cache-control", "no-store");
+      return res.status(result?.deduped ? 200 : 202).json(result);
+    } catch (error) {
+      if (error instanceof InternalServiceError) return apiError(res, error.status >= 400 && error.status < 600 ? error.status : 502, error.code, { message: error.message, requestId: req.requestId });
+      return apiError(res, 502, "internal-service-unavailable", { requestId: req.requestId });
+    }
+  }
+
   const usersById = new Map(state.users.map((u) => [u.id, u]));
   const projectRows: (string | number)[][] = [[
     "Code","Name","Status","Progress %","Budget (RWF)","Spent (RWF)","Measured Estimate (RWF)","Measured Actual (RWF)","Variance (RWF)","Manager","Location","Start","Expected Completion"
@@ -649,6 +717,32 @@ cpmisRemainingRouter.get("/reports/monthly-progress", async (req: Request, res: 
     return overlapsRange(project, from, to);
   });
   const ids = new Set(projects.map((project) => project.id));
+
+  if (String(req.query.async) === "true") {
+    const scoped = {
+      ...state,
+      projects: state.projects.filter((p: any) => ids.has(p.id)),
+      tasks: (state.tasks as any[]).filter((t: any) => ids.has(t.projectId)),
+      boq: ((state as any).boq ?? []).filter((b: any) => ids.has(b.projectId)),
+      progressMarks: ((state as any).progressMarks ?? []).filter((m: any) => ids.has(m.projectId)),
+      costReports: ((state as any).costReports ?? []).filter((r: any) => ids.has(r.projectId)),
+      reports: ((state as any).reports ?? []).filter((r: any) => ids.has(r.projectId)),
+      users: state.users,
+    };
+    try {
+      const result = await internalService.createJob({
+        type: "report.monthly-progress",
+        payload: { state: scoped, month: monthRaw, projectId },
+        metadata: { source: "express", workflow: "reports.monthly-progress", requestedBy: auth.session.id, requestId: req.requestId, async: true },
+      });
+      res.setHeader("cache-control", "no-store");
+      return res.status(result?.deduped ? 200 : 202).json(result);
+    } catch (error) {
+      if (error instanceof InternalServiceError) return apiError(res, error.status >= 400 && error.status < 600 ? error.status : 502, error.code, { message: error.message, requestId: req.requestId });
+      return apiError(res, 502, "internal-service-unavailable", { requestId: req.requestId });
+    }
+  }
+
   const usersById = new Map(state.users.map((u) => [u.id, u]));
 
   const inMonth = (value?: string | null) => {
