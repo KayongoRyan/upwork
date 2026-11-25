@@ -875,8 +875,9 @@ businessRouter.get("/projects/:id/expense-transactions", async (req: Request, re
   if (!state) return;
   const expenses = (state.expenses ?? []).filter((e: any) => e.projectId === projectId);
   const payments = (state.payments ?? []).filter((p: any) => p.projectId === projectId);
+  const variations = (state.variations ?? []).filter((v: any) => v.projectId === projectId);
   res.setHeader("cache-control", "no-store");
-  res.json({ ok: true, projectId, expenses, payments });
+  res.json({ ok: true, projectId, expenses, payments, variations });
 });
 
 businessRouter.post("/expenses", async (req: Request, res: Response) => {
@@ -1077,4 +1078,161 @@ businessRouter.post("/payments/:id/reverse", async (req: Request, res: Response)
   if (!payment) return apiError(res, 404, "not-found", { requestId: req.requestId });
   if (!(await ensureProjectAccess(req, res, auth.session, payment.projectId, state))) return;
   return withAction(req, res, "administrator", auth.session, { type: "reverse-payment", id, note: body.note, stamp: stamp(auth.session) });
+});
+
+// 10. Approved variation records (QS submits, management reviews).
+const variationCreateSchema = z.object({
+  projectId: z.string().min(1),
+  boqItemId: z.string().min(1).nullable().optional(),
+  reference: z.string().trim().max(120).optional(),
+  title: z.string().trim().min(3).max(200),
+  description: z.string().trim().min(3).max(2000),
+  reason: z.string().trim().min(3).max(2000),
+  type: z.enum(["addition", "omission"]),
+  amount: z.coerce.number().positive(),
+  currency: z.string().trim().min(1).max(8).optional(),
+});
+const variationDecisionSchema = z.object({
+  decision: z.enum(["approved", "rejected"]),
+  note: z.string().trim().max(1000).optional(),
+});
+const variationNoteSchema = z.object({ note: z.string().trim().max(1000).optional() });
+
+businessRouter.get("/variations", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
+  if (projectId && !(await ensureProjectAccess(req, res, auth.session, projectId))) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const allowed = new Set(scopedProjects(state, auth.session).map((p: any) => p.id));
+  const variations = (state.variations ?? []).filter((v: any) => allowed.has(v.projectId) && (!projectId || v.projectId === projectId));
+  res.setHeader("cache-control", "no-store");
+  res.json({ ok: true, variations });
+});
+
+businessRouter.post("/variations", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  if (!["administrator", "quantity_surveyor"].includes(auth.session.role)) return apiError(res, 403, "forbidden", { requestId: req.requestId });
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const body = parseOr400(variationCreateSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  if (!(await ensureProjectAccess(req, res, auth.session, body.projectId))) return;
+  const portal = portalForSession(auth.session);
+  return withIdempotency(req, res, `business:variations:create:${auth.session.id}`, body, async () => {
+    res.setHeader("cache-control", "no-store");
+    return runAction(req, portal, auth.session, {
+      type: "create-variation",
+      input: {
+        ...body,
+        boqItemId: body.boqItemId ?? null,
+        reference: body.reference ?? "",
+        currency: body.currency ?? "RWF",
+      },
+      stamp: stamp(auth.session),
+    }, 201);
+  });
+});
+
+businessRouter.patch("/variations/:id", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  if (!["administrator", "quantity_surveyor"].includes(auth.session.role)) return apiError(res, 403, "forbidden", { requestId: req.requestId });
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const body = parseOr400(variationCreateSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const variation = (state.variations ?? []).find((v: any) => v.id === id);
+  if (!variation) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, variation.projectId, state))) return;
+  if (body.projectId !== variation.projectId) return apiError(res, 400, "validation-failed", { message: "projectId cannot be changed.", requestId: req.requestId });
+  return withAction(req, res, portalForSession(auth.session), auth.session, {
+    type: "update-variation",
+    id,
+    input: { ...body, boqItemId: body.boqItemId ?? null, reference: body.reference ?? "", currency: body.currency ?? variation.currency ?? "RWF" },
+    stamp: stamp(auth.session),
+  });
+});
+
+businessRouter.post("/variations/:id/submit", async (req: Request, res: Response) => {
+  const auth = await requireAnySession(req, res);
+  if (!auth) return;
+  if (!["administrator", "quantity_surveyor"].includes(auth.session.role)) return apiError(res, 403, "forbidden", { requestId: req.requestId });
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const variation = (state.variations ?? []).find((v: any) => v.id === id);
+  if (!variation) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, variation.projectId, state))) return;
+  return withAction(req, res, portalForSession(auth.session), auth.session, { type: "submit-variation", id, stamp: stamp(auth.session) });
+});
+
+businessRouter.post("/variations/:id/open-review", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const variation = (state.variations ?? []).find((v: any) => v.id === id);
+  if (!variation) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, variation.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "open-variation-review", id, stamp: stamp(auth.session) });
+});
+
+businessRouter.post("/variations/:id/decide", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const body = parseOr400(variationDecisionSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  if (body.decision === "rejected" && (body.note ?? "").trim().length < 3) {
+    return apiError(res, 400, "validation-failed", { message: "Rejection note must be at least 3 characters.", requestId: req.requestId });
+  }
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const variation = (state.variations ?? []).find((v: any) => v.id === id);
+  if (!variation) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, variation.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "decide-variation", id, decision: body.decision, note: body.note ?? "", stamp: stamp(auth.session) });
+});
+
+businessRouter.post("/variations/:id/cancel", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const body = parseOr400(variationNoteSchema, req.body ?? {}, req, res);
+  if (!body) return;
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const variation = (state.variations ?? []).find((v: any) => v.id === id);
+  if (!variation) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, variation.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "cancel-variation", id, note: body.note ?? "", stamp: stamp(auth.session) });
+});
+
+businessRouter.delete("/variations/:id", async (req: Request, res: Response) => {
+  const auth = await requireSession(req, res, "administrator");
+  if (!auth) return;
+  const csrfError = verifyCsrfToken(req, auth.session);
+  if (csrfError) return res.status(csrfError.status).json(csrfError.body);
+  const id = String(req.params.id);
+  const state = await readStateOr503(req, res);
+  if (!state) return;
+  const variation = (state.variations ?? []).find((v: any) => v.id === id);
+  if (!variation) return apiError(res, 404, "not-found", { requestId: req.requestId });
+  if (!(await ensureProjectAccess(req, res, auth.session, variation.projectId, state))) return;
+  return withAction(req, res, "administrator", auth.session, { type: "delete-variation", id, stamp: stamp(auth.session) });
 });

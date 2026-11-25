@@ -456,6 +456,7 @@ export function createSeedState(): AdminState {
     progressMarks: [],
     calendarEvents: [],
     workComments: [],
+    variations: [],
     expenses: [],
     payments: [],
   };

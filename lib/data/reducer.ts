@@ -26,6 +26,7 @@ import type {
   TaskPriority,
   UserInput,
   UserRole,
+  VariationRecord,
   WorkKind,
 } from "@/types";
 
@@ -74,6 +75,13 @@ export type AdminAction =
   | { type: "decide-cost-report"; id: string; decision: "approved" | "rejected"; note: string; stamp: Stamp }
   | { type: "delete-cost-report"; id: string; stamp: Stamp }
   | { type: "revise-cost-bill"; projectId: string; lines: { id: string; estimatedQty: number; actualQty: number; unitRate: number }[]; stamp: Stamp }
+  | { type: "create-variation"; input: { projectId: string; boqItemId: string | null; reference: string; title: string; description: string; reason: string; type: "addition" | "omission"; amount: number; currency: string }; stamp: Stamp }
+  | { type: "update-variation"; id: string; input: { projectId: string; boqItemId: string | null; reference: string; title: string; description: string; reason: string; type: "addition" | "omission"; amount: number; currency: string }; stamp: Stamp }
+  | { type: "submit-variation"; id: string; stamp: Stamp }
+  | { type: "open-variation-review"; id: string; stamp: Stamp }
+  | { type: "decide-variation"; id: string; decision: "approved" | "rejected"; note: string; stamp: Stamp }
+  | { type: "cancel-variation"; id: string; note: string; stamp: Stamp }
+  | { type: "delete-variation"; id: string; stamp: Stamp }
   | { type: "create-expense"; input: { projectId: string; category: "labor" | "material" | "equipment" | "subcontractor" | "service" | "other"; description: string; amount: number; currency: string; vendor: string; incurredDate: string }; stamp: Stamp }
   | { type: "submit-expense"; id: string; stamp: Stamp }
   | { type: "decide-expense"; id: string; decision: "approved" | "rejected"; note: string; stamp: Stamp }
@@ -943,6 +951,132 @@ export function adminReducer(state: AdminState, action: AdminAction): AdminState
       return {
         ...state,
         costReports: (state.costReports ?? []).filter((report) => report.id !== id),
+        notifications: state.notifications.filter((item) => item.id !== `ntf-${id}`),
+        activityLogs: state.activityLogs.filter((item) => item.id !== `log-${id}`),
+      };
+    }
+    case "create-variation": {
+      const project = state.projects.find((p) => p.id === action.input.projectId);
+      if (!project) return state;
+      const amount = Number(action.input.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return state;
+      const title = action.input.title.trim();
+      const description = action.input.description.trim();
+      const reason = action.input.reason.trim();
+      if (title.length < 3 || description.length < 3 || reason.length < 3) return state;
+      if (action.input.boqItemId && !state.boq.some((b) => b.id === action.input.boqItemId && b.projectId === project.id)) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
+      const variation: VariationRecord = {
+        id: action.stamp.id,
+        projectId: project.id,
+        boqItemId: action.input.boqItemId ?? null,
+        reference: action.input.reference.trim(),
+        title,
+        description,
+        reason,
+        type: action.input.type,
+        amount: Math.round(amount * 100) / 100,
+        currency: (action.input.currency || state.settings.currency || "RWF").trim().toUpperCase(),
+        status: "draft",
+        submittedBy: null,
+        submittedAt: null,
+        reviewedBy: null,
+        reviewedAt: null,
+        decisionNote: "",
+        rejectionNote: "",
+        createdBy: actor.id,
+        createdAt: action.stamp.at,
+        updatedAt: action.stamp.at,
+        reviewHistory: [{ id: action.stamp.id, action: "created", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "quantity_surveyor") as UserRole, note: "", at: action.stamp.at }],
+      };
+      return audit({ ...state, variations: [variation, ...(state.variations ?? [])] }, action.stamp, "Created variation", "Variations", project.code, "success", actor);
+    }
+    case "update-variation": {
+      const variation = (state.variations ?? []).find((v) => v.id === action.id);
+      const project = variation ? state.projects.find((p) => p.id === variation.projectId) : undefined;
+      if (!variation || !project) return state;
+      if (!["draft", "rejected"].includes(variation.status)) return state;
+      if (action.input.projectId !== variation.projectId) return state;
+      const amount = Number(action.input.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return state;
+      const title = action.input.title.trim();
+      const description = action.input.description.trim();
+      const reason = action.input.reason.trim();
+      if (title.length < 3 || description.length < 3 || reason.length < 3) return state;
+      if (action.input.boqItemId && !state.boq.some((b) => b.id === action.input.boqItemId && b.projectId === project.id)) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
+      return audit({
+        ...state,
+        variations: (state.variations ?? []).map((v) => v.id === variation.id ? {
+          ...v,
+          boqItemId: action.input.boqItemId ?? null,
+          reference: action.input.reference.trim(),
+          title, description, reason,
+          type: action.input.type,
+          amount: Math.round(amount * 100) / 100,
+          currency: (action.input.currency || v.currency || state.settings.currency || "RWF").trim().toUpperCase(),
+          updatedAt: action.stamp.at,
+          reviewHistory: [...(v.reviewHistory ?? []), { id: action.stamp.id, action: "updated", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "quantity_surveyor") as UserRole, note: "", at: action.stamp.at }],
+        } : v),
+      }, action.stamp, "Updated variation", "Variations", project.code, "success", actor);
+    }
+    case "submit-variation": {
+      const variation = (state.variations ?? []).find((v) => v.id === action.id);
+      const project = variation ? state.projects.find((p) => p.id === variation.projectId) : undefined;
+      if (!variation || !project) return state;
+      if (!["draft", "rejected"].includes(variation.status)) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: "submitted", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "quantity_surveyor") as UserRole, note: "", at: action.stamp.at };
+      return audit({
+        ...state,
+        variations: (state.variations ?? []).map((v) => v.id === variation.id ? { ...v, status: "submitted", submittedBy: actor.id, submittedAt: action.stamp.at, updatedAt: action.stamp.at, reviewHistory: [...(v.reviewHistory ?? []), ev] } : v),
+      }, action.stamp, "Submitted variation", "Variations", project.code, "success", actor);
+    }
+    case "open-variation-review": {
+      const variation = (state.variations ?? []).find((v) => v.id === action.id);
+      const project = variation ? state.projects.find((p) => p.id === variation.projectId) : undefined;
+      if (!variation || !project || variation.status !== "submitted") return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: "in_review", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note: "", at: action.stamp.at };
+      return audit({
+        ...state,
+        variations: (state.variations ?? []).map((v) => v.id === variation.id ? { ...v, status: "in_review", updatedAt: action.stamp.at, reviewHistory: [...(v.reviewHistory ?? []), ev] } : v),
+      }, action.stamp, "Opened variation review", "Variations", project.code, "warning", actor);
+    }
+    case "decide-variation": {
+      const variation = (state.variations ?? []).find((v) => v.id === action.id);
+      const project = variation ? state.projects.find((p) => p.id === variation.projectId) : undefined;
+      if (!variation || !project || !["submitted", "in_review"].includes(variation.status)) return state;
+      const note = action.note.trim();
+      if (action.decision === "rejected" && note.length < 3) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "Administrator" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: action.decision, actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note, at: action.stamp.at };
+      return audit({
+        ...state,
+        variations: (state.variations ?? []).map((v) => v.id === variation.id ? {
+          ...v, status: action.decision, reviewedBy: actor.id, reviewedAt: action.stamp.at, decisionNote: note,
+          rejectionNote: action.decision === "rejected" ? note : v.rejectionNote, updatedAt: action.stamp.at, reviewHistory: [...(v.reviewHistory ?? []), ev],
+        } : v),
+        notifications: maybeNotify(state, action.stamp, { type: action.decision === "approved" ? "status" : "delay", title: `${project.code} variation ${action.decision}`, message: `${actor.name} ${action.decision} variation "${variation.title}".${note ? ` Note: ${note}` : ""}`, source: "administrator", senderName: actor.name, projectId: project.id }),
+      }, action.stamp, action.decision === "approved" ? "Approved variation" : "Rejected variation", "Variations", project.code, action.decision === "approved" ? "success" : "warning", actor);
+    }
+    case "cancel-variation": {
+      const variation = (state.variations ?? []).find((v) => v.id === action.id);
+      const project = variation ? state.projects.find((p) => p.id === variation.projectId) : undefined;
+      if (!variation || !project) return state;
+      if (["approved", "cancelled"].includes(variation.status)) return state;
+      const actor = { id: action.stamp.actorId ?? "system", name: action.stamp.actorName ?? "User" };
+      const ev: FinancialReviewEvent = { id: action.stamp.id, action: "cancelled", actorId: actor.id, actorName: actor.name, actorRole: (action.stamp.actorRole ?? "administrator") as UserRole, note: action.note.trim(), at: action.stamp.at };
+      return audit({
+        ...state,
+        variations: (state.variations ?? []).map((v) => v.id === variation.id ? { ...v, status: "cancelled", updatedAt: action.stamp.at, reviewHistory: [...(v.reviewHistory ?? []), ev] } : v),
+      }, action.stamp, "Cancelled variation", "Variations", project.code, "warning", actor);
+    }
+    case "delete-variation": {
+      const id = action.id;
+      return {
+        ...state,
+        variations: (state.variations ?? []).filter((v) => v.id !== id),
         notifications: state.notifications.filter((item) => item.id !== `ntf-${id}`),
         activityLogs: state.activityLogs.filter((item) => item.id !== `log-${id}`),
       };

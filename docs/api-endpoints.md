@@ -136,7 +136,20 @@ All endpoints below require a valid portal session. Mutating endpoints require C
 | PATCH | `/api/v1/cpmis/business/boq/:id` | Yes | No | Update BOQ item. |
 | DELETE | `/api/v1/cpmis/business/boq/:id` | Yes | No | Delete BOQ item. |
 | GET | `/api/v1/cpmis/business/projects/:id/expenses` | No | No | Legacy BOQ expense summary for compatibility (budget/spent/estimated/actual/BOQ lines). Not expense transaction records. |
-| GET | `/api/v1/cpmis/business/projects/:id/expense-transactions` | No | No | Project expense and payment transaction records; project access scoped. |
+| GET | `/api/v1/cpmis/business/projects/:id/expense-transactions` | No | No | Project expense, payment, and variation transaction records; project access scoped. |
+
+#### Variation Records
+
+| Method | Path | CSRF | Idempotency | Notes |
+|---|---|---:|---:|---|
+| GET | `/api/v1/cpmis/business/variations` | No | No | List variation records. Query `projectId` optional. Scoped by role/project access. |
+| POST | `/api/v1/cpmis/business/variations` | Yes | Yes | Create variation (`draft`). Admin/QS; project access required. Body: `projectId, boqItemId?, reference?, title, description, reason, type(addition|omission), amount, currency?`. |
+| PATCH | `/api/v1/cpmis/business/variations/:id` | Yes | No | Update draft/rejected variation. Admin/QS; project access required; projectId cannot change. |
+| POST | `/api/v1/cpmis/business/variations/:id/submit` | Yes | No | Submit draft/rejected variation for review. Admin/QS. |
+| POST | `/api/v1/cpmis/business/variations/:id/open-review` | Yes | No | Admin opens submitted variation review (`in_review`). |
+| POST | `/api/v1/cpmis/business/variations/:id/decide` | Yes | No | Admin approves/rejects submitted/in-review variation. Body: `decision: approved|rejected, note?` (rejection note required, min 3 chars). |
+| POST | `/api/v1/cpmis/business/variations/:id/cancel` | Yes | No | Admin cancels non-approved/non-cancelled variation. Body: `note?`. |
+| DELETE | `/api/v1/cpmis/business/variations/:id` | Yes | No | Admin deletes variation record. |
 
 #### Expense Transactions
 
