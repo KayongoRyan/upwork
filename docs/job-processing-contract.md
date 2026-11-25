@@ -134,8 +134,9 @@ Rules:
 
 ## Failure / Retry Semantics
 
-- **Retryable failure**: transient error; service requeues if attempts remain.
-- **Non-retryable failure**: permanent error; status becomes `failed`.
+- **Retryable failure**: transient error; service requeues if attempts remain. Handlers signal this by raising `RetryableJobError`.
+- **Non-retryable failure**: permanent error; status becomes `failed`. Handlers signal this by raising `NonRetryableJobError`.
+- **Unhandled handler exception**: treated as non-retryable (`failed`) by default, because unexpected exceptions are often deterministic; handlers should catch transient errors and raise `RetryableJobError` explicitly.
 - **Dead letter**: retryable but attempts exhausted; requires manual inspection/retry.
 - **Manual retry**: `POST /jobs/{job_id}/retry` resets attempts and moves to `queued`.
 
