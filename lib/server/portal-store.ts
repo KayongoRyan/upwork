@@ -123,6 +123,8 @@ const PORTAL_ACTIONS: Record<PortalKey, ReadonlySet<AdminAction["type"]>> = {
     "send-cost-report",
     "delete-cost-report",
     "submit-cost-report",
+    "open-cost-report-review",
+    "decide-cost-report",
     "register-document",
     "revise-document",
     "issue-revision",
@@ -594,14 +596,17 @@ const STATUS_TRANSITIONS: Record<string, Record<string, ReadonlySet<string>>> = 
     done: new Set(["done", "todo", "pending"]),
   },
   report: {
-    submitted: new Set(["submitted", "in_review", "approved", "rejected"]),
+    submitted: new Set(["submitted", "in_review"]),
     in_review: new Set(["in_review", "approved", "rejected"]),
     approved: new Set(["approved"]),
     rejected: new Set(["rejected", "submitted"]),
   },
   costReport: {
     pending: new Set(["pending", "submitted"]),
-    submitted: new Set(["submitted"]),
+    submitted: new Set(["submitted", "in_review"]),
+    in_review: new Set(["in_review", "approved", "rejected"]),
+    approved: new Set(["approved"]),
+    rejected: new Set(["rejected", "submitted"]),
   },
   account: {
     active: new Set(["active", "inactive"]),
@@ -1024,6 +1029,9 @@ async function applyNow(action: AdminAction): Promise<AdminState> {
     throw new PersistenceError(error);
   }
   const next = action.type === "reset" ? createSeedState() : adminReducer(state, action);
+  if (next === state && !BENIGN_NOOP_ACTIONS.has(action.type)) {
+    throw new LifecycleActionError(action.type);
+  }
   assertStateIntegrity(next);
   if (action.type !== "reset") assertStatusTransitions(state, next);
 
@@ -1147,6 +1155,8 @@ function targetProjectIds(state: AdminState, action: AdminAction): string[] {
       const surveyor = state.users.find((u) => u.id === action.surveyorId);
       return surveyor?.projectId ? [surveyor.projectId] : [];
     }
+    case "open-cost-report-review":
+    case "decide-cost-report":
     case "delete-cost-report": {
       const report = state.costReports.find((r) => r.id === action.id);
       return report ? [report.projectId] : [];
@@ -1211,3 +1221,24 @@ export class PortalActionError extends Error {
     this.name = "PortalActionError";
   }
 }
+
+export class LifecycleActionError extends Error {
+  constructor(
+    readonly action: string,
+    readonly reason = "The action violates a lifecycle, permission, assignment, or duplicate-submission rule.",
+  ) {
+    super(reason);
+    this.name = "LifecycleActionError";
+  }
+}
+
+const BENIGN_NOOP_ACTIONS = new Set<AdminAction["type"]>([
+  "mark-notification",
+  "mark-all-notifications",
+  "delete-calendar-event",
+  "delete-task",
+  "delete-report",
+  "delete-cost-report",
+  "delete-work-comment",
+  "delete-support-note",
+]);

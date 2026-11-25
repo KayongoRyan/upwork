@@ -149,7 +149,7 @@ function PersonReview({ person, data }: { person: UserAccount; data: ReturnType<
             </p>
             {costs.length === 0 ? <p className="text-sm text-muted-foreground">No cost report submitted yet.</p> : costs.map((report) => (
               <p key={report.id} className="text-sm">
-                {report.status === "pending" ? "Sent" : "Submitted"} {report.submittedAt ? formatDateTime(report.submittedAt) : "—"} · {report.lines.length} lines
+                {report.status === "pending" ? "Sent" : report.status === "submitted" ? "Submitted" : report.status === "in_review" ? "Under review" : report.status === "approved" ? "Approved" : "Rejected"} {report.submittedAt ? formatDateTime(report.submittedAt) : "-"} · {report.lines.length} lines
               </p>
             ))}
           </div>

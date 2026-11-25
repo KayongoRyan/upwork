@@ -144,6 +144,7 @@ All endpoints below require a valid portal session. Mutating endpoints require C
 | GET | `/api/v1/cpmis/business/cost-reports` | No | No | List cost reports. |
 | POST | `/api/v1/cpmis/business/cost-reports/send` | Yes | Yes | QS sends cost report. |
 | POST | `/api/v1/cpmis/business/cost-reports/submit` | Yes | Yes | PM submits cost report. |
+| POST | `/api/v1/cpmis/portal/:portal/actions` | Yes | Yes | Generic portal action dispatch; supports `open-cost-report-review` and `decide-cost-report` (admin), enforces lifecycle transitions, rejection reason, project access, and audit history. |
 | PATCH | `/api/v1/cpmis/business/cost-reports/revise-bill` | Yes | No | Revise bill; project ownership enforced. |
 | DELETE | `/api/v1/cpmis/business/cost-reports/:id` | Yes | No | Delete cost report. |
 

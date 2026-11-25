@@ -447,7 +447,7 @@ export function usePm() {
       if (!surveyor) return { ok: false, error: "No quantity surveyor is assigned to that project." };
       const live = billLines(data.boq, projectId);
       if (live.length === 0) return { ok: false, error: "There is no bill to submit." };
-      const latest = (data.costReports ?? []).find((report) => report.projectId === projectId && report.status === "submitted");
+      const latest = (data.costReports ?? []).find((report) => report.projectId === projectId && ["submitted","in_review","approved"].includes(report.status));
       if (latest && sameBill(latest.lines, live)) return { ok: false, error: "This measurement is already submitted." };
       return { ok: true, saved: data.submitCostReport(projectId, surveyor.id) };
     },
@@ -540,8 +540,8 @@ export function useQuantitySurveyor() {
     notices,
     manager: project ? data.users.find((user) => user.id === project.managerId) ?? null : null,
     statements: (data.costReports ?? []).filter((report) => report.projectId === project?.id),
-    submissions: (data.costReports ?? []).filter((report) => report.projectId === project?.id && report.status === "submitted"),
-    submitter: data.users.find((user) => user.id === (data.costReports ?? []).find((report) => report.projectId === project?.id && report.status === "submitted")?.submittedBy) ?? null,
+    submissions: (data.costReports ?? []).filter((report) => report.projectId === project?.id && ["submitted","in_review","approved","rejected"].includes(report.status)),
+    submitter: data.users.find((user) => user.id === (data.costReports ?? []).find((report) => report.projectId === project?.id && ["submitted","in_review","approved","rejected"].includes(report.status))?.submittedBy) ?? null,
     estimated: project ? estimateFor(lines, project.id) : 0,
     expenditure: project ? expenditureFor(lines, project.id) : 0,
     add(input: BoqInput): ActionResult {
