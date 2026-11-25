@@ -126,4 +126,22 @@ describe("expense/payment lifecycles", () => {
     expect(state.payments[0].status).toBe("reversed");
     expect(state.payments[0].reviewHistory.some((h) => h.action === "reversed")).toBe(true);
   });
+
+  it("prevents duplicate financial transactions", () => {
+    let s = baseState();
+    s = createExpense(s, { description: "Cement bags", amount: 1000, vendor: "Supplier", incurredDate: "2026-11-20" });
+    const duplicateExpense = adminReducer(s, {
+      type: "create-expense",
+      input: { projectId: s.expenses[0].projectId, category: "material", description: "Cement bags", amount: 1000, currency: "RWF", vendor: "Supplier", incurredDate: "2026-11-20" },
+      stamp: stamp({ id: "dup-e1" }),
+    } as AdminAction);
+    expect(duplicateExpense).toBe(s);
+
+    let state = adminReducer(s, { type: "submit-expense", id: s.expenses[0].id, stamp: stamp({ id: "s1", actorRole: "project_manager" }) } as AdminAction);
+    state = adminReducer(state, { type: "decide-expense", id: s.expenses[0].id, decision: "approved", note: "ok", stamp: stamp({ id: "a1" }) } as AdminAction);
+    const expense = state.expenses[0];
+    state = adminReducer(state, { type: "create-payment", input: { projectId: expense.projectId, expenseId: expense.id, amount: 200, currency: "RWF", method: "cash", reference: "REF-1", scheduledFor: null }, stamp: stamp({ id: "p1" }) } as AdminAction);
+    const dupByRef = adminReducer(state, { type: "create-payment", input: { projectId: expense.projectId, expenseId: expense.id, amount: 200, currency: "RWF", method: "cash", reference: "REF-1", scheduledFor: null }, stamp: stamp({ id: "p2" }) } as AdminAction);
+    expect(dupByRef).toBe(state);
+  });
 });
