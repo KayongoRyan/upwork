@@ -8,7 +8,7 @@ export function QrCodeView() {
     <div>
       <PageHeader
         title="QR Code"
-        description="Sign-up QR codes for project managers, site engineers, and quantity surveyors. Scan a code to open that portal's sign-up page, then verify by phone OTP before entering."
+        description="Sign-up QR codes for administrators, project managers, site engineers, and quantity surveyors. Scan a code to open that portal's sign-up page, then verify by email OTP before entering."
       />
       <PortalQrCodes />
     </div>

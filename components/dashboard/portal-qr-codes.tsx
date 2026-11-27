@@ -6,6 +6,12 @@ import { activePort, type CpmisPortalId } from "@/lib/portals";
 
 const TARGETS: Array<{ id: CpmisPortalId; label: string; description: string; base: string }> = [
   {
+    id: "administrator",
+    label: "Administrator",
+    description: "Scan to create an Administrator account.",
+    base: "/admin",
+  },
+  {
     id: "project_manager",
     label: "Project Manager",
     description: "Scan to create a Project Manager account.",
@@ -37,7 +43,7 @@ export function PortalQrCodes() {
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       {TARGETS.map((target) => {
         const url = mounted ? signupUrl(target.id, target.base) : `${target.base}/signup`;
         return (

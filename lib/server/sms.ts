@@ -1,4 +1,8 @@
 /**
+ * DEPRECATED: portal signup OTPs are now delivered by email through Supabase
+ * (see `lib/server/email-otp.ts`). This module is retained for reference and
+ * possible future SMS notifications, but it is no longer used by the signup flow.
+ *
  * Africa's Talking SMS delivery for OTP verification.
  *
  * Configure via env vars:

@@ -43,7 +43,9 @@ Configure via repo-root `.env` and/or `backend/.env`. See [../.env.example](../.
 | `VERTEXA_API_KEY` / `API_KEY` | dev default outside prod | Shared admin/BFF key; required in production |
 | `VERTEXA_API_URL` / `CPMIS_API_URL` | `http://localhost:4000` in dev | Used by Next.js BFF proxies; required in production |
 | `DEMO_PASSWORD_*` | seeded demo passwords | Override in real deployments |
-| `AT_USERNAME`, `AT_API_KEY`, `AT_FROM` | sandbox/empty | Africa's Talking SMS for signup OTP |
+| `SUPABASE_URL` | empty | Supabase project base URL for signup email OTP |
+| `SUPABASE_ANON_KEY` / `SUPABASE_PUBLISHABLE_KEY` | empty | Supabase anon/publishable key for Auth OTP endpoints |
+| `SUPABASE_EMAIL_OTP_TIMEOUT_MS` | `10000` | Supabase Auth request timeout |
 | `OTP_DEMO_FALLBACK` | `false` | Temporary demo OTP fallback; must be `false` in production |
 | `STORAGE_DRIVER` | `local` | Document object storage driver |
 | `STORAGE_LOCAL_DIR` | `data/uploads` | Local document storage path |
@@ -53,7 +55,7 @@ Configure via repo-root `.env` and/or `backend/.env`. See [../.env.example](../.
 | `INTERNAL_SERVICE_KEY` | dev default outside prod | Shared secret for Express-to-Python internal calls; required in production |
 | `INTERNAL_SERVICE_TIMEOUT_MS` | `10000` | Internal service request timeout |
 
-Production config validation fails fast for missing `MONGODB_URI`, missing API key, missing/non-local CORS origins, and `OTP_DEMO_FALLBACK=true`.
+Production config validation fails fast for missing `MONGODB_URI`, missing API key, missing/non-local CORS origins, missing Supabase email OTP config, and `OTP_DEMO_FALLBACK=true`.
 
 ## API surface
 
@@ -79,7 +81,7 @@ All API routes are versioned under `/api/v1`. Responses include `X-API-Version: 
 
 | Area | Base path | Notes |
 |---|---|---|
-| Auth/session/signup | `/api/v1/cpmis/auth/*` | Sign-in, sign-out, session, OTP signup; per-portal HttpOnly session cookies, CSRF |
+| Auth/session/signup | `/api/v1/cpmis/auth/*` | Sign-in, sign-out, session, Supabase email OTP signup; per-portal HttpOnly session cookies, CSRF |
 | Portal state/actions | `/api/v1/cpmis/portal/:portal/*` | Session-scoped state and portal actions |
 | Business JSON APIs | `/api/v1/cpmis/business/*` | Users, employees, projects/assignments, tasks, site reports, BOQ, cost reports, progress/report workflows |
 | Legacy/compat routes | `/api/v1/cpmis/*` | Remaining form/redirect/file handlers used by BFF proxies; see `docs/api-contract-map.md` |

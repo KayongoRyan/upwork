@@ -1168,7 +1168,7 @@ cpmisRemainingRouter.post("/se/reports", upload.array("photos", MAX_PHOTOS), asy
 
 // --- signup OTP ---
 const signupSchema = z.object({
-  portal: z.enum(["project_manager", "site_engineer", "quantity_surveyor"]),
+  portal: z.enum(["administrator", "project_manager", "site_engineer", "quantity_surveyor"]),
   firstName: z.string().trim().min(2, "First name is required").max(80),
   lastName: z.string().trim().min(2, "Last name is required").max(80),
   phone: z.string().trim().min(8, "Enter a valid phone number").max(30).regex(/^[+\d\s().-]+$/, "Enter a valid phone number"),
@@ -1209,7 +1209,7 @@ cpmisRemainingRouter.post("/auth/signup/request-otp", async (req: Request, res: 
     const passwordHash = await hashPassword(input.password);
     const result = await createSignupOtp({ portal: input.portal as PortalKey, firstName: input.firstName, lastName: input.lastName, phone, email, passwordHash });
     if (!result.ok) return apiError(res, result.status, result.error, { requestId: req.requestId });
-    return res.json({ ok: true, challengeId: result.challengeId, expiresAt: result.expiresAt, ...(result.demoOtp ? { demoOtp: result.demoOtp } : {}) });
+    return res.json({ ok: true, challengeId: result.challengeId, expiresAt: result.expiresAt, delivery: result.delivery, ...(result.demoOtp ? { demoOtp: result.demoOtp } : {}) });
   } catch (error) {
     if (error instanceof PersistenceError) return apiError(res, 503, "Sign-up could not be started. Try again.", { requestId: req.requestId });
     console.error("[cpmis] signup request-otp failed", error);
@@ -1218,9 +1218,10 @@ cpmisRemainingRouter.post("/auth/signup/request-otp", async (req: Request, res: 
 });
 
 const verifySchema = z.object({
-  portal: z.enum(["project_manager", "site_engineer", "quantity_surveyor"]),
+  portal: z.enum(["administrator", "project_manager", "site_engineer", "quantity_surveyor"]),
   challengeId: z.string().min(1),
-  otp: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
+  // Supabase projects can configure the email OTP length from 6 to 10 digits.
+  otp: z.string().trim().regex(/^\d{6,10}$/, "Enter the verification code"),
 });
 
 cpmisRemainingRouter.post("/auth/signup/verify-otp", async (req: Request, res: Response) => {

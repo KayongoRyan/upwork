@@ -49,7 +49,7 @@ This document lists the HTTP endpoints exposed by the Express API (canonical aut
 | POST | `/api/v1/cpmis/auth/sign-in` | Public pre-auth (same-origin) | No | JSON `{ portal, email, password }` | JSON `{ ok, redirectTo }` + Set-Cookie session | Per-portal session cookie; login rate-limited. |
 | POST | `/api/v1/cpmis/auth/sign-out` | Portal session (if present) | Yes when session present | JSON/form `{ portal, csrfToken? }` | JSON `{ ok: true }` | Invalidates session. |
 | GET | `/api/v1/cpmis/auth/session/:portal` | Portal session | No | Path `portal` | JSON `{ ok, user }` | Returns current session user; 401/403 when missing/invalid. |
-| POST | `/api/v1/cpmis/auth/signup/request-otp` | Public (same-origin/rate-limited) | No | JSON signup payload incl. portal/name/phone/email/password | JSON challenge response | Sends/creates OTP challenge. Temporary demo fallback controlled by env. |
+| POST | `/api/v1/cpmis/auth/signup/request-otp` | Public (same-origin/rate-limited) | No | JSON signup payload incl. portal/name/phone/email/password | JSON challenge response with `challengeId`, `delivery` (`email` or `demo`), and optional `demoOtp` | Creates an OTP challenge and asks Supabase Auth to email the 6-digit code. Temporary demo fallback controlled by `OTP_DEMO_FALLBACK`. |
 | POST | `/api/v1/cpmis/auth/signup/verify-otp` | Public (same-origin) | No | JSON `{ challengeId, otp, ... }` | JSON success + session/redirect as implemented | Verifies OTP, creates active account, signs in. |
 
 ### CPMIS Portal State / Actions

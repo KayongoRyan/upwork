@@ -1,8 +1,9 @@
 /**
- * Phone OTP challenges for portal self-signup.
+ * Email OTP challenges for portal self-signup.
  *
  * Challenges are short-lived, single-use, and bound to the portal + signup
- * payload. Only a hash of the OTP is stored. In-memory fallback keeps the flow
+ * payload. Supabase Auth generates and emails the code; only the temporary
+ * demo fallback stores a local OTP hash. In-memory fallback keeps the flow
  * working without MongoDB, matching the rest of the preview persistence.
  */
 
@@ -12,8 +13,13 @@ import {
   requireCollectionInProduction,
   type PortalKey,
 } from "@/lib/server/mongo";
-import { PORTAL_ROLE } from "@/lib/server/auth";
-import { sendSms } from "@/lib/server/sms";
+import {
+  emailOtpConfigured,
+  sendEmailOtp,
+  verifyEmailOtp,
+} from "@/lib/server/email-otp";
+
+export type SignupOtpProvider = "supabase_email" | "demo";
 
 export interface SignupChallenge {
   _id: string;
@@ -23,7 +29,13 @@ export interface SignupChallenge {
   phone: string;
   email: string;
   passwordHash: string;
-  otpHash: string;
+  /**
+   * Only used by the temporary demo fallback. Supabase-generated codes are
+   * verified against Supabase and never stored here.
+   */
+  otpHash: string | null;
+  /** Missing on legacy SMS challenges; treat those as local demo records. */
+  provider?: SignupOtpProvider;
   createdAt: string;
   expiresAt: string;
   attempts: number;
@@ -96,7 +108,13 @@ export interface CreateOtpInput {
 }
 
 export type CreateOtpResult =
-  | { ok: true; challengeId: string; expiresAt: string; demoOtp?: string }
+  | {
+      ok: true;
+      challengeId: string;
+      expiresAt: string;
+      delivery: "email" | "demo";
+      demoOtp?: string;
+    }
   | { ok: false; error: string; status: number };
 
 export async function createSignupOtp(input: CreateOtpInput): Promise<CreateOtpResult> {
@@ -104,6 +122,17 @@ export async function createSignupOtp(input: CreateOtpInput): Promise<CreateOtpR
   const email = normalizeEmail(input.email);
   const phone = normalizePhone(input.phone);
   const col = requireCollectionInProduction(await collection());
+  const demoFallback = process.env.OTP_DEMO_FALLBACK === "true";
+  const emailConfigured = emailOtpConfigured();
+
+  if (!emailConfigured && !demoFallback) {
+    return {
+      ok: false,
+      status: 503,
+      error:
+        "Email OTP is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY).",
+    };
+  }
 
   // Basic resend throttling per portal+email/phone.
   const recentCutoff = new Date(now.getTime() - RESEND_MIN_MS).toISOString();
@@ -128,7 +157,8 @@ export async function createSignupOtp(input: CreateOtpInput): Promise<CreateOtpR
   }
 
   const challengeId = crypto.randomUUID();
-  const otp = generateOtp();
+  const useDemo = !emailConfigured;
+  const demoOtp = useDemo ? generateOtp() : null;
   const record: SignupChallenge = {
     _id: challengeId,
     portal: input.portal,
@@ -137,7 +167,8 @@ export async function createSignupOtp(input: CreateOtpInput): Promise<CreateOtpR
     phone,
     email,
     passwordHash: input.passwordHash,
-    otpHash: hashOtp(challengeId, otp),
+    otpHash: demoOtp ? hashOtp(challengeId, demoOtp) : null,
+    provider: useDemo ? "demo" : "supabase_email",
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + OTP_TTL_MS).toISOString(),
     attempts: 0,
@@ -153,18 +184,55 @@ export async function createSignupOtp(input: CreateOtpInput): Promise<CreateOtpR
     memory().challenges.set(challengeId, record);
   }
 
-  const roleLabel = PORTAL_ROLE[input.portal].replaceAll("_", " ");
-  const message = `Your CPMIS ${roleLabel} portal verification code is ${otp}. It expires in 10 minutes.`;
-  const demoFallback = process.env.OTP_DEMO_FALLBACK === "true";
-  const sms = await sendSms(phone, message);
-  if (!sms.ok && !demoFallback) {
-    // Do not leave a challenge the user cannot verify.
-    if (col) await col.deleteOne({ _id: challengeId }).catch(() => undefined);
-    else memory().challenges.delete(challengeId);
-    return { ok: false, status: sms.status, error: sms.error };
+  if (!useDemo) {
+    const sent = await sendEmailOtp(email);
+    if (!sent.ok) {
+      if (!demoFallback) {
+        // Do not leave a challenge the user cannot verify.
+        if (col) await col.deleteOne({ _id: challengeId }).catch(() => undefined);
+        else memory().challenges.delete(challengeId);
+        return { ok: false, status: sent.status, error: sent.error };
+      }
+
+      // Delivery failed but the temporary demo fallback is enabled: convert the
+      // challenge to a locally verified code so signup can continue.
+      const fallbackOtp = generateOtp();
+      const updated: SignupChallenge = {
+        ...record,
+        provider: "demo",
+        otpHash: hashOtp(challengeId, fallbackOtp),
+      };
+      try {
+        if (col) {
+          await col.updateOne(
+            { _id: challengeId },
+            { $set: { provider: "demo", otpHash: updated.otpHash } },
+          );
+        } else {
+          memory().challenges.set(challengeId, updated);
+        }
+      } catch {
+        if (col) await col.deleteOne({ _id: challengeId }).catch(() => undefined);
+        else memory().challenges.delete(challengeId);
+        return { ok: false, status: 503, error: "Sign-up could not be started. Try again." };
+      }
+      return {
+        ok: true,
+        challengeId,
+        expiresAt: record.expiresAt,
+        delivery: "demo",
+        demoOtp: fallbackOtp,
+      };
+    }
   }
 
-  return { ok: true, challengeId, expiresAt: record.expiresAt, ...(demoFallback ? { demoOtp: otp } : {}) };
+  return {
+    ok: true,
+    challengeId,
+    expiresAt: record.expiresAt,
+    delivery: useDemo ? "demo" : "email",
+    ...(demoOtp ? { demoOtp } : {}),
+  };
 }
 
 export type VerifyOtpResult =
@@ -193,13 +261,31 @@ export async function verifySignupOtp(challengeId: string, otp: string, portal: 
     return { ok: false, status: 429, error: "Too many incorrect attempts. Request a new code." };
   }
 
-  const match = timingSafeEqualHex(record.otpHash, hashOtp(challengeId, otp.trim()));
-  if (!match) {
-    record.attempts += 1;
-    if (col) {
-      await col.updateOne({ _id: challengeId }, { $set: { attempts: record.attempts } });
+  if (record.provider === "supabase_email") {
+    const verified = await verifyEmailOtp(record.email, otp.trim());
+    if (!verified.ok) {
+      // Provider outages and provider-side throttling are not wrong codes, so
+      // do not burn an attempt for them.
+      if (verified.status >= 500 || verified.status === 429) {
+        return { ok: false, status: verified.status, error: verified.error };
+      }
+      record.attempts += 1;
+      if (col) {
+        await col.updateOne({ _id: challengeId }, { $set: { attempts: record.attempts } });
+      }
+      return { ok: false, status: 400, error: "Incorrect verification code." };
     }
-    return { ok: false, status: 400, error: "Incorrect verification code." };
+  } else {
+    const match =
+      Boolean(record.otpHash) &&
+      timingSafeEqualHex(record.otpHash as string, hashOtp(challengeId, otp.trim()));
+    if (!match) {
+      record.attempts += 1;
+      if (col) {
+        await col.updateOne({ _id: challengeId }, { $set: { attempts: record.attempts } });
+      }
+      return { ok: false, status: 400, error: "Incorrect verification code." };
+    }
   }
 
   record.consumedAt = new Date().toISOString();

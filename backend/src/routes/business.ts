@@ -47,6 +47,9 @@ function actionErrorResult(error: unknown, req: Request): { status: number; body
   if (error && typeof error === "object" && "name" in error && (error as any).name === "PortalActionError") {
     return { status: 403, body: { ok: false, error: "forbidden", message: "You are not authorized to perform this action.", requestId: req.requestId, apiVersion: req.app.locals?.apiVersion ?? "v1" } };
   }
+  if (error && typeof error === "object" && "name" in error && (error as any).name === "LifecycleActionError") {
+    return { status: 409, body: { ok: false, error: "lifecycle-violation", message: "The action violates a lifecycle, permission, assignment, or duplicate-submission rule.", requestId: req.requestId, apiVersion: req.app.locals?.apiVersion ?? "v1" } };
+  }
   if (isDuplicateKeyError(error)) {
     return { status: 409, body: { ok: false, error: "conflict", message: "A record with the same unique value already exists.", requestId: req.requestId, apiVersion: req.app.locals?.apiVersion ?? "v1" } };
   }

@@ -501,7 +501,7 @@ const UNIQUE_INDEXES: Array<{ portal: PortalKey; collection: string; keys: Recor
   { portal: "administrator", collection: "projects", keys: { code: 1 }, name: "uniq_projects_code" },
 ];
 
-const RELATIONSHIP_INDEXES: Array<{ portal: PortalKey; collection: string; keys: Record<string, 1>; name: string }> = [
+const RELATIONSHIP_INDEXES: Array<{ portal: PortalKey; collection: string; keys: Record<string, 1 | -1>; name: string }> = [
   { portal: "administrator", collection: "projects", keys: { managerId: 1 }, name: "rel_projects_managerId" },
   { portal: "administrator", collection: "users", keys: { projectId: 1 }, name: "rel_users_projectId" },
   { portal: "administrator", collection: "users", keys: { role: 1 }, name: "rel_users_role" },

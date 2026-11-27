@@ -7,7 +7,7 @@ alongside the work that portal does. The ports share one Node process; the data 
 not live in that process. On first boot each database is seeded from the sample
 workspace, and later changes persist.
 
-The preview clock is 6 Nov 2026. Money is RWF. Each portal requires email + password sign-in. Sessions are per portal (signing into one portal does not sign into another). Each portal also has a sign-up flow: users scan the portal QR code from the admin dashboard, submit their name, phone, email, and password, verify their phone with an SMS OTP, and are signed into that portal.
+The preview clock is 6 Nov 2026. Money is RWF. Each portal requires email + password sign-in. Sessions are per portal (signing into one portal does not sign into another). Each portal also has a sign-up flow: users scan the portal QR code from the admin dashboard, submit their name, phone, email, and password, verify their email with a Supabase-delivered OTP, and are signed into that portal.
 
 ### Demo credentials
 
@@ -24,17 +24,32 @@ All seeded users in `lib/mock-data/seed.ts` can sign in with their role password
 
 ### Self-signup (QR + OTP)
 
-The Administrator portal includes a **QR Code** page in the navigation bar with a QR for each portal (Project Manager, Site Engineer, Quantity Surveyor). Scanning a QR opens that portal's sign-up page where the user enters first/last name, phone number, email, and password. A 6-digit OTP is sent by SMS through Africa's Talking; after verification the account is created as active for that portal role and the user is signed in.
+The Administrator portal includes a **QR Code** page in the navigation bar with a QR for each portal (Administrator, Project Manager, Site Engineer, Quantity Surveyor). Scanning a QR opens that portal's sign-up page where the user enters first/last name, phone number, email, and password. A 6-digit OTP is emailed through Supabase Auth; after verification the account is created as active for that portal role and the user is signed in.
 
-Configure Africa's Talking in `.env`:
+Configure Supabase in `.env`:
 
 ```env
-AT_USERNAME=sandbox
-AT_API_KEY=...
-AT_FROM=
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=...
+# or, for newer projects:
+# SUPABASE_PUBLISHABLE_KEY=...
+SUPABASE_EMAIL_OTP_TIMEOUT_MS=10000
 ```
 
-If SMS is not configured, existing email/password sign-in still works, but OTP signup will return a configuration error.
+In the Supabase dashboard:
+
+1. Enable the **Email** auth provider.
+2. Add `{{ .Token }}` to the **Magic Link** and **Confirm signup** email templates (new users may receive either) so the email shows the 6-digit code, for example:
+   ```html
+   <h2>Your CPMIS verification code</h2>
+   <p>Enter this code on the sign-up page: <strong>{{ .Token }}</strong></p>
+   <p>If you did not request this, you can ignore this email.</p>
+   ```
+   Remove the default confirmation link if you only want code entry. Clicking the link consumes the Supabase token before the signup page can verify it.
+3. Set the email OTP expiry to **600 seconds** in Auth settings if you want Supabase and the app to use the same 10-minute window. Keep the OTP length between 6 and 10 digits; the signup form accepts any code length in that range.
+4. Configure custom SMTP before production. Supabase's built-in email service is heavily rate-limited and is only suitable for testing.
+
+The app enforces its own 10-minute challenge expiry and 60-second resend throttle. If email delivery is not configured, existing email/password sign-in still works, but OTP signup returns a configuration error unless `OTP_DEMO_FALLBACK=true` (development only).
 
 ## Run
 

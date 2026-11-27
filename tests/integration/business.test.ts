@@ -399,6 +399,22 @@ describe("business API", () => {
     expect(res.body.error).toBe("conflict");
   });
 
+  it("maps lifecycle violations to 409 conflict", async () => {
+    h.applyPortalAction.mockRejectedValueOnce(
+      Object.assign(new Error("lifecycle"), { name: "LifecycleActionError" }),
+    );
+    const res = await request(app()).post("/api/v1/cpmis/business/tasks").send({
+      projectId: "p1",
+      title: "Lifecycle Task",
+      assignee: "SE One",
+      dueDate: "2026-12-01",
+      priority: "medium",
+      status: "todo",
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe("lifecycle-violation");
+  });
+
   it("returns project reconciliation between budget, valuation, expenses and payments", async () => {
     h.currentSession.value = adminSession;
     h.mockState.boq = [
