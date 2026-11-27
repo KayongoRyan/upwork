@@ -66,9 +66,25 @@ describe("real session cookie auth", () => {
   it("signs in, sets session cookie, and authenticates protected requests", async () => {
     const { app, portalStore, auth } = await loadApp();
     const state = await portalStore.readState();
-    const pm = state.users.find((u: any) => u.role === "project_manager");
+    const pm = state.users.find(
+      (u: any) =>
+        u.role === "project_manager" &&
+        u.status === "active" &&
+        state.projects.some((p: any) => p.managerId === u.id),
+    );
     expect(pm).toBeTruthy();
     if (!pm) throw new Error("missing pm");
+    const managedProject = state.projects.find((p: any) => p.managerId === pm.id);
+    expect(managedProject).toBeTruthy();
+    if (!managedProject) throw new Error("missing managed project");
+    const assignee = state.users.find(
+      (u: any) =>
+        u.role === "site_engineer" &&
+        u.status === "active" &&
+        u.projectId === managedProject.id,
+    );
+    expect(assignee).toBeTruthy();
+    if (!assignee) throw new Error("missing project site engineer");
 
     // Seed known password for the real credential record.
     await auth.setUserPassword(pm.id, pm.email, "Password123!");
@@ -114,9 +130,9 @@ describe("real session cookie auth", () => {
       .set("Host", "localhost:3030")
       .set("x-csrf-token", csrfToken)
       .send({
-        projectId: state.projects.find((p: any) => p.managerId === pm.id)?.id ?? state.projects[0].id,
+        projectId: managedProject.id,
         title: "Cookie Auth Task",
-        assignee: "SE One",
+        assignee: `${assignee.firstName} ${assignee.lastName}`,
         dueDate: "2026-12-01",
         priority: "medium",
         status: "todo",

@@ -54,6 +54,12 @@ export const config = {
     key: internalServiceKey,
     timeoutMs: parseNumber(process.env.INTERNAL_SERVICE_TIMEOUT_MS, 10_000),
   },
+  /** Supabase Auth email OTP delivery for portal signup. */
+  supabase: {
+    url: (process.env.SUPABASE_URL?.trim() || "").replace(/\/+$/, "").replace(/\/rest\/v1$/i, ""),
+    key: process.env.SUPABASE_ANON_KEY?.trim() || process.env.SUPABASE_PUBLISHABLE_KEY?.trim() || "",
+    timeoutMs: parseNumber(process.env.SUPABASE_EMAIL_OTP_TIMEOUT_MS, 10_000),
+  },
   /** Public inquiry creation (POST /api/v1/inquiries). */
   inquiryRateLimit: {
     windowMs: parseNumber(process.env.INQUIRY_RATE_LIMIT_WINDOW_MS, 10 * 60 * 1000),
@@ -69,6 +75,9 @@ export function validateProductionConfig() {
   if (config.corsOrigins.length === 0) missing.push("CORS_ORIGINS");
   if (config.corsOrigins.some((o) => /localhost|127\.0\.0\.1/i.test(o))) missing.push("CORS_ORIGINS (must not include localhost in production)");
   if (parseBool(process.env.OTP_DEMO_FALLBACK, false)) missing.push("OTP_DEMO_FALLBACK must be false in production");
+  if (!config.supabase.url || !config.supabase.key) {
+    missing.push("SUPABASE_URL and SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY)");
+  }
   if (!config.internalService.key) missing.push("INTERNAL_SERVICE_KEY");
   return missing;
 }
